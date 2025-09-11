@@ -1,0 +1,170 @@
+'use client';
+
+import React from 'react';
+import { GridColDef } from '@mui/x-data-grid';
+import BaseDataTable, {
+  commonColumns,
+} from '@/components/tables/base-data-table';
+import ProgramTemplateForm from './program-template-form';
+import { useProgramTemplates, useDeleteProgramTemplate } from '@/lib/hooks/use-program-templates';
+import { ProgramTemplate } from '@/types/database.types';
+
+// Extend ProgramTemplate to satisfy BaseEntity interface
+interface ProgramTemplateEntity extends Omit<ProgramTemplate, 'created_at' | 'updated_at'> {
+  id: string | number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Program Template-specific columns
+const programTemplateColumns: GridColDef[] = [
+  {
+    field: 'program_template_id',
+    headerName: 'ID',
+    width: 80,
+    type: 'number',
+  },
+  {
+    field: 'program_template_name',
+    headerName: 'Template Name',
+    width: 200,
+    flex: 1,
+  },
+  {
+    field: 'description',
+    headerName: 'Description',
+    width: 300,
+  },
+  {
+    field: 'total_cost',
+    headerName: 'Total Cost',
+    width: 120,
+    type: 'number',
+    valueFormatter: (params: any) => {
+      if (params.value == null) return '$0.00';
+      return `$${Number(params.value).toFixed(2)}`;
+    },
+  },
+  {
+    field: 'total_charge',
+    headerName: 'Total Charge',
+    width: 120,
+    type: 'number',
+    valueFormatter: (params: any) => {
+      if (params.value == null) return '$0.00';
+      return `$${Number(params.value).toFixed(2)}`;
+    },
+  },
+  {
+    field: 'margin_percentage',
+    headerName: 'Margin %',
+    width: 100,
+    type: 'number',
+    valueFormatter: (params: any) => {
+      if (params.value == null) return '0.0%';
+      return `${Number(params.value).toFixed(1)}%`;
+    },
+  },
+  commonColumns.activeFlag,
+  commonColumns.createdAt,
+  commonColumns.createdBy,
+  commonColumns.updatedAt,
+  commonColumns.updatedBy,
+];
+
+interface ProgramTemplatesGridProps {
+  onTemplateSelect: (template: ProgramTemplate | null) => void;
+  selectedTemplate: ProgramTemplate | null;
+}
+
+export default function ProgramTemplatesGrid({ onTemplateSelect, selectedTemplate }: ProgramTemplatesGridProps) {
+  const { data: templates, isLoading, error } = useProgramTemplates();
+  const deleteTemplate = useDeleteProgramTemplate();
+
+  const handleDelete = (id: string | number) => {
+    deleteTemplate.mutate(String(id));
+  };
+
+  const handleEdit = (_row: ProgramTemplateEntity) => {
+    // The edit functionality is handled by the BaseDataTable component
+    // which will open the form modal with the row data
+  };
+
+  const renderProgramTemplateForm = ({
+    open,
+    onClose,
+    initialValues,
+    mode,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    initialValues?: Partial<ProgramTemplateEntity>;
+    mode: 'create' | 'edit';
+  }) => {
+    if (!open) return null;
+
+    // Convert ProgramTemplateEntity to ProgramTemplate for the form
+    const template: ProgramTemplate | null = initialValues
+      ? {
+          program_template_id: initialValues.program_template_id || 0,
+          program_template_name: initialValues.program_template_name || '',
+          description: initialValues.description || '',
+          active_flag: initialValues.active_flag ?? true,
+          total_cost: initialValues.total_cost || 0,
+          total_charge: initialValues.total_charge || 0,
+          margin_percentage: initialValues.margin_percentage || 0,
+          created_at: initialValues.created_at || null,
+          created_by: initialValues.created_by || null,
+          updated_at: initialValues.updated_at || null,
+          updated_by: initialValues.updated_by || null,
+        }
+      : null;
+
+    const handleSave = async (data: Partial<ProgramTemplate>) => {
+      // This will be handled by the BaseDataTable's form submission
+      onClose();
+    };
+
+    const handleCancel = () => {
+      onClose();
+    };
+
+    return (
+      <ProgramTemplateForm 
+        template={template} 
+        onSave={handleSave} 
+        onCancel={handleCancel} 
+      />
+    );
+  };
+
+  // Transform templates data to include id property and handle null dates
+  const templatesWithId: ProgramTemplateEntity[] = (templates || []).map(template => ({
+    ...template,
+    id: template.program_template_id,
+    created_at: template.created_at || new Date().toISOString(),
+    updated_at: template.updated_at || new Date().toISOString(),
+    created_by: template.created_by_email || '-',
+    updated_by: template.updated_by_email || '-',
+  }));
+
+  return (
+    <BaseDataTable<ProgramTemplateEntity>
+      title="Program Templates"
+      data={templatesWithId}
+      columns={programTemplateColumns}
+      loading={isLoading}
+      error={error?.message || null}
+      getRowId={row => row.program_template_id}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      renderForm={renderProgramTemplateForm}
+      createButtonText="Add Template"
+      editButtonText="Edit Template"
+      deleteButtonText="Delete Template"
+      deleteConfirmMessage="Are you sure you want to delete this template? This action cannot be undone."
+      pageSize={25}
+      pageSizeOptions={[10, 25, 50, 100]}
+    />
+  );
+}

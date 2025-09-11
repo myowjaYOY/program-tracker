@@ -1,0 +1,231 @@
+# Program Tracker - Cursor AI Rules
+
+## Project Context
+This is a Next.js 14+ app for tracking marketing campaigns, sales, and payments.
+Stack: Next.js App Router, TypeScript (strict), Material UI Pro, Supabase, React Query, Zustand, React Hook Form + Zod.
+
+## MANDATORY ARCHITECTURE PATTERNS (VENDORS CRUD TEMPLATE)
+
+### Entity Management Architecture (MUST FOLLOW FOR ALL CRUD PAGES)
+When creating any entity management page (Campaigns, Leads, Sales, etc.), ALWAYS follow this exact pattern established by the Vendors CRUD implementation:
+
+#### Required File Structure
+```
+src/
+├── types/common.ts                    # Base interfaces for all entities
+├── lib/validations/[entity].ts        # Zod schemas
+├── lib/hooks/use-[entity].ts          # React Query hooks
+├── app/api/[entity]/route.ts          # CRUD API routes
+├── app/api/[entity]/[id]/route.ts     # Individual entity operations
+├── components/forms/base-form.tsx     # Reusable base form component
+├── components/forms/[entity]-form.tsx # Entity-specific form
+├── components/tables/base-data-table.tsx # Reusable base table
+├── components/[entity]/[entity]-table.tsx # Entity-specific table
+└── app/dashboard/[entity]/page.tsx    # Page component
+```
+
+#### Inheritance Requirements (MANDATORY)
+- Entity forms MUST extend BaseForm component
+- Entity tables MUST extend BaseDataTable component
+- Never create standalone form/table components without inheritance
+- Use CommonColumnRenderers for consistent table styling
+
+#### Implementation Sequence (STRICT ORDER)
+1. **Validation Schema** (`src/lib/validations/[entity].ts`)
+2. **API Routes** (`src/app/api/[entity]/route.ts` and `[id]/route.ts`)
+3. **React Query Hooks** (`src/lib/hooks/use-[entity].ts`)
+4. **Form Component** (`src/components/forms/[entity]-form.tsx`)
+5. **Table Component** (`src/components/[entity]/[entity]-table.tsx`)
+6. **Page Component** (`src/app/dashboard/[entity]/page.tsx`)
+7. **Navigation Update** (add to sidebar)
+
+#### React Query Hooks Pattern (REQUIRED)
+```typescript
+// MUST implement these exact hooks for every entity:
+- use[Entities]() - fetch all
+- useActive[Entities]() - fetch active only (for dropdowns)
+- useCreate[Entity]() - mutation with toast notifications
+- useUpdate[Entity]() - mutation with cache updates
+- useDelete[Entity]() - mutation with optimistic updates
+- [entity]Keys object for query key consistency
+```
+
+## Code Style
+
+### TypeScript
+- Strict mode always - no 'any' types
+- Explicit return types for all functions
+- Interfaces over types when possible
+- Proper null handling with ?. and ??
+
+### React/Next.js
+- Functional components only
+- Server Components by default, 'use client' when needed
+- App Router conventions strictly
+- Single responsibility components
+
+### Naming
+- Components: PascalCase (CampaignForm.tsx)
+- Utilities/hooks: camelCase (useAuth.ts)
+- Types: PascalCase (CampaignFormData)
+- API routes: lowercase-with-hyphens
+
+## Material UI Rules
+- Always use theme values, never hardcode colors
+- theme.spacing() for all spacing
+- Data tables: Always use MUI X DataGrid Pro
+- use MUI Pro version 8.6
+- sx prop over inline styles
+- Loading states: Use Skeleton components
+- Purple theme: primary=#8e24ff, secondary=#5a0ea4
+
+## Supabase Patterns
+- Use types from database.types.ts
+- Always handle errors with try-catch
+- Check auth before queries in ALL API routes
+- Pattern: `const { data, error } = await supabase.from()...`
+- If error, throw it; return data
+- Use createServerClient in API routes
+- Use createClient in client components
+- Add audit fields: created_by, updated_by, timestamps
+
+## React Query
+- Query keys: ['resource', id?, params?]
+- Always handle onSuccess, onError in mutations
+- Show toast notifications for user feedback
+- Implement proper cache invalidation
+- Use optimistic updates where appropriate
+
+## Forms
+- Zod schema first, infer types from it
+- zodResolver for validation
+- Consistent error messages
+- Show field errors immediately
+- MUST extend BaseForm component
+- Use Grid layout with proper spacing
+
+## State Management
+- Zustand stores in /lib/store (updated path)
+- Keep stores small and focused
+- Use TypeScript interfaces for store state
+- React Query for server state management
+
+## API Routes
+- Validate request body with Zod
+- Return format: `{ data }` or `{ error }`
+- Proper HTTP status codes
+- RESTful conventions
+- Authentication checks in ALL routes
+- Handle referential integrity for deletes
+
+## Security
+- Never expose service role key
+- Validate user permissions
+- Sanitize inputs
+- Use RLS policies
+
+## Database Context
+- All tables have: created_at, updated_at, active_flag
+- See types/database.types.ts for complete schema
+
+## Business Rules
+
+## Error Handling
+- User-friendly error messages
+- Log errors in development only
+- Never expose internal errors
+- Use sonner toast for user feedback
+
+## Performance
+- Dynamic imports for large components
+- Paginate large datasets
+- Use Next.js Image component
+- Implement loading boundaries
+
+## Implementation Order
+1. Database types and schemas
+2. API routes
+3. React Query hooks
+4. UI components
+5. Integration tests
+
+## Testing
+- Test critical business logic
+- Focus on integration over unit tests
+- Test API routes before building UI
+- Verify form validation and table operations
+
+## Git Commits
+- Format: feat|fix|chore|docs: message
+- Keep under 50 chars
+- Be specific
+
+## CRITICAL ENTITY MANAGEMENT RULES
+
+### Before Creating Any New Entity Page, Verify:
+1. ✅ Am I following the exact Vendors CRUD pattern?
+2. ✅ Am I using BaseForm and BaseDataTable inheritance?
+3. ✅ Have I created the Zod validation schema first?
+4. ✅ Am I implementing all 7 required files in order?
+5. ✅ Am I using the mandatory React Query hook patterns?
+
+### Validation Layer (MANDATORY ZOD PATTERN)
+```typescript
+export const [entity]Schema = z.object({
+  // Define fields with proper validation
+})
+export const [entity]UpdateSchema = [entity]Schema.partial()
+export type [Entity]FormData = z.infer<typeof [entity]Schema>
+export type [Entity]UpdateData = z.infer<typeof [entity]UpdateSchema>
+```
+
+### API Routes (REQUIRED AUTHENTICATION PATTERN)
+```typescript
+// MUST include in every API route:
+const { data: { session }, error: authError } = await supabase.auth.getSession()
+if (authError || !session) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+}
+```
+
+### Common Types (MUST USE)
+```typescript
+// Use these exact interfaces from types/common.ts:
+- BaseEntity interface
+- EntityFormProps<T> interface
+- EntityTableProps<T> interface
+- MutationCallbacks interface
+```
+
+### Toast Notifications (REQUIRED MESSAGES)
+- Success: "[Entity] created/updated/deleted successfully"
+- Error: User-friendly messages only
+- Loading: "Saving..." or "Loading..."
+
+## Important
+Always ask for clarification on:
+- Business logic requirements
+- User permissions
+- UI/UX decisions
+- Database relationships
+
+## MANDATORY PATTERN CONSISTENCY RULES
+
+### CRITICAL: Before ANY Implementation
+1. **MUST EXAMINE** existing similar implementation first (e.g., Therapies for Therapy Tasks)
+2. **MUST FOLLOW** the exact same patterns found in the reference implementation
+3. **MUST USE** Controller for dropdowns, loading states, same file structure
+4. **NEVER REINVENT** - always copy the working pattern exactly
+
+### When Asked to Create Entity Management Pages:
+1. **STOP** - Find the most similar existing entity (Vendors, Therapies, etc.)
+2. **EXAMINE** - Study the reference implementation's exact patterns
+3. **COPY** - Follow the reference implementation exactly
+4. **VERIFY** - Ensure all patterns match the reference
+5. **TEST** - Verify each layer before proceeding to the next
+
+### If Deviation is Requested:
+- Ask why the established pattern cannot be followed
+- Explain the benefits of consistency and maintainability
+- Suggest modifications that preserve the core architecture
+- Document any approved deviations for future reference
