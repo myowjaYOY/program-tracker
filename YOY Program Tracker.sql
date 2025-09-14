@@ -2,35 +2,12 @@
 -- PostgreSQL database dump
 --
 
+\restrict yBqt8sY4pHZPwd4VPOajwEm6bZDdLjbnyNUpqaURl0rk1FVX2LZbJTAjbHOuMN5
+
 -- Dumped from database version 15.8
--- Dumped by pg_dump version 17.5
+-- Dumped by pg_dump version 17.6
 
--- Started on 2025-09-08 10:57:32
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
-SET client_min_messages = warning;
-SET row_security = off;
-
-DROP DATABASE IF EXISTS postgres;
---
--- TOC entry 4029 (class 1262 OID 16979)
--- Name: postgres; Type: DATABASE; Schema: -; Owner: postgres
---
-
-CREATE DATABASE postgres WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_PROVIDER = libc LOCALE = 'en_US.UTF-8';
-
-
-ALTER DATABASE postgres OWNER TO postgres;
-
-\connect postgres
+-- Started on 2025-09-13 22:03:09
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -55,7 +32,7 @@ CREATE SCHEMA public;
 ALTER SCHEMA public OWNER TO pg_database_owner;
 
 --
--- TOC entry 4031 (class 0 OID 0)
+-- TOC entry 4190 (class 0 OID 0)
 -- Dependencies: 19
 -- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: pg_database_owner
 --
@@ -64,7 +41,144 @@ COMMENT ON SCHEMA public IS 'standard public schema';
 
 
 --
--- TOC entry 358 (class 1255 OID 17201)
+-- TOC entry 353 (class 1255 OID 63600)
+-- Name: audit_financing_types(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.audit_financing_types() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        NEW.created_at = now();
+        NEW.created_by = auth.uid();
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION public.audit_financing_types() OWNER TO postgres;
+
+--
+-- TOC entry 336 (class 1255 OID 64973)
+-- Name: audit_member_program_finances(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.audit_member_program_finances() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
+        VALUES ('member_program_finances', NEW.member_program_finance_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
+        RETURN NEW;
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
+        VALUES ('member_program_finances', NEW.member_program_finance_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
+        RETURN NEW;
+    ELSIF TG_OP = 'DELETE' THEN
+        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
+        VALUES ('member_program_finances', OLD.member_program_finance_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
+        RETURN OLD;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION public.audit_member_program_finances() OWNER TO postgres;
+
+--
+-- TOC entry 354 (class 1255 OID 63602)
+-- Name: audit_member_program_payments(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.audit_member_program_payments() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        NEW.created_at = now();
+        NEW.created_by = auth.uid();
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION public.audit_member_program_payments() OWNER TO postgres;
+
+--
+-- TOC entry 352 (class 1255 OID 63599)
+-- Name: audit_payment_methods(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.audit_payment_methods() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        NEW.created_at = now();
+        NEW.created_by = auth.uid();
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION public.audit_payment_methods() OWNER TO postgres;
+
+--
+-- TOC entry 351 (class 1255 OID 63598)
+-- Name: audit_payment_status(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.audit_payment_status() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        NEW.created_at = now();
+        NEW.created_by = auth.uid();
+        NEW.updated_at = now();
+        NEW.updated_by = auth.uid();
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION public.audit_payment_status() OWNER TO postgres;
+
+--
+-- TOC entry 381 (class 1255 OID 17201)
 -- Name: audit_trigger_function(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -134,11 +248,11 @@ $_$;
 ALTER FUNCTION public.audit_trigger_function() OWNER TO postgres;
 
 --
--- TOC entry 390 (class 1255 OID 17202)
+-- TOC entry 416 (class 1255 OID 17202)
 -- Name: create_member_program_from_template(integer, integer, date); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date DEFAULT CURRENT_DATE) RETURNS integer
+CREATE OR REPLACE FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date DEFAULT CURRENT_DATE) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -146,18 +260,48 @@ DECLARE
     template_item RECORD;
     therapy_task RECORD;
     new_member_program_item_id INTEGER;
+    calculated_margin NUMERIC(5,2);
 BEGIN
-    -- Create the member program
+    -- Create the member program (removed margin_percentage since column no longer exists)
     INSERT INTO member_programs (
         lead_id, program_template_name, description, start_date,
-        total_cost, total_charge, source_template_id, margin_percentage, program_status_id
+        total_cost, total_charge, source_template_id, program_status_id
     )
     SELECT 
         p_lead_id, program_template_name, description, p_start_date,
-        total_cost, total_charge, program_template_id, margin_percentage, 1 -- Active status
+        total_cost, total_charge, program_template_id, 1 -- Active status
     FROM program_template 
     WHERE program_template_id = p_template_id
     RETURNING member_program_id INTO new_member_program_id;
+    
+    -- Calculate initial margin from template data
+    SELECT 
+        CASE 
+            WHEN total_charge > 0 THEN ((total_charge - total_cost) / total_charge) * 100
+            ELSE 0
+        END
+    INTO calculated_margin
+    FROM program_template 
+    WHERE program_template_id = p_template_id;
+    
+    -- Create initial finances record with calculated margin
+    INSERT INTO member_program_finances (
+        member_program_id,
+        finance_charges,
+        taxes,
+        discounts,
+        final_total_price,
+        margin,
+        financing_type_id
+    ) VALUES (
+        new_member_program_id,
+        0.00, -- Default finance charges
+        0.00, -- Default taxes
+        0.00, -- Default discounts
+        (SELECT total_charge FROM program_template WHERE program_template_id = p_template_id), -- Initial final total price
+        calculated_margin, -- Calculated margin from template
+        NULL -- No financing type initially
+    );
     
     -- Copy template items to member program items
     FOR template_item IN 
@@ -203,7 +347,7 @@ $$;
 ALTER FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date) OWNER TO postgres;
 
 --
--- TOC entry 391 (class 1255 OID 17203)
+-- TOC entry 413 (class 1255 OID 17203)
 -- Name: example_create_member_program(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -249,7 +393,7 @@ $$;
 ALTER FUNCTION public.example_create_member_program() OWNER TO postgres;
 
 --
--- TOC entry 361 (class 1255 OID 17204)
+-- TOC entry 384 (class 1255 OID 17204)
 -- Name: handle_new_user(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -268,7 +412,7 @@ $$;
 ALTER FUNCTION public.handle_new_user() OWNER TO postgres;
 
 --
--- TOC entry 364 (class 1255 OID 17205)
+-- TOC entry 387 (class 1255 OID 17205)
 -- Name: update_timestamp_function(); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -290,7 +434,7 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- TOC entry 265 (class 1259 OID 17330)
+-- TOC entry 269 (class 1259 OID 17330)
 -- Name: audit_logs; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -311,7 +455,7 @@ CREATE TABLE public.audit_logs (
 ALTER TABLE public.audit_logs OWNER TO postgres;
 
 --
--- TOC entry 266 (class 1259 OID 17336)
+-- TOC entry 270 (class 1259 OID 17336)
 -- Name: audit_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -326,8 +470,8 @@ CREATE SEQUENCE public.audit_logs_id_seq
 ALTER SEQUENCE public.audit_logs_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4039 (class 0 OID 0)
--- Dependencies: 266
+-- TOC entry 4203 (class 0 OID 0)
+-- Dependencies: 270
 -- Name: audit_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -335,7 +479,7 @@ ALTER SEQUENCE public.audit_logs_id_seq OWNED BY public.audit_logs.id;
 
 
 --
--- TOC entry 267 (class 1259 OID 17337)
+-- TOC entry 271 (class 1259 OID 17337)
 -- Name: bodies_body_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -350,7 +494,7 @@ CREATE SEQUENCE public.bodies_body_id_seq
 ALTER SEQUENCE public.bodies_body_id_seq OWNER TO postgres;
 
 --
--- TOC entry 268 (class 1259 OID 17338)
+-- TOC entry 272 (class 1259 OID 17338)
 -- Name: bodies; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -369,7 +513,7 @@ CREATE TABLE public.bodies (
 ALTER TABLE public.bodies OWNER TO postgres;
 
 --
--- TOC entry 269 (class 1259 OID 17349)
+-- TOC entry 273 (class 1259 OID 17349)
 -- Name: buckets_bucket_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -384,7 +528,7 @@ CREATE SEQUENCE public.buckets_bucket_id_seq
 ALTER SEQUENCE public.buckets_bucket_id_seq OWNER TO postgres;
 
 --
--- TOC entry 270 (class 1259 OID 17350)
+-- TOC entry 274 (class 1259 OID 17350)
 -- Name: buckets; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -403,7 +547,7 @@ CREATE TABLE public.buckets (
 ALTER TABLE public.buckets OWNER TO postgres;
 
 --
--- TOC entry 271 (class 1259 OID 17361)
+-- TOC entry 275 (class 1259 OID 17361)
 -- Name: campaigns; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -427,7 +571,7 @@ CREATE TABLE public.campaigns (
 ALTER TABLE public.campaigns OWNER TO postgres;
 
 --
--- TOC entry 272 (class 1259 OID 17371)
+-- TOC entry 276 (class 1259 OID 17371)
 -- Name: campaigns_campaign_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -443,8 +587,8 @@ CREATE SEQUENCE public.campaigns_campaign_id_seq
 ALTER SEQUENCE public.campaigns_campaign_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4046 (class 0 OID 0)
--- Dependencies: 272
+-- TOC entry 4210 (class 0 OID 0)
+-- Dependencies: 276
 -- Name: campaigns_campaign_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -452,7 +596,59 @@ ALTER SEQUENCE public.campaigns_campaign_id_seq OWNED BY public.campaigns.campai
 
 
 --
--- TOC entry 273 (class 1259 OID 17372)
+-- TOC entry 326 (class 1259 OID 63528)
+-- Name: financing_types; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.financing_types (
+    financing_type_id integer NOT NULL,
+    financing_type_name character varying(50) NOT NULL,
+    financing_type_description text,
+    active_flag boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.financing_types OWNER TO postgres;
+
+--
+-- TOC entry 4212 (class 0 OID 0)
+-- Dependencies: 326
+-- Name: TABLE financing_types; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.financing_types IS 'Lookup table for financing types (Full Payment, Financed)';
+
+
+--
+-- TOC entry 327 (class 1259 OID 63540)
+-- Name: financing_types_financing_type_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.financing_types_financing_type_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.financing_types_financing_type_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4214 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: financing_types_financing_type_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.financing_types_financing_type_id_seq OWNED BY public.financing_types.financing_type_id;
+
+
+--
+-- TOC entry 277 (class 1259 OID 17372)
 -- Name: leads; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -476,7 +672,7 @@ CREATE TABLE public.leads (
 ALTER TABLE public.leads OWNER TO postgres;
 
 --
--- TOC entry 274 (class 1259 OID 17382)
+-- TOC entry 278 (class 1259 OID 17382)
 -- Name: leads_lead_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -491,8 +687,8 @@ CREATE SEQUENCE public.leads_lead_id_seq
 ALTER SEQUENCE public.leads_lead_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4049 (class 0 OID 0)
--- Dependencies: 274
+-- TOC entry 4217 (class 0 OID 0)
+-- Dependencies: 278
 -- Name: leads_lead_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -500,7 +696,147 @@ ALTER SEQUENCE public.leads_lead_id_seq OWNED BY public.leads.lead_id;
 
 
 --
--- TOC entry 275 (class 1259 OID 17383)
+-- TOC entry 330 (class 1259 OID 64937)
+-- Name: member_program_finances; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.member_program_finances (
+    member_program_finance_id integer NOT NULL,
+    member_program_id integer NOT NULL,
+    finance_charges numeric(10,2) DEFAULT 0.00,
+    taxes numeric(10,2) DEFAULT 0.00,
+    discounts numeric(10,2) DEFAULT 0.00,
+    final_total_price numeric(10,2) DEFAULT 0.00,
+    margin numeric(5,2) DEFAULT 0.00,
+    financing_type_id integer,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.member_program_finances OWNER TO postgres;
+
+--
+-- TOC entry 331 (class 1259 OID 64949)
+-- Name: member_program_finances_member_program_finance_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.member_program_finances_member_program_finance_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.member_program_finances_member_program_finance_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4220 (class 0 OID 0)
+-- Dependencies: 331
+-- Name: member_program_finances_member_program_finance_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.member_program_finances_member_program_finance_id_seq OWNED BY public.member_program_finances.member_program_finance_id;
+
+
+--
+-- TOC entry 332 (class 1259 OID 66099)
+-- Name: member_program_item_schedule; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.member_program_item_schedule (
+    member_program_item_schedule_id integer NOT NULL,
+    member_program_item_id integer NOT NULL,
+    instance_number integer NOT NULL,
+    scheduled_date date NOT NULL,
+    completed_flag boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.member_program_item_schedule OWNER TO postgres;
+
+--
+-- TOC entry 333 (class 1259 OID 66114)
+-- Name: member_program_item_schedule_member_program_item_schedule_id_se; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se OWNER TO postgres;
+
+--
+-- TOC entry 4223 (class 0 OID 0)
+-- Dependencies: 333
+-- Name: member_program_item_schedule_member_program_item_schedule_id_se; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se OWNED BY public.member_program_item_schedule.member_program_item_schedule_id;
+
+
+--
+-- TOC entry 321 (class 1259 OID 62265)
+-- Name: member_program_item_tasks; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.member_program_item_tasks (
+    member_program_item_task_id integer NOT NULL,
+    member_program_item_id integer NOT NULL,
+    task_id integer NOT NULL,
+    task_name text NOT NULL,
+    description text,
+    task_delay integer NOT NULL,
+    completed_flag boolean DEFAULT false NOT NULL,
+    completed_date timestamp with time zone,
+    completed_by uuid,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.member_program_item_tasks OWNER TO postgres;
+
+--
+-- TOC entry 320 (class 1259 OID 62264)
+-- Name: member_program_item_tasks_member_program_item_task_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4226 (class 0 OID 0)
+-- Dependencies: 320
+-- Name: member_program_item_tasks_member_program_item_task_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq OWNED BY public.member_program_item_tasks.member_program_item_task_id;
+
+
+--
+-- TOC entry 279 (class 1259 OID 17383)
 -- Name: member_program_items; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -525,7 +861,7 @@ CREATE TABLE public.member_program_items (
 ALTER TABLE public.member_program_items OWNER TO postgres;
 
 --
--- TOC entry 276 (class 1259 OID 17398)
+-- TOC entry 280 (class 1259 OID 17398)
 -- Name: member_program_items_member_program_item_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -540,8 +876,8 @@ CREATE SEQUENCE public.member_program_items_member_program_item_id_seq
 ALTER SEQUENCE public.member_program_items_member_program_item_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4052 (class 0 OID 0)
--- Dependencies: 276
+-- TOC entry 4229 (class 0 OID 0)
+-- Dependencies: 280
 -- Name: member_program_items_member_program_item_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -549,35 +885,16 @@ ALTER SEQUENCE public.member_program_items_member_program_item_id_seq OWNED BY p
 
 
 --
--- TOC entry 277.5 (class 1259 OID 17400)
--- Name: member_program_item_tasks_member_program_item_task_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+-- TOC entry 334 (class 1259 OID 66120)
+-- Name: member_program_items_task_schedule; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    MAXVALUE 2147483647
-    CACHE 1;
-
-
-ALTER SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq OWNER TO postgres;
-
---
--- TOC entry 277.6 (class 1259 OID 17401)
--- Name: member_program_item_tasks; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.member_program_item_tasks (
-    member_program_item_task_id integer DEFAULT nextval('public.member_program_item_tasks_member_program_item_task_id_seq'::regclass) NOT NULL,
-    member_program_item_id integer NOT NULL,
-    task_id integer NOT NULL,
-    task_name text NOT NULL,
-    description text,
-    task_delay integer NOT NULL,
+CREATE TABLE public.member_program_items_task_schedule (
+    member_program_item_task_schedule_id integer NOT NULL,
+    member_program_item_schedule_id integer NOT NULL,
+    member_program_item_task_id integer NOT NULL,
+    due_date date NOT NULL,
     completed_flag boolean DEFAULT false NOT NULL,
-    completed_date timestamp with time zone,
-    completed_by uuid,
     created_at timestamp with time zone DEFAULT now(),
     created_by uuid DEFAULT auth.uid(),
     updated_at timestamp with time zone DEFAULT now(),
@@ -585,47 +902,14 @@ CREATE TABLE public.member_program_item_tasks (
 );
 
 
-ALTER TABLE public.member_program_item_tasks OWNER TO postgres;
+ALTER TABLE public.member_program_items_task_schedule OWNER TO postgres;
 
 --
--- TOC entry 4052.5 (class 0 OID 0)
--- Dependencies: 277.5
--- Name: member_program_item_tasks_member_program_item_task_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- TOC entry 335 (class 1259 OID 66140)
+-- Name: member_program_items_task_schedule_member_program_item_task_sch; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
-ALTER SEQUENCE public.member_program_item_tasks_member_program_item_task_id_seq OWNED BY public.member_program_item_tasks.member_program_item_task_id;
-
-
---
--- TOC entry 277 (class 1259 OID 17399)
--- Name: member_program_schedule; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.member_program_schedule (
-    program_schedule_id integer NOT NULL,
-    member_program_item_id integer NOT NULL,
-    schedule_type text NOT NULL,
-    name text NOT NULL,
-    instructions text,
-    scheduled_date date NOT NULL,
-    actual_date date,
-    completed boolean DEFAULT false NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid(),
-    CONSTRAINT member_program_schedule_schedule_type_check CHECK ((schedule_type = ANY (ARRAY['Therapy'::text, 'Task'::text])))
-);
-
-
-ALTER TABLE public.member_program_schedule OWNER TO postgres;
-
---
--- TOC entry 278 (class 1259 OID 17410)
--- Name: member_program_schedule_program_schedule_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.member_program_schedule_program_schedule_id_seq
+CREATE SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -633,19 +917,104 @@ CREATE SEQUENCE public.member_program_schedule_program_schedule_id_seq
     CACHE 1;
 
 
-ALTER SEQUENCE public.member_program_schedule_program_schedule_id_seq OWNER TO postgres;
+ALTER SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch OWNER TO postgres;
 
 --
--- TOC entry 4055 (class 0 OID 0)
--- Dependencies: 278
--- Name: member_program_schedule_program_schedule_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+-- TOC entry 4232 (class 0 OID 0)
+-- Dependencies: 335
+-- Name: member_program_items_task_schedule_member_program_item_task_sch; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
-ALTER SEQUENCE public.member_program_schedule_program_schedule_id_seq OWNED BY public.member_program_schedule.program_schedule_id;
+ALTER SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch OWNED BY public.member_program_items_task_schedule.member_program_item_task_schedule_id;
 
 
 --
--- TOC entry 279 (class 1259 OID 17411)
+-- TOC entry 328 (class 1259 OID 63559)
+-- Name: member_program_payments; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.member_program_payments (
+    member_program_payment_id integer NOT NULL,
+    member_program_id integer NOT NULL,
+    payment_amount numeric(10,2) NOT NULL,
+    payment_due_date date NOT NULL,
+    payment_date date,
+    payment_status_id integer NOT NULL,
+    payment_method_id integer,
+    payment_reference character varying(100),
+    notes text,
+    active_flag boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.member_program_payments OWNER TO postgres;
+
+--
+-- TOC entry 4234 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: TABLE member_program_payments; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.member_program_payments IS 'Payment schedule and tracking for member programs';
+
+
+--
+-- TOC entry 4235 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: COLUMN member_program_payments.payment_due_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.member_program_payments.payment_due_date IS 'Date when payment is due';
+
+
+--
+-- TOC entry 4236 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: COLUMN member_program_payments.payment_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.member_program_payments.payment_date IS 'Date when payment was actually made (NULL until paid)';
+
+
+--
+-- TOC entry 4237 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: COLUMN member_program_payments.payment_reference; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.member_program_payments.payment_reference IS 'Reference number for payment (check number, transaction ID, etc.)';
+
+
+--
+-- TOC entry 329 (class 1259 OID 63571)
+-- Name: member_program_payments_member_program_payment_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.member_program_payments_member_program_payment_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.member_program_payments_member_program_payment_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4239 (class 0 OID 0)
+-- Dependencies: 329
+-- Name: member_program_payments_member_program_payment_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.member_program_payments_member_program_payment_id_seq OWNED BY public.member_program_payments.member_program_payment_id;
+
+
+--
+-- TOC entry 281 (class 1259 OID 17411)
 -- Name: member_programs; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -655,7 +1024,6 @@ CREATE TABLE public.member_programs (
     description text,
     total_cost numeric(9,2),
     total_charge numeric(9,2),
-    margin_percentage numeric(5,2),
     lead_id integer,
     start_date date,
     active_flag boolean DEFAULT true NOT NULL,
@@ -672,7 +1040,7 @@ CREATE TABLE public.member_programs (
 ALTER TABLE public.member_programs OWNER TO postgres;
 
 --
--- TOC entry 280 (class 1259 OID 17422)
+-- TOC entry 282 (class 1259 OID 17422)
 -- Name: member_programs_member_program_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -688,8 +1056,8 @@ CREATE SEQUENCE public.member_programs_member_program_id_seq
 ALTER SEQUENCE public.member_programs_member_program_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4058 (class 0 OID 0)
--- Dependencies: 280
+-- TOC entry 4242 (class 0 OID 0)
+-- Dependencies: 282
 -- Name: member_programs_member_program_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -697,7 +1065,7 @@ ALTER SEQUENCE public.member_programs_member_program_id_seq OWNED BY public.memb
 
 
 --
--- TOC entry 315 (class 1259 OID 59417)
+-- TOC entry 317 (class 1259 OID 59417)
 -- Name: menu_items; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -715,7 +1083,7 @@ CREATE TABLE public.menu_items (
 ALTER TABLE public.menu_items OWNER TO postgres;
 
 --
--- TOC entry 314 (class 1259 OID 59416)
+-- TOC entry 316 (class 1259 OID 59416)
 -- Name: menu_items_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -731,8 +1099,8 @@ CREATE SEQUENCE public.menu_items_id_seq
 ALTER SEQUENCE public.menu_items_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4061 (class 0 OID 0)
--- Dependencies: 314
+-- TOC entry 4245 (class 0 OID 0)
+-- Dependencies: 316
 -- Name: menu_items_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -740,7 +1108,111 @@ ALTER SEQUENCE public.menu_items_id_seq OWNED BY public.menu_items.id;
 
 
 --
--- TOC entry 281 (class 1259 OID 17423)
+-- TOC entry 324 (class 1259 OID 63514)
+-- Name: payment_methods; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.payment_methods (
+    payment_method_id integer NOT NULL,
+    payment_method_name character varying(50) NOT NULL,
+    payment_method_description text,
+    active_flag boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.payment_methods OWNER TO postgres;
+
+--
+-- TOC entry 4247 (class 0 OID 0)
+-- Dependencies: 324
+-- Name: TABLE payment_methods; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.payment_methods IS 'Lookup table for payment methods (Cash, Check, Credit Card, etc.)';
+
+
+--
+-- TOC entry 325 (class 1259 OID 63526)
+-- Name: payment_methods_payment_method_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.payment_methods_payment_method_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.payment_methods_payment_method_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4249 (class 0 OID 0)
+-- Dependencies: 325
+-- Name: payment_methods_payment_method_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.payment_methods_payment_method_id_seq OWNED BY public.payment_methods.payment_method_id;
+
+
+--
+-- TOC entry 322 (class 1259 OID 63500)
+-- Name: payment_status; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.payment_status (
+    payment_status_id integer NOT NULL,
+    payment_status_name character varying(50) NOT NULL,
+    payment_status_description text,
+    active_flag boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid DEFAULT auth.uid(),
+    updated_at timestamp with time zone DEFAULT now(),
+    updated_by uuid DEFAULT auth.uid()
+);
+
+
+ALTER TABLE public.payment_status OWNER TO postgres;
+
+--
+-- TOC entry 4251 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: TABLE payment_status; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.payment_status IS 'Lookup table for payment statuses (Pending, Paid, Late, Cancelled)';
+
+
+--
+-- TOC entry 323 (class 1259 OID 63512)
+-- Name: payment_status_payment_status_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.payment_status_payment_status_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    MAXVALUE 2147483647
+    CACHE 1;
+
+
+ALTER SEQUENCE public.payment_status_payment_status_id_seq OWNER TO postgres;
+
+--
+-- TOC entry 4253 (class 0 OID 0)
+-- Dependencies: 323
+-- Name: payment_status_payment_status_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.payment_status_payment_status_id_seq OWNED BY public.payment_status.payment_status_id;
+
+
+--
+-- TOC entry 283 (class 1259 OID 17423)
 -- Name: pillars_pillar_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -755,7 +1227,7 @@ CREATE SEQUENCE public.pillars_pillar_id_seq
 ALTER SEQUENCE public.pillars_pillar_id_seq OWNER TO postgres;
 
 --
--- TOC entry 282 (class 1259 OID 17424)
+-- TOC entry 284 (class 1259 OID 17424)
 -- Name: pillars; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -774,7 +1246,7 @@ CREATE TABLE public.pillars (
 ALTER TABLE public.pillars OWNER TO postgres;
 
 --
--- TOC entry 283 (class 1259 OID 17435)
+-- TOC entry 285 (class 1259 OID 17435)
 -- Name: program_items_program_item_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -789,7 +1261,7 @@ CREATE SEQUENCE public.program_items_program_item_id_seq
 ALTER SEQUENCE public.program_items_program_item_id_seq OWNER TO postgres;
 
 --
--- TOC entry 284 (class 1259 OID 17436)
+-- TOC entry 286 (class 1259 OID 17436)
 -- Name: program_status_program_status_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -804,7 +1276,7 @@ CREATE SEQUENCE public.program_status_program_status_id_seq
 ALTER SEQUENCE public.program_status_program_status_id_seq OWNER TO postgres;
 
 --
--- TOC entry 285 (class 1259 OID 17437)
+-- TOC entry 287 (class 1259 OID 17437)
 -- Name: program_status; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -823,7 +1295,7 @@ CREATE TABLE public.program_status (
 ALTER TABLE public.program_status OWNER TO postgres;
 
 --
--- TOC entry 286 (class 1259 OID 17448)
+-- TOC entry 288 (class 1259 OID 17448)
 -- Name: program_template_program_template_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -838,7 +1310,7 @@ CREATE SEQUENCE public.program_template_program_template_id_seq
 ALTER SEQUENCE public.program_template_program_template_id_seq OWNER TO postgres;
 
 --
--- TOC entry 287 (class 1259 OID 17449)
+-- TOC entry 289 (class 1259 OID 17449)
 -- Name: program_template; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -860,7 +1332,7 @@ CREATE TABLE public.program_template (
 ALTER TABLE public.program_template OWNER TO postgres;
 
 --
--- TOC entry 288 (class 1259 OID 17460)
+-- TOC entry 290 (class 1259 OID 17460)
 -- Name: program_template_items_program_template_items_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -875,7 +1347,7 @@ CREATE SEQUENCE public.program_template_items_program_template_items_id_seq
 ALTER SEQUENCE public.program_template_items_program_template_items_id_seq OWNER TO postgres;
 
 --
--- TOC entry 289 (class 1259 OID 17461)
+-- TOC entry 291 (class 1259 OID 17461)
 -- Name: program_template_items; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -898,7 +1370,7 @@ CREATE TABLE public.program_template_items (
 ALTER TABLE public.program_template_items OWNER TO postgres;
 
 --
--- TOC entry 290 (class 1259 OID 17475)
+-- TOC entry 292 (class 1259 OID 17475)
 -- Name: programs_program_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -913,7 +1385,7 @@ CREATE SEQUENCE public.programs_program_id_seq
 ALTER SEQUENCE public.programs_program_id_seq OWNER TO postgres;
 
 --
--- TOC entry 291 (class 1259 OID 17476)
+-- TOC entry 293 (class 1259 OID 17476)
 -- Name: status; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -932,7 +1404,7 @@ CREATE TABLE public.status (
 ALTER TABLE public.status OWNER TO postgres;
 
 --
--- TOC entry 292 (class 1259 OID 17486)
+-- TOC entry 294 (class 1259 OID 17486)
 -- Name: status_status_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -948,8 +1420,8 @@ CREATE SEQUENCE public.status_status_id_seq
 ALTER SEQUENCE public.status_status_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4074 (class 0 OID 0)
--- Dependencies: 292
+-- TOC entry 4266 (class 0 OID 0)
+-- Dependencies: 294
 -- Name: status_status_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -957,7 +1429,7 @@ ALTER SEQUENCE public.status_status_id_seq OWNED BY public.status.status_id;
 
 
 --
--- TOC entry 293 (class 1259 OID 17487)
+-- TOC entry 295 (class 1259 OID 17487)
 -- Name: therapies_therapy_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -972,7 +1444,7 @@ CREATE SEQUENCE public.therapies_therapy_id_seq
 ALTER SEQUENCE public.therapies_therapy_id_seq OWNER TO postgres;
 
 --
--- TOC entry 294 (class 1259 OID 17488)
+-- TOC entry 296 (class 1259 OID 17488)
 -- Name: therapies; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -995,7 +1467,7 @@ CREATE TABLE public.therapies (
 ALTER TABLE public.therapies OWNER TO postgres;
 
 --
--- TOC entry 295 (class 1259 OID 17499)
+-- TOC entry 297 (class 1259 OID 17499)
 -- Name: therapies_bodies_pillars; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1014,7 +1486,7 @@ CREATE TABLE public.therapies_bodies_pillars (
 ALTER TABLE public.therapies_bodies_pillars OWNER TO postgres;
 
 --
--- TOC entry 296 (class 1259 OID 17507)
+-- TOC entry 298 (class 1259 OID 17507)
 -- Name: therapy_tasks_task_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -1029,7 +1501,7 @@ CREATE SEQUENCE public.therapy_tasks_task_id_seq
 ALTER SEQUENCE public.therapy_tasks_task_id_seq OWNER TO postgres;
 
 --
--- TOC entry 297 (class 1259 OID 17508)
+-- TOC entry 299 (class 1259 OID 17508)
 -- Name: therapy_tasks; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1050,17 +1522,7 @@ CREATE TABLE public.therapy_tasks (
 ALTER TABLE public.therapy_tasks OWNER TO postgres;
 
 --
--- Foreign key constraints for therapy_tasks table
---
-
-ALTER TABLE ONLY public.therapy_tasks
-    ADD CONSTRAINT therapy_tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.therapy_tasks
-    ADD CONSTRAINT therapy_tasks_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
---
--- TOC entry 298 (class 1259 OID 17519)
+-- TOC entry 300 (class 1259 OID 17519)
 -- Name: therapy_type_therapy_type_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -1075,7 +1537,7 @@ CREATE SEQUENCE public.therapy_type_therapy_type_id_seq
 ALTER SEQUENCE public.therapy_type_therapy_type_id_seq OWNER TO postgres;
 
 --
--- TOC entry 299 (class 1259 OID 17520)
+-- TOC entry 301 (class 1259 OID 17520)
 -- Name: therapytype; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1094,7 +1556,7 @@ CREATE TABLE public.therapytype (
 ALTER TABLE public.therapytype OWNER TO postgres;
 
 --
--- TOC entry 317 (class 1259 OID 59428)
+-- TOC entry 319 (class 1259 OID 59428)
 -- Name: user_menu_permissions; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1110,7 +1572,7 @@ CREATE TABLE public.user_menu_permissions (
 ALTER TABLE public.user_menu_permissions OWNER TO postgres;
 
 --
--- TOC entry 316 (class 1259 OID 59427)
+-- TOC entry 318 (class 1259 OID 59427)
 -- Name: user_menu_permissions_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -1126,8 +1588,8 @@ CREATE SEQUENCE public.user_menu_permissions_id_seq
 ALTER SEQUENCE public.user_menu_permissions_id_seq OWNER TO postgres;
 
 --
--- TOC entry 4084 (class 0 OID 0)
--- Dependencies: 316
+-- TOC entry 4276 (class 0 OID 0)
+-- Dependencies: 318
 -- Name: user_menu_permissions_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
@@ -1135,7 +1597,7 @@ ALTER SEQUENCE public.user_menu_permissions_id_seq OWNED BY public.user_menu_per
 
 
 --
--- TOC entry 300 (class 1259 OID 17531)
+-- TOC entry 302 (class 1259 OID 17531)
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1152,7 +1614,7 @@ CREATE TABLE public.users (
 ALTER TABLE public.users OWNER TO postgres;
 
 --
--- TOC entry 301 (class 1259 OID 17537)
+-- TOC entry 303 (class 1259 OID 17537)
 -- Name: vendors; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -1173,102 +1635,7 @@ CREATE TABLE public.vendors (
 ALTER TABLE public.vendors OWNER TO postgres;
 
 --
--- TOC entry 302 (class 1259 OID 17550)
--- Name: payment_status; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.payment_status (
-    payment_status_id integer NOT NULL,
-    payment_status_name text NOT NULL,
-    active_flag boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
-);
-
-ALTER TABLE public.payment_status OWNER TO postgres;
-
---
--- TOC entry 303 (class 1259 OID 17563)
--- Name: payment_methods; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.payment_methods (
-    payment_method_id integer NOT NULL,
-    payment_method_name text NOT NULL,
-    active_flag boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
-);
-
-ALTER TABLE public.payment_methods OWNER TO postgres;
-
---
--- TOC entry 304 (class 1259 OID 17576)
--- Name: financing_types; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.financing_types (
-    financing_type_id integer NOT NULL,
-    financing_type_name text NOT NULL,
-    active_flag boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
-);
-
-ALTER TABLE public.financing_types OWNER TO postgres;
-
---
--- TOC entry 305 (class 1259 OID 17589)
--- Name: member_program_finances; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.member_program_finances (
-    member_program_finance_id integer NOT NULL,
-    program_id integer NOT NULL,
-    finance_charges numeric(10,2) DEFAULT 0.00,
-    taxes numeric(10,2) DEFAULT 0.00,
-    discounts numeric(10,2) DEFAULT 0.00,
-    final_total_price numeric(10,2) DEFAULT 0.00,
-    margin numeric(5,2) DEFAULT 0.00,
-    financing_type_id integer,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
-);
-
-ALTER TABLE public.member_program_finances OWNER TO postgres;
-
---
--- TOC entry 306 (class 1259 OID 17602)
--- Name: member_program_payments; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.member_program_payments (
-    member_program_payment_id integer NOT NULL,
-    program_id integer NOT NULL,
-    payment_amount numeric(10,2) NOT NULL,
-    payment_due_date date NOT NULL,
-    payment_status_id integer NOT NULL,
-    payment_method_id integer,
-    payment_date date,
-    notes text,
-    created_at timestamp with time zone DEFAULT now(),
-    created_by uuid DEFAULT auth.uid(),
-    updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
-);
-
-ALTER TABLE public.member_program_payments OWNER TO postgres;
-
---
--- TOC entry 312 (class 1259 OID 17547)
+-- TOC entry 304 (class 1259 OID 17547)
 -- Name: vendors_vendor_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -1284,101 +1651,16 @@ CREATE SEQUENCE public.vendors_vendor_id_seq
 ALTER SEQUENCE public.vendors_vendor_id_seq OWNER TO postgres;
 
 --
--- TOC entry 310 (class 1259 OID 17576)
--- Name: member_program_finances_member_program_finance_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.member_program_finances_member_program_finance_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.member_program_finances_member_program_finance_id_seq OWNER TO postgres;
-
---
--- TOC entry 311 (class 1259 OID 17589)
--- Name: member_program_payments_member_program_payment_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.member_program_payments_member_program_payment_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.member_program_payments_member_program_payment_id_seq OWNER TO postgres;
-
---
--- TOC entry 307 (class 1259 OID 17615)
--- Name: payment_status_payment_status_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.payment_status_payment_status_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.payment_status_payment_status_id_seq OWNER TO postgres;
-
---
--- TOC entry 308 (class 1259 OID 17628)
--- Name: payment_methods_payment_method_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.payment_methods_payment_method_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.payment_methods_payment_method_id_seq OWNER TO postgres;
-
---
--- TOC entry 309 (class 1259 OID 17641)
--- Name: financing_types_financing_type_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.financing_types_financing_type_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.financing_types_financing_type_id_seq OWNER TO postgres;
-
---
--- TOC entry 4088 (class 0 OID 0)
--- Dependencies: 312
+-- TOC entry 4280 (class 0 OID 0)
+-- Dependencies: 304
 -- Name: vendors_vendor_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
 
 ALTER SEQUENCE public.vendors_vendor_id_seq OWNED BY public.vendors.vendor_id;
 
-ALTER SEQUENCE public.member_program_finances_member_program_finance_id_seq OWNED BY public.member_program_finances.member_program_finance_id;
-
-ALTER SEQUENCE public.member_program_payments_member_program_payment_id_seq OWNED BY public.member_program_payments.member_program_payment_id;
-
-ALTER SEQUENCE public.payment_status_payment_status_id_seq OWNED BY public.payment_status.payment_status_id;
-
-ALTER SEQUENCE public.payment_methods_payment_method_id_seq OWNED BY public.payment_methods.payment_method_id;
-
-ALTER SEQUENCE public.financing_types_financing_type_id_seq OWNED BY public.financing_types.financing_type_id;
-
 
 --
--- TOC entry 3581 (class 2604 OID 17606)
+-- TOC entry 3625 (class 2604 OID 17606)
 -- Name: audit_logs id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1386,7 +1668,7 @@ ALTER TABLE ONLY public.audit_logs ALTER COLUMN id SET DEFAULT nextval('public.a
 
 
 --
--- TOC entry 3595 (class 2604 OID 17607)
+-- TOC entry 3639 (class 2604 OID 17607)
 -- Name: campaigns campaign_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1394,7 +1676,15 @@ ALTER TABLE ONLY public.campaigns ALTER COLUMN campaign_id SET DEFAULT nextval('
 
 
 --
--- TOC entry 3601 (class 2604 OID 17608)
+-- TOC entry 3757 (class 2604 OID 63541)
+-- Name: financing_types financing_type_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.financing_types ALTER COLUMN financing_type_id SET DEFAULT nextval('public.financing_types_financing_type_id_seq'::regclass);
+
+
+--
+-- TOC entry 3645 (class 2604 OID 17608)
 -- Name: leads lead_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1402,7 +1692,31 @@ ALTER TABLE ONLY public.leads ALTER COLUMN lead_id SET DEFAULT nextval('public.l
 
 
 --
--- TOC entry 3607 (class 2604 OID 17609)
+-- TOC entry 3769 (class 2604 OID 64950)
+-- Name: member_program_finances member_program_finance_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_finances ALTER COLUMN member_program_finance_id SET DEFAULT nextval('public.member_program_finances_member_program_finance_id_seq'::regclass);
+
+
+--
+-- TOC entry 3779 (class 2604 OID 66115)
+-- Name: member_program_item_schedule member_program_item_schedule_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_schedule ALTER COLUMN member_program_item_schedule_id SET DEFAULT nextval('public.member_program_item_schedule_member_program_item_schedule_id_se'::regclass);
+
+
+--
+-- TOC entry 3739 (class 2604 OID 62268)
+-- Name: member_program_item_tasks member_program_item_task_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_tasks ALTER COLUMN member_program_item_task_id SET DEFAULT nextval('public.member_program_item_tasks_member_program_item_task_id_seq'::regclass);
+
+
+--
+-- TOC entry 3651 (class 2604 OID 17609)
 -- Name: member_program_items member_program_item_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1410,15 +1724,23 @@ ALTER TABLE ONLY public.member_program_items ALTER COLUMN member_program_item_id
 
 
 --
--- TOC entry 3618 (class 2604 OID 17610)
--- Name: member_program_schedule program_schedule_id; Type: DEFAULT; Schema: public; Owner: postgres
+-- TOC entry 3785 (class 2604 OID 66141)
+-- Name: member_program_items_task_schedule member_program_item_task_schedule_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.member_program_schedule ALTER COLUMN program_schedule_id SET DEFAULT nextval('public.member_program_schedule_program_schedule_id_seq'::regclass);
+ALTER TABLE ONLY public.member_program_items_task_schedule ALTER COLUMN member_program_item_task_schedule_id SET DEFAULT nextval('public.member_program_items_task_schedule_member_program_item_task_sch'::regclass);
 
 
 --
--- TOC entry 3624 (class 2604 OID 17611)
+-- TOC entry 3763 (class 2604 OID 63572)
+-- Name: member_program_payments member_program_payment_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments ALTER COLUMN member_program_payment_id SET DEFAULT nextval('public.member_program_payments_member_program_payment_id_seq'::regclass);
+
+
+--
+-- TOC entry 3662 (class 2604 OID 17611)
 -- Name: member_programs member_program_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1426,7 +1748,7 @@ ALTER TABLE ONLY public.member_programs ALTER COLUMN member_program_id SET DEFAU
 
 
 --
--- TOC entry 3696 (class 2604 OID 59420)
+-- TOC entry 3734 (class 2604 OID 59420)
 -- Name: menu_items id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1434,7 +1756,23 @@ ALTER TABLE ONLY public.menu_items ALTER COLUMN id SET DEFAULT nextval('public.m
 
 
 --
--- TOC entry 3658 (class 2604 OID 17612)
+-- TOC entry 3751 (class 2604 OID 63527)
+-- Name: payment_methods payment_method_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_methods ALTER COLUMN payment_method_id SET DEFAULT nextval('public.payment_methods_payment_method_id_seq'::regclass);
+
+
+--
+-- TOC entry 3745 (class 2604 OID 63513)
+-- Name: payment_status payment_status_id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_status ALTER COLUMN payment_status_id SET DEFAULT nextval('public.payment_status_payment_status_id_seq'::regclass);
+
+
+--
+-- TOC entry 3696 (class 2604 OID 17612)
 -- Name: status status_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1442,7 +1780,7 @@ ALTER TABLE ONLY public.status ALTER COLUMN status_id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 3699 (class 2604 OID 59431)
+-- TOC entry 3737 (class 2604 OID 59431)
 -- Name: user_menu_permissions id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -1450,25 +1788,15 @@ ALTER TABLE ONLY public.user_menu_permissions ALTER COLUMN id SET DEFAULT nextva
 
 
 --
--- TOC entry 3690 (class 2604 OID 17613)
+-- TOC entry 3728 (class 2604 OID 17613)
 -- Name: vendors vendor_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.vendors ALTER COLUMN vendor_id SET DEFAULT nextval('public.vendors_vendor_id_seq'::regclass);
 
-ALTER TABLE ONLY public.member_program_finances ALTER COLUMN member_program_finance_id SET DEFAULT nextval('public.member_program_finances_member_program_finance_id_seq'::regclass);
-
-ALTER TABLE ONLY public.member_program_payments ALTER COLUMN member_program_payment_id SET DEFAULT nextval('public.member_program_payments_member_program_payment_id_seq'::regclass);
-
-ALTER TABLE ONLY public.payment_status ALTER COLUMN payment_status_id SET DEFAULT nextval('public.payment_status_payment_status_id_seq'::regclass);
-
-ALTER TABLE ONLY public.payment_methods ALTER COLUMN payment_method_id SET DEFAULT nextval('public.payment_methods_payment_method_id_seq'::regclass);
-
-ALTER TABLE ONLY public.financing_types ALTER COLUMN financing_type_id SET DEFAULT nextval('public.financing_types_financing_type_id_seq'::regclass);
-
 
 --
--- TOC entry 3703 (class 2606 OID 17659)
+-- TOC entry 3792 (class 2606 OID 17659)
 -- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1477,7 +1805,7 @@ ALTER TABLE ONLY public.audit_logs
 
 
 --
--- TOC entry 3705 (class 2606 OID 17661)
+-- TOC entry 3794 (class 2606 OID 17661)
 -- Name: bodies bodies_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1486,7 +1814,7 @@ ALTER TABLE ONLY public.bodies
 
 
 --
--- TOC entry 3707 (class 2606 OID 17663)
+-- TOC entry 3796 (class 2606 OID 17663)
 -- Name: buckets buckets_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1495,7 +1823,7 @@ ALTER TABLE ONLY public.buckets
 
 
 --
--- TOC entry 3709 (class 2606 OID 17665)
+-- TOC entry 3798 (class 2606 OID 17665)
 -- Name: campaigns campaigns_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1504,7 +1832,7 @@ ALTER TABLE ONLY public.campaigns
 
 
 --
--- TOC entry 3711 (class 2606 OID 17667)
+-- TOC entry 3800 (class 2606 OID 17667)
 -- Name: leads leads_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1513,16 +1841,25 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- TOC entry 3715 (class 2606 OID 17669)
--- Name: member_program_items member_program_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- TOC entry 3862 (class 2606 OID 64952)
+-- Name: member_program_finances member_program_finances_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.member_program_items
-    ADD CONSTRAINT member_program_items_pkey PRIMARY KEY (member_program_item_id);
+ALTER TABLE ONLY public.member_program_finances
+    ADD CONSTRAINT member_program_finances_pkey PRIMARY KEY (member_program_finance_id);
 
 
 --
--- TOC entry 3718.5 (class 2606 OID 17670)
+-- TOC entry 3866 (class 2606 OID 66108)
+-- Name: member_program_item_schedule member_program_item_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_schedule
+    ADD CONSTRAINT member_program_item_schedule_pkey PRIMARY KEY (member_program_item_schedule_id);
+
+
+--
+-- TOC entry 3847 (class 2606 OID 62277)
 -- Name: member_program_item_tasks member_program_item_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1531,16 +1868,25 @@ ALTER TABLE ONLY public.member_program_item_tasks
 
 
 --
--- TOC entry 3719 (class 2606 OID 17671)
--- Name: member_program_schedule member_program_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- TOC entry 3804 (class 2606 OID 17669)
+-- Name: member_program_items member_program_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.member_program_schedule
-    ADD CONSTRAINT member_program_schedule_pkey PRIMARY KEY (program_schedule_id);
+ALTER TABLE ONLY public.member_program_items
+    ADD CONSTRAINT member_program_items_pkey PRIMARY KEY (member_program_item_id);
 
 
 --
--- TOC entry 3724 (class 2606 OID 17673)
+-- TOC entry 3871 (class 2606 OID 66129)
+-- Name: member_program_items_task_schedule member_program_items_task_schedule_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_items_task_schedule
+    ADD CONSTRAINT member_program_items_task_schedule_pkey PRIMARY KEY (member_program_item_task_schedule_id);
+
+
+--
+-- TOC entry 3809 (class 2606 OID 17673)
 -- Name: member_programs member_programs_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1549,7 +1895,7 @@ ALTER TABLE ONLY public.member_programs
 
 
 --
--- TOC entry 3749 (class 2606 OID 59426)
+-- TOC entry 3834 (class 2606 OID 59426)
 -- Name: menu_items menu_items_path_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1558,7 +1904,7 @@ ALTER TABLE ONLY public.menu_items
 
 
 --
--- TOC entry 3751 (class 2606 OID 59424)
+-- TOC entry 3836 (class 2606 OID 59424)
 -- Name: menu_items menu_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1567,7 +1913,7 @@ ALTER TABLE ONLY public.menu_items
 
 
 --
--- TOC entry 3726 (class 2606 OID 17675)
+-- TOC entry 3811 (class 2606 OID 17675)
 -- Name: pillars pillars_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1576,7 +1922,43 @@ ALTER TABLE ONLY public.pillars
 
 
 --
--- TOC entry 3728 (class 2606 OID 17677)
+-- TOC entry 3853 (class 2606 OID 63539)
+-- Name: financing_types pk_financing_types; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.financing_types
+    ADD CONSTRAINT pk_financing_types PRIMARY KEY (financing_type_id);
+
+
+--
+-- TOC entry 3860 (class 2606 OID 63570)
+-- Name: member_program_payments pk_member_program_payments; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT pk_member_program_payments PRIMARY KEY (member_program_payment_id);
+
+
+--
+-- TOC entry 3851 (class 2606 OID 63525)
+-- Name: payment_methods pk_payment_methods; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_methods
+    ADD CONSTRAINT pk_payment_methods PRIMARY KEY (payment_method_id);
+
+
+--
+-- TOC entry 3849 (class 2606 OID 63511)
+-- Name: payment_status pk_payment_status; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_status
+    ADD CONSTRAINT pk_payment_status PRIMARY KEY (payment_status_id);
+
+
+--
+-- TOC entry 3813 (class 2606 OID 17677)
 -- Name: program_status program_status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1585,7 +1967,7 @@ ALTER TABLE ONLY public.program_status
 
 
 --
--- TOC entry 3732 (class 2606 OID 17679)
+-- TOC entry 3817 (class 2606 OID 17679)
 -- Name: program_template_items program_template_items_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1594,7 +1976,7 @@ ALTER TABLE ONLY public.program_template_items
 
 
 --
--- TOC entry 3730 (class 2606 OID 17681)
+-- TOC entry 3815 (class 2606 OID 17681)
 -- Name: program_template program_template_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1603,7 +1985,7 @@ ALTER TABLE ONLY public.program_template
 
 
 --
--- TOC entry 3734 (class 2606 OID 17683)
+-- TOC entry 3819 (class 2606 OID 17683)
 -- Name: status status_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1612,7 +1994,7 @@ ALTER TABLE ONLY public.status
 
 
 --
--- TOC entry 3738 (class 2606 OID 17685)
+-- TOC entry 3823 (class 2606 OID 17685)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1621,7 +2003,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3736 (class 2606 OID 17687)
+-- TOC entry 3821 (class 2606 OID 17687)
 -- Name: therapies therapies_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1630,7 +2012,7 @@ ALTER TABLE ONLY public.therapies
 
 
 --
--- TOC entry 3740 (class 2606 OID 17689)
+-- TOC entry 3825 (class 2606 OID 17689)
 -- Name: therapy_tasks therapy_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1639,7 +2021,7 @@ ALTER TABLE ONLY public.therapy_tasks
 
 
 --
--- TOC entry 3742 (class 2606 OID 17691)
+-- TOC entry 3827 (class 2606 OID 17691)
 -- Name: therapytype therapy_type_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1648,7 +2030,7 @@ ALTER TABLE ONLY public.therapytype
 
 
 --
--- TOC entry 3755 (class 2606 OID 59434)
+-- TOC entry 3840 (class 2606 OID 59434)
 -- Name: user_menu_permissions user_menu_permissions_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1657,7 +2039,7 @@ ALTER TABLE ONLY public.user_menu_permissions
 
 
 --
--- TOC entry 3757 (class 2606 OID 59436)
+-- TOC entry 3842 (class 2606 OID 59436)
 -- Name: user_menu_permissions user_menu_permissions_user_id_menu_path_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1666,7 +2048,7 @@ ALTER TABLE ONLY public.user_menu_permissions
 
 
 --
--- TOC entry 3744 (class 2606 OID 17693)
+-- TOC entry 3829 (class 2606 OID 17693)
 -- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -1675,63 +2057,32 @@ ALTER TABLE ONLY public.users
 
 
 --
--- TOC entry 3746 (class 2606 OID 17695)
+-- TOC entry 3831 (class 2606 OID 17695)
 -- Name: vendors vendors_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.vendors
     ADD CONSTRAINT vendors_pkey PRIMARY KEY (vendor_id);
 
-ALTER TABLE ONLY public.member_program_finances
-    ADD CONSTRAINT member_program_finances_pkey PRIMARY KEY (member_program_finance_id);
 
-ALTER TABLE ONLY public.member_program_payments
-    ADD CONSTRAINT member_program_payments_pkey PRIMARY KEY (member_program_payment_id);
+--
+-- TOC entry 3863 (class 1259 OID 66116)
+-- Name: idx_member_program_item_schedule_program_item; Type: INDEX; Schema: public; Owner: postgres
+--
 
-ALTER TABLE ONLY public.payment_status
-    ADD CONSTRAINT payment_status_pkey PRIMARY KEY (payment_status_id);
-
-ALTER TABLE ONLY public.payment_methods
-    ADD CONSTRAINT payment_methods_pkey PRIMARY KEY (payment_method_id);
-
-ALTER TABLE ONLY public.financing_types
-    ADD CONSTRAINT financing_types_pkey PRIMARY KEY (financing_type_id);
+CREATE INDEX idx_member_program_item_schedule_program_item ON public.member_program_item_schedule USING btree (member_program_item_id, instance_number);
 
 
 --
--- TOC entry 3712 (class 1259 OID 17752)
--- Name: idx_member_program_items_member_program; Type: INDEX; Schema: public; Owner: postgres
+-- TOC entry 3864 (class 1259 OID 66117)
+-- Name: idx_member_program_item_schedule_scheduled_date; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_member_program_items_member_program ON public.member_program_items USING btree (member_program_id);
-
-
---
--- TOC entry 3713 (class 1259 OID 17753)
--- Name: idx_member_program_items_therapy; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_member_program_items_therapy ON public.member_program_items USING btree (therapy_id);
+CREATE INDEX idx_member_program_item_schedule_scheduled_date ON public.member_program_item_schedule USING btree (scheduled_date);
 
 
 --
--- TOC entry 3715.5 (class 1259 OID 17753.5)
--- Name: idx_member_program_item_tasks_item; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_member_program_item_tasks_item ON public.member_program_item_tasks USING btree (member_program_item_id);
-
-
---
--- TOC entry 3715.6 (class 1259 OID 17753.6)
--- Name: idx_member_program_item_tasks_task; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_member_program_item_tasks_task ON public.member_program_item_tasks USING btree (task_id);
-
-
---
--- TOC entry 3715.7 (class 1259 OID 17753.7)
+-- TOC entry 3843 (class 1259 OID 62305)
 -- Name: idx_member_program_item_tasks_completed; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1739,23 +2090,103 @@ CREATE INDEX idx_member_program_item_tasks_completed ON public.member_program_it
 
 
 --
--- TOC entry 3716 (class 1259 OID 17754)
--- Name: idx_member_program_schedule_date; Type: INDEX; Schema: public; Owner: postgres
+-- TOC entry 3844 (class 1259 OID 62303)
+-- Name: idx_member_program_item_tasks_item; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_member_program_schedule_date ON public.member_program_schedule USING btree (scheduled_date);
-
-
---
--- TOC entry 3717 (class 1259 OID 17755)
--- Name: idx_member_program_schedule_item; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_member_program_schedule_item ON public.member_program_schedule USING btree (member_program_item_id);
+CREATE INDEX idx_member_program_item_tasks_item ON public.member_program_item_tasks USING btree (member_program_item_id);
 
 
 --
--- TOC entry 3720 (class 1259 OID 17756)
+-- TOC entry 3845 (class 1259 OID 62304)
+-- Name: idx_member_program_item_tasks_task; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_item_tasks_task ON public.member_program_item_tasks USING btree (task_id);
+
+
+--
+-- TOC entry 3801 (class 1259 OID 17752)
+-- Name: idx_member_program_items_member_program; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_items_member_program ON public.member_program_items USING btree (member_program_id);
+
+
+--
+-- TOC entry 3867 (class 1259 OID 66144)
+-- Name: idx_member_program_items_task_schedule_due_date; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_items_task_schedule_due_date ON public.member_program_items_task_schedule USING btree (due_date);
+
+
+--
+-- TOC entry 3868 (class 1259 OID 66142)
+-- Name: idx_member_program_items_task_schedule_fulfillment; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_items_task_schedule_fulfillment ON public.member_program_items_task_schedule USING btree (member_program_item_schedule_id);
+
+
+--
+-- TOC entry 3869 (class 1259 OID 66143)
+-- Name: idx_member_program_items_task_schedule_task; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_items_task_schedule_task ON public.member_program_items_task_schedule USING btree (member_program_item_task_id);
+
+
+--
+-- TOC entry 3802 (class 1259 OID 17753)
+-- Name: idx_member_program_items_therapy; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_items_therapy ON public.member_program_items USING btree (therapy_id);
+
+
+--
+-- TOC entry 3854 (class 1259 OID 63613)
+-- Name: idx_member_program_payments_due_date; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_payments_due_date ON public.member_program_payments USING btree (payment_due_date);
+
+
+--
+-- TOC entry 3855 (class 1259 OID 63612)
+-- Name: idx_member_program_payments_method_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_payments_method_id ON public.member_program_payments USING btree (payment_method_id);
+
+
+--
+-- TOC entry 3856 (class 1259 OID 63614)
+-- Name: idx_member_program_payments_payment_date; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_payments_payment_date ON public.member_program_payments USING btree (payment_date);
+
+
+--
+-- TOC entry 3857 (class 1259 OID 63610)
+-- Name: idx_member_program_payments_program_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_payments_program_id ON public.member_program_payments USING btree (member_program_id);
+
+
+--
+-- TOC entry 3858 (class 1259 OID 63611)
+-- Name: idx_member_program_payments_status_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_member_program_payments_status_id ON public.member_program_payments USING btree (payment_status_id);
+
+
+--
+-- TOC entry 3805 (class 1259 OID 17756)
 -- Name: idx_member_programs_lead_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1763,7 +2194,7 @@ CREATE INDEX idx_member_programs_lead_id ON public.member_programs USING btree (
 
 
 --
--- TOC entry 3721 (class 1259 OID 17757)
+-- TOC entry 3806 (class 1259 OID 17757)
 -- Name: idx_member_programs_source_template; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1771,7 +2202,7 @@ CREATE INDEX idx_member_programs_source_template ON public.member_programs USING
 
 
 --
--- TOC entry 3722 (class 1259 OID 17758)
+-- TOC entry 3807 (class 1259 OID 17758)
 -- Name: idx_member_programs_status; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1779,7 +2210,7 @@ CREATE INDEX idx_member_programs_status ON public.member_programs USING btree (p
 
 
 --
--- TOC entry 3747 (class 1259 OID 59451)
+-- TOC entry 3832 (class 1259 OID 59451)
 -- Name: idx_menu_items_section; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1787,7 +2218,7 @@ CREATE INDEX idx_menu_items_section ON public.menu_items USING btree (section);
 
 
 --
--- TOC entry 3752 (class 1259 OID 59450)
+-- TOC entry 3837 (class 1259 OID 59450)
 -- Name: idx_user_menu_permissions_path; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1795,7 +2226,7 @@ CREATE INDEX idx_user_menu_permissions_path ON public.user_menu_permissions USIN
 
 
 --
--- TOC entry 3753 (class 1259 OID 59449)
+-- TOC entry 3838 (class 1259 OID 59449)
 -- Name: idx_user_menu_permissions_user_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -1803,7 +2234,7 @@ CREATE INDEX idx_user_menu_permissions_user_id ON public.user_menu_permissions U
 
 
 --
--- TOC entry 3802 (class 2620 OID 17767)
+-- TOC entry 3942 (class 2620 OID 17767)
 -- Name: bodies audit_bodies_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1811,7 +2242,7 @@ CREATE TRIGGER audit_bodies_trigger AFTER INSERT OR DELETE OR UPDATE ON public.b
 
 
 --
--- TOC entry 3804 (class 2620 OID 17768)
+-- TOC entry 3944 (class 2620 OID 17768)
 -- Name: buckets audit_buckets_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1819,7 +2250,7 @@ CREATE TRIGGER audit_buckets_trigger AFTER INSERT OR DELETE OR UPDATE ON public.
 
 
 --
--- TOC entry 3806 (class 2620 OID 17769)
+-- TOC entry 3946 (class 2620 OID 17769)
 -- Name: campaigns audit_campaigns_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1827,7 +2258,7 @@ CREATE TRIGGER audit_campaigns_trigger AFTER INSERT OR DELETE OR UPDATE ON publi
 
 
 --
--- TOC entry 3808 (class 2620 OID 17770)
+-- TOC entry 3948 (class 2620 OID 17770)
 -- Name: leads audit_leads_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1835,15 +2266,23 @@ CREATE TRIGGER audit_leads_trigger AFTER INSERT OR DELETE OR UPDATE ON public.le
 
 
 --
--- TOC entry 3810 (class 2620 OID 17771)
--- Name: member_program_items audit_member_program_items_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+-- TOC entry 3980 (class 2620 OID 64974)
+-- Name: member_program_finances audit_member_program_finances_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER audit_member_program_items_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_items FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_function('member_program_item_id');
+CREATE TRIGGER audit_member_program_finances_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_finances FOR EACH ROW EXECUTE FUNCTION public.audit_member_program_finances();
 
 
 --
--- TOC entry 3811.5 (class 2620 OID 17771.5)
+-- TOC entry 3981 (class 2620 OID 66118)
+-- Name: member_program_item_schedule audit_member_program_item_schedule_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER audit_member_program_item_schedule_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_item_schedule FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_function('member_program_item_schedule_id');
+
+
+--
+-- TOC entry 3974 (class 2620 OID 62306)
 -- Name: member_program_item_tasks audit_member_program_item_tasks_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1851,15 +2290,23 @@ CREATE TRIGGER audit_member_program_item_tasks_trigger AFTER INSERT OR DELETE OR
 
 
 --
--- TOC entry 3812 (class 2620 OID 17772)
--- Name: member_program_schedule audit_member_program_schedule_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+-- TOC entry 3983 (class 2620 OID 66145)
+-- Name: member_program_items_task_schedule audit_member_program_items_task_schedule_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER audit_member_program_schedule_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_schedule FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_function('program_schedule_id');
+CREATE TRIGGER audit_member_program_items_task_schedule_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_items_task_schedule FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_function('member_program_item_task_schedule_id');
 
 
 --
--- TOC entry 3814 (class 2620 OID 17773)
+-- TOC entry 3950 (class 2620 OID 17771)
+-- Name: member_program_items audit_member_program_items_trigger; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER audit_member_program_items_trigger AFTER INSERT OR DELETE OR UPDATE ON public.member_program_items FOR EACH ROW EXECUTE FUNCTION public.audit_trigger_function('member_program_item_id');
+
+
+--
+-- TOC entry 3952 (class 2620 OID 17773)
 -- Name: member_programs audit_member_programs_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1867,7 +2314,7 @@ CREATE TRIGGER audit_member_programs_trigger AFTER INSERT OR DELETE OR UPDATE ON
 
 
 --
--- TOC entry 3816 (class 2620 OID 17774)
+-- TOC entry 3954 (class 2620 OID 17774)
 -- Name: pillars audit_pillars_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1875,7 +2322,7 @@ CREATE TRIGGER audit_pillars_trigger AFTER INSERT OR DELETE OR UPDATE ON public.
 
 
 --
--- TOC entry 3818 (class 2620 OID 17775)
+-- TOC entry 3956 (class 2620 OID 17775)
 -- Name: program_status audit_program_status_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1883,7 +2330,7 @@ CREATE TRIGGER audit_program_status_trigger AFTER INSERT OR DELETE OR UPDATE ON 
 
 
 --
--- TOC entry 3822 (class 2620 OID 17776)
+-- TOC entry 3960 (class 2620 OID 17776)
 -- Name: program_template_items audit_program_template_items_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1891,7 +2338,7 @@ CREATE TRIGGER audit_program_template_items_trigger AFTER INSERT OR DELETE OR UP
 
 
 --
--- TOC entry 3820 (class 2620 OID 17777)
+-- TOC entry 3958 (class 2620 OID 17777)
 -- Name: program_template audit_program_template_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1899,7 +2346,7 @@ CREATE TRIGGER audit_program_template_trigger AFTER INSERT OR DELETE OR UPDATE O
 
 
 --
--- TOC entry 3824 (class 2620 OID 17778)
+-- TOC entry 3962 (class 2620 OID 17778)
 -- Name: status audit_status_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1907,7 +2354,7 @@ CREATE TRIGGER audit_status_trigger AFTER INSERT OR DELETE OR UPDATE ON public.s
 
 
 --
--- TOC entry 3828 (class 2620 OID 17779)
+-- TOC entry 3966 (class 2620 OID 17779)
 -- Name: therapies_bodies_pillars audit_therapies_bodies_pillars_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1915,7 +2362,7 @@ CREATE TRIGGER audit_therapies_bodies_pillars_trigger AFTER INSERT OR DELETE OR 
 
 
 --
--- TOC entry 3826 (class 2620 OID 17780)
+-- TOC entry 3964 (class 2620 OID 17780)
 -- Name: therapies audit_therapies_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1923,7 +2370,7 @@ CREATE TRIGGER audit_therapies_trigger AFTER INSERT OR DELETE OR UPDATE ON publi
 
 
 --
--- TOC entry 3830 (class 2620 OID 17781)
+-- TOC entry 3968 (class 2620 OID 17781)
 -- Name: therapy_tasks audit_therapy_tasks_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1931,7 +2378,7 @@ CREATE TRIGGER audit_therapy_tasks_trigger AFTER INSERT OR DELETE OR UPDATE ON p
 
 
 --
--- TOC entry 3832 (class 2620 OID 17782)
+-- TOC entry 3970 (class 2620 OID 17782)
 -- Name: therapytype audit_therapy_type_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1939,7 +2386,7 @@ CREATE TRIGGER audit_therapy_type_trigger AFTER INSERT OR DELETE OR UPDATE ON pu
 
 
 --
--- TOC entry 3834 (class 2620 OID 17783)
+-- TOC entry 3972 (class 2620 OID 17783)
 -- Name: vendors audit_vendors_trigger; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1947,7 +2394,39 @@ CREATE TRIGGER audit_vendors_trigger AFTER INSERT OR DELETE OR UPDATE ON public.
 
 
 --
--- TOC entry 3803 (class 2620 OID 17784)
+-- TOC entry 3978 (class 2620 OID 63605)
+-- Name: financing_types trigger_audit_financing_types; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_audit_financing_types BEFORE INSERT OR UPDATE ON public.financing_types FOR EACH ROW EXECUTE FUNCTION public.audit_financing_types();
+
+
+--
+-- TOC entry 3979 (class 2620 OID 63607)
+-- Name: member_program_payments trigger_audit_member_program_payments; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_audit_member_program_payments BEFORE INSERT OR UPDATE ON public.member_program_payments FOR EACH ROW EXECUTE FUNCTION public.audit_member_program_payments();
+
+
+--
+-- TOC entry 3977 (class 2620 OID 63604)
+-- Name: payment_methods trigger_audit_payment_methods; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_audit_payment_methods BEFORE INSERT OR UPDATE ON public.payment_methods FOR EACH ROW EXECUTE FUNCTION public.audit_payment_methods();
+
+
+--
+-- TOC entry 3976 (class 2620 OID 63603)
+-- Name: payment_status trigger_audit_payment_status; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_audit_payment_status BEFORE INSERT OR UPDATE ON public.payment_status FOR EACH ROW EXECUTE FUNCTION public.audit_payment_status();
+
+
+--
+-- TOC entry 3943 (class 2620 OID 17784)
 -- Name: bodies update_bodies_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1955,7 +2434,7 @@ CREATE TRIGGER update_bodies_timestamp BEFORE UPDATE ON public.bodies FOR EACH R
 
 
 --
--- TOC entry 3805 (class 2620 OID 17785)
+-- TOC entry 3945 (class 2620 OID 17785)
 -- Name: buckets update_buckets_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1963,7 +2442,7 @@ CREATE TRIGGER update_buckets_timestamp BEFORE UPDATE ON public.buckets FOR EACH
 
 
 --
--- TOC entry 3807 (class 2620 OID 17786)
+-- TOC entry 3947 (class 2620 OID 17786)
 -- Name: campaigns update_campaigns_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1971,7 +2450,7 @@ CREATE TRIGGER update_campaigns_timestamp BEFORE UPDATE ON public.campaigns FOR 
 
 
 --
--- TOC entry 3809 (class 2620 OID 17787)
+-- TOC entry 3949 (class 2620 OID 17787)
 -- Name: leads update_leads_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1979,15 +2458,15 @@ CREATE TRIGGER update_leads_timestamp BEFORE UPDATE ON public.leads FOR EACH ROW
 
 
 --
--- TOC entry 3811 (class 2620 OID 17788)
--- Name: member_program_items update_member_program_items_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
+-- TOC entry 3982 (class 2620 OID 66119)
+-- Name: member_program_item_schedule update_member_program_item_schedule_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER update_member_program_items_timestamp BEFORE UPDATE ON public.member_program_items FOR EACH ROW EXECUTE FUNCTION public.update_timestamp_function();
+CREATE TRIGGER update_member_program_item_schedule_timestamp BEFORE UPDATE ON public.member_program_item_schedule FOR EACH ROW EXECUTE FUNCTION public.update_timestamp_function();
 
 
 --
--- TOC entry 3812.5 (class 2620 OID 17788.5)
+-- TOC entry 3975 (class 2620 OID 62307)
 -- Name: member_program_item_tasks update_member_program_item_tasks_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -1995,15 +2474,23 @@ CREATE TRIGGER update_member_program_item_tasks_timestamp BEFORE UPDATE ON publi
 
 
 --
--- TOC entry 3813 (class 2620 OID 17789)
--- Name: member_program_schedule update_member_program_schedule_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
+-- TOC entry 3984 (class 2620 OID 66146)
+-- Name: member_program_items_task_schedule update_member_program_items_task_schedule_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
-CREATE TRIGGER update_member_program_schedule_timestamp BEFORE UPDATE ON public.member_program_schedule FOR EACH ROW EXECUTE FUNCTION public.update_timestamp_function();
+CREATE TRIGGER update_member_program_items_task_schedule_timestamp BEFORE UPDATE ON public.member_program_items_task_schedule FOR EACH ROW EXECUTE FUNCTION public.update_timestamp_function();
 
 
 --
--- TOC entry 3815 (class 2620 OID 17790)
+-- TOC entry 3951 (class 2620 OID 17788)
+-- Name: member_program_items update_member_program_items_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER update_member_program_items_timestamp BEFORE UPDATE ON public.member_program_items FOR EACH ROW EXECUTE FUNCTION public.update_timestamp_function();
+
+
+--
+-- TOC entry 3953 (class 2620 OID 17790)
 -- Name: member_programs update_member_programs_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2011,7 +2498,7 @@ CREATE TRIGGER update_member_programs_timestamp BEFORE UPDATE ON public.member_p
 
 
 --
--- TOC entry 3817 (class 2620 OID 17791)
+-- TOC entry 3955 (class 2620 OID 17791)
 -- Name: pillars update_pillars_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2019,7 +2506,7 @@ CREATE TRIGGER update_pillars_timestamp BEFORE UPDATE ON public.pillars FOR EACH
 
 
 --
--- TOC entry 3819 (class 2620 OID 17792)
+-- TOC entry 3957 (class 2620 OID 17792)
 -- Name: program_status update_program_status_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2027,7 +2514,7 @@ CREATE TRIGGER update_program_status_timestamp BEFORE UPDATE ON public.program_s
 
 
 --
--- TOC entry 3823 (class 2620 OID 17793)
+-- TOC entry 3961 (class 2620 OID 17793)
 -- Name: program_template_items update_program_template_items_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2035,7 +2522,7 @@ CREATE TRIGGER update_program_template_items_timestamp BEFORE UPDATE ON public.p
 
 
 --
--- TOC entry 3821 (class 2620 OID 17794)
+-- TOC entry 3959 (class 2620 OID 17794)
 -- Name: program_template update_program_template_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2043,7 +2530,7 @@ CREATE TRIGGER update_program_template_timestamp BEFORE UPDATE ON public.program
 
 
 --
--- TOC entry 3825 (class 2620 OID 17795)
+-- TOC entry 3963 (class 2620 OID 17795)
 -- Name: status update_status_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2051,7 +2538,7 @@ CREATE TRIGGER update_status_timestamp BEFORE UPDATE ON public.status FOR EACH R
 
 
 --
--- TOC entry 3829 (class 2620 OID 17796)
+-- TOC entry 3967 (class 2620 OID 17796)
 -- Name: therapies_bodies_pillars update_therapies_bodies_pillars_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2059,7 +2546,7 @@ CREATE TRIGGER update_therapies_bodies_pillars_timestamp BEFORE UPDATE ON public
 
 
 --
--- TOC entry 3827 (class 2620 OID 17797)
+-- TOC entry 3965 (class 2620 OID 17797)
 -- Name: therapies update_therapies_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2067,7 +2554,7 @@ CREATE TRIGGER update_therapies_timestamp BEFORE UPDATE ON public.therapies FOR 
 
 
 --
--- TOC entry 3831 (class 2620 OID 17798)
+-- TOC entry 3969 (class 2620 OID 17798)
 -- Name: therapy_tasks update_therapy_tasks_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2075,7 +2562,7 @@ CREATE TRIGGER update_therapy_tasks_timestamp BEFORE UPDATE ON public.therapy_ta
 
 
 --
--- TOC entry 3833 (class 2620 OID 17799)
+-- TOC entry 3971 (class 2620 OID 17799)
 -- Name: therapytype update_therapy_type_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2083,7 +2570,7 @@ CREATE TRIGGER update_therapy_type_timestamp BEFORE UPDATE ON public.therapytype
 
 
 --
--- TOC entry 3835 (class 2620 OID 17800)
+-- TOC entry 3973 (class 2620 OID 17800)
 -- Name: vendors update_vendors_timestamp; Type: TRIGGER; Schema: public; Owner: postgres
 --
 
@@ -2091,7 +2578,7 @@ CREATE TRIGGER update_vendors_timestamp BEFORE UPDATE ON public.vendors FOR EACH
 
 
 --
--- TOC entry 3758 (class 2606 OID 17858)
+-- TOC entry 3872 (class 2606 OID 17858)
 -- Name: bodies bodies_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2100,7 +2587,7 @@ ALTER TABLE ONLY public.bodies
 
 
 --
--- TOC entry 3759 (class 2606 OID 17863)
+-- TOC entry 3873 (class 2606 OID 17863)
 -- Name: bodies bodies_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2109,7 +2596,7 @@ ALTER TABLE ONLY public.bodies
 
 
 --
--- TOC entry 3760 (class 2606 OID 17868)
+-- TOC entry 3874 (class 2606 OID 17868)
 -- Name: buckets buckets_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2118,7 +2605,7 @@ ALTER TABLE ONLY public.buckets
 
 
 --
--- TOC entry 3761 (class 2606 OID 17873)
+-- TOC entry 3875 (class 2606 OID 17873)
 -- Name: buckets buckets_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2127,7 +2614,7 @@ ALTER TABLE ONLY public.buckets
 
 
 --
--- TOC entry 3762 (class 2606 OID 17878)
+-- TOC entry 3876 (class 2606 OID 17878)
 -- Name: campaigns campaigns_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2136,7 +2623,7 @@ ALTER TABLE ONLY public.campaigns
 
 
 --
--- TOC entry 3763 (class 2606 OID 17883)
+-- TOC entry 3877 (class 2606 OID 17883)
 -- Name: campaigns campaigns_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2145,7 +2632,7 @@ ALTER TABLE ONLY public.campaigns
 
 
 --
--- TOC entry 3764 (class 2606 OID 17888)
+-- TOC entry 3878 (class 2606 OID 17888)
 -- Name: campaigns campaigns_vendor_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2154,7 +2641,25 @@ ALTER TABLE ONLY public.campaigns
 
 
 --
--- TOC entry 3786 (class 2606 OID 17893)
+-- TOC entry 3928 (class 2606 OID 63696)
+-- Name: financing_types financing_types_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.financing_types
+    ADD CONSTRAINT financing_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3929 (class 2606 OID 63701)
+-- Name: financing_types financing_types_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.financing_types
+    ADD CONSTRAINT financing_types_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3901 (class 2606 OID 17893)
 -- Name: therapies fk_bucket; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2163,133 +2668,25 @@ ALTER TABLE ONLY public.therapies
 
 
 --
--- TOC entry 3770 (class 2606 OID 17898)
--- Name: member_program_schedule fk_member_program_schedule_item; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- TOC entry 3935 (class 2606 OID 64958)
+-- Name: member_program_finances fk_member_program_finances_financing_type; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.member_program_schedule
-    ADD CONSTRAINT fk_member_program_schedule_item FOREIGN KEY (member_program_item_id) REFERENCES public.member_program_items(member_program_item_id) ON DELETE CASCADE;
-
-
---
--- TOC entry 3771 (class 2606 OID 17903)
--- Name: member_programs fk_member_programs_lead; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_programs
-    ADD CONSTRAINT fk_member_programs_lead FOREIGN KEY (lead_id) REFERENCES public.leads(lead_id);
+ALTER TABLE ONLY public.member_program_finances
+    ADD CONSTRAINT fk_member_program_finances_financing_type FOREIGN KEY (financing_type_id) REFERENCES public.financing_types(financing_type_id) ON UPDATE CASCADE ON DELETE SET NULL;
 
 
 --
--- TOC entry 3772 (class 2606 OID 17908)
--- Name: member_programs fk_member_programs_program_status; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- TOC entry 3936 (class 2606 OID 64953)
+-- Name: member_program_finances fk_member_program_finances_program; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.member_programs
-    ADD CONSTRAINT fk_member_programs_program_status FOREIGN KEY (program_status_id) REFERENCES public.program_status(program_status_id);
-
-
---
--- TOC entry 3773 (class 2606 OID 17913)
--- Name: member_programs fk_member_programs_source_template; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_programs
-    ADD CONSTRAINT fk_member_programs_source_template FOREIGN KEY (source_template_id) REFERENCES public.program_template(program_template_id) ON UPDATE CASCADE ON DELETE SET NULL;
+ALTER TABLE ONLY public.member_program_finances
+    ADD CONSTRAINT fk_member_program_finances_program FOREIGN KEY (member_program_id) REFERENCES public.member_programs(member_program_id) ON UPDATE CASCADE ON DELETE CASCADE;
 
 
 --
--- TOC entry 3774 (class 2606 OID 17918)
--- Name: member_programs member_programs_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_programs
-    ADD CONSTRAINT member_programs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
-
-
---
--- TOC entry 3775 (class 2606 OID 17923)
--- Name: member_programs member_programs_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_programs
-    ADD CONSTRAINT member_programs_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
-
-
---
--- TOC entry 3780 (class 2606 OID 17918)
--- Name: program_template_items fk_program_template; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.program_template_items
-    ADD CONSTRAINT fk_program_template FOREIGN KEY (program_template_id) REFERENCES public.program_template(program_template_id) ON DELETE CASCADE;
-
-
---
--- TOC entry 3795 (class 2606 OID 17923)
--- Name: therapy_tasks fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.therapy_tasks
-    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
-
-
---
--- TOC entry 3781 (class 2606 OID 17928)
--- Name: program_template_items fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.program_template_items
-    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
-
-
---
--- TOC entry 3769 (class 2606 OID 17933)
--- Name: member_program_items fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_program_items
-    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
-
-
---
--- TOC entry 3786.5 (class 2606 OID 17937.5)
--- Name: member_program_item_tasks fk_member_program_item_tasks_item; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_program_item_tasks
-    ADD CONSTRAINT fk_member_program_item_tasks_item FOREIGN KEY (member_program_item_id) REFERENCES public.member_program_items(member_program_item_id) ON DELETE CASCADE;
-
-
---
--- TOC entry 3786.6 (class 2606 OID 17937.6)
--- Name: member_program_item_tasks fk_member_program_item_tasks_task; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_program_item_tasks
-    ADD CONSTRAINT fk_member_program_item_tasks_task FOREIGN KEY (task_id) REFERENCES public.therapy_tasks(task_id);
-
-
---
--- TOC entry 3786.7 (class 2606 OID 17937.7)
--- Name: member_program_item_tasks fk_member_program_item_tasks_created_by; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_program_item_tasks
-    ADD CONSTRAINT fk_member_program_item_tasks_created_by FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- TOC entry 3786.8 (class 2606 OID 17937.8)
--- Name: member_program_item_tasks fk_member_program_item_tasks_updated_by; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.member_program_item_tasks
-    ADD CONSTRAINT fk_member_program_item_tasks_updated_by FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
-
-
---
--- TOC entry 3786.9 (class 2606 OID 17937.9)
+-- TOC entry 3919 (class 2606 OID 62298)
 -- Name: member_program_item_tasks fk_member_program_item_tasks_completed_by; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2298,7 +2695,133 @@ ALTER TABLE ONLY public.member_program_item_tasks
 
 
 --
--- TOC entry 3787 (class 2606 OID 17938)
+-- TOC entry 3920 (class 2606 OID 62288)
+-- Name: member_program_item_tasks fk_member_program_item_tasks_created_by; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_tasks
+    ADD CONSTRAINT fk_member_program_item_tasks_created_by FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3921 (class 2606 OID 62278)
+-- Name: member_program_item_tasks fk_member_program_item_tasks_item; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_tasks
+    ADD CONSTRAINT fk_member_program_item_tasks_item FOREIGN KEY (member_program_item_id) REFERENCES public.member_program_items(member_program_item_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3922 (class 2606 OID 62283)
+-- Name: member_program_item_tasks fk_member_program_item_tasks_task; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_tasks
+    ADD CONSTRAINT fk_member_program_item_tasks_task FOREIGN KEY (task_id) REFERENCES public.therapy_tasks(task_id);
+
+
+--
+-- TOC entry 3923 (class 2606 OID 62293)
+-- Name: member_program_item_tasks fk_member_program_item_tasks_updated_by; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_tasks
+    ADD CONSTRAINT fk_member_program_item_tasks_updated_by FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3930 (class 2606 OID 63593)
+-- Name: member_program_payments fk_member_program_payments_method; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT fk_member_program_payments_method FOREIGN KEY (payment_method_id) REFERENCES public.payment_methods(payment_method_id);
+
+
+--
+-- TOC entry 3931 (class 2606 OID 63583)
+-- Name: member_program_payments fk_member_program_payments_program; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT fk_member_program_payments_program FOREIGN KEY (member_program_id) REFERENCES public.member_programs(member_program_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3932 (class 2606 OID 63588)
+-- Name: member_program_payments fk_member_program_payments_status; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT fk_member_program_payments_status FOREIGN KEY (payment_status_id) REFERENCES public.payment_status(payment_status_id);
+
+
+--
+-- TOC entry 3884 (class 2606 OID 17903)
+-- Name: member_programs fk_member_programs_lead; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_programs
+    ADD CONSTRAINT fk_member_programs_lead FOREIGN KEY (lead_id) REFERENCES public.leads(lead_id);
+
+
+--
+-- TOC entry 3885 (class 2606 OID 17908)
+-- Name: member_programs fk_member_programs_program_status; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_programs
+    ADD CONSTRAINT fk_member_programs_program_status FOREIGN KEY (program_status_id) REFERENCES public.program_status(program_status_id);
+
+
+--
+-- TOC entry 3886 (class 2606 OID 17913)
+-- Name: member_programs fk_member_programs_source_template; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_programs
+    ADD CONSTRAINT fk_member_programs_source_template FOREIGN KEY (source_template_id) REFERENCES public.program_template(program_template_id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3895 (class 2606 OID 17918)
+-- Name: program_template_items fk_program_template; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.program_template_items
+    ADD CONSTRAINT fk_program_template FOREIGN KEY (program_template_id) REFERENCES public.program_template(program_template_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3910 (class 2606 OID 17923)
+-- Name: therapy_tasks fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.therapy_tasks
+    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
+
+
+--
+-- TOC entry 3896 (class 2606 OID 17928)
+-- Name: program_template_items fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.program_template_items
+    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
+
+
+--
+-- TOC entry 3883 (class 2606 OID 17933)
+-- Name: member_program_items fk_therapy; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_items
+    ADD CONSTRAINT fk_therapy FOREIGN KEY (therapy_id) REFERENCES public.therapies(therapy_id);
+
+
+--
+-- TOC entry 3902 (class 2606 OID 17938)
 -- Name: therapies fk_therapy_type; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2307,7 +2830,7 @@ ALTER TABLE ONLY public.therapies
 
 
 --
--- TOC entry 3765 (class 2606 OID 17943)
+-- TOC entry 3879 (class 2606 OID 17943)
 -- Name: leads leads_campaign_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2316,7 +2839,7 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- TOC entry 3766 (class 2606 OID 17948)
+-- TOC entry 3880 (class 2606 OID 17948)
 -- Name: leads leads_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2325,7 +2848,7 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- TOC entry 3767 (class 2606 OID 17953)
+-- TOC entry 3881 (class 2606 OID 17953)
 -- Name: leads leads_status_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2334,7 +2857,7 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- TOC entry 3768 (class 2606 OID 17958)
+-- TOC entry 3882 (class 2606 OID 17958)
 -- Name: leads leads_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2343,7 +2866,124 @@ ALTER TABLE ONLY public.leads
 
 
 --
--- TOC entry 3774 (class 2606 OID 17963)
+-- TOC entry 3937 (class 2606 OID 64963)
+-- Name: member_program_finances member_program_finances_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_finances
+    ADD CONSTRAINT member_program_finances_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3938 (class 2606 OID 64968)
+-- Name: member_program_finances member_program_finances_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_finances
+    ADD CONSTRAINT member_program_finances_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3939 (class 2606 OID 66109)
+-- Name: member_program_item_schedule member_program_item_schedule_member_program_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_item_schedule
+    ADD CONSTRAINT member_program_item_schedule_member_program_item_id_fkey FOREIGN KEY (member_program_item_id) REFERENCES public.member_program_items(member_program_item_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3940 (class 2606 OID 66130)
+-- Name: member_program_items_task_schedule member_program_items_task_sch_member_program_item_schedule_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_items_task_schedule
+    ADD CONSTRAINT member_program_items_task_sch_member_program_item_schedule_fkey FOREIGN KEY (member_program_item_schedule_id) REFERENCES public.member_program_item_schedule(member_program_item_schedule_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3941 (class 2606 OID 66135)
+-- Name: member_program_items_task_schedule member_program_items_task_sche_member_program_item_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_items_task_schedule
+    ADD CONSTRAINT member_program_items_task_sche_member_program_item_task_id_fkey FOREIGN KEY (member_program_item_task_id) REFERENCES public.member_program_item_tasks(member_program_item_task_id) ON DELETE CASCADE;
+
+
+--
+-- TOC entry 3933 (class 2606 OID 63716)
+-- Name: member_program_payments member_program_payments_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT member_program_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3934 (class 2606 OID 63721)
+-- Name: member_program_payments member_program_payments_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_program_payments
+    ADD CONSTRAINT member_program_payments_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3887 (class 2606 OID 61100)
+-- Name: member_programs member_programs_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_programs
+    ADD CONSTRAINT member_programs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- TOC entry 3888 (class 2606 OID 61105)
+-- Name: member_programs member_programs_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.member_programs
+    ADD CONSTRAINT member_programs_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+
+
+--
+-- TOC entry 3926 (class 2606 OID 63686)
+-- Name: payment_methods payment_methods_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_methods
+    ADD CONSTRAINT payment_methods_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3927 (class 2606 OID 63691)
+-- Name: payment_methods payment_methods_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_methods
+    ADD CONSTRAINT payment_methods_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3924 (class 2606 OID 63676)
+-- Name: payment_status payment_status_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_status
+    ADD CONSTRAINT payment_status_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3925 (class 2606 OID 63681)
+-- Name: payment_status payment_status_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.payment_status
+    ADD CONSTRAINT payment_status_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3889 (class 2606 OID 17963)
 -- Name: pillars pillars_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2352,7 +2992,7 @@ ALTER TABLE ONLY public.pillars
 
 
 --
--- TOC entry 3775 (class 2606 OID 17968)
+-- TOC entry 3890 (class 2606 OID 17968)
 -- Name: pillars pillars_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2361,7 +3001,7 @@ ALTER TABLE ONLY public.pillars
 
 
 --
--- TOC entry 3776 (class 2606 OID 17973)
+-- TOC entry 3891 (class 2606 OID 17973)
 -- Name: program_status program_status_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2370,7 +3010,7 @@ ALTER TABLE ONLY public.program_status
 
 
 --
--- TOC entry 3777 (class 2606 OID 17978)
+-- TOC entry 3892 (class 2606 OID 17978)
 -- Name: program_status program_status_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2379,7 +3019,7 @@ ALTER TABLE ONLY public.program_status
 
 
 --
--- TOC entry 3778 (class 2606 OID 54902)
+-- TOC entry 3893 (class 2606 OID 54902)
 -- Name: program_template program_template_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2388,7 +3028,7 @@ ALTER TABLE ONLY public.program_template
 
 
 --
--- TOC entry 3782 (class 2606 OID 54912)
+-- TOC entry 3897 (class 2606 OID 54912)
 -- Name: program_template_items program_template_items_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2397,7 +3037,7 @@ ALTER TABLE ONLY public.program_template_items
 
 
 --
--- TOC entry 3783 (class 2606 OID 54917)
+-- TOC entry 3898 (class 2606 OID 54917)
 -- Name: program_template_items program_template_items_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2406,7 +3046,7 @@ ALTER TABLE ONLY public.program_template_items
 
 
 --
--- TOC entry 3779 (class 2606 OID 54907)
+-- TOC entry 3894 (class 2606 OID 54907)
 -- Name: program_template program_template_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2415,7 +3055,7 @@ ALTER TABLE ONLY public.program_template
 
 
 --
--- TOC entry 3784 (class 2606 OID 17983)
+-- TOC entry 3899 (class 2606 OID 17983)
 -- Name: status status_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2424,7 +3064,7 @@ ALTER TABLE ONLY public.status
 
 
 --
--- TOC entry 3785 (class 2606 OID 17988)
+-- TOC entry 3900 (class 2606 OID 17988)
 -- Name: status status_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2433,7 +3073,7 @@ ALTER TABLE ONLY public.status
 
 
 --
--- TOC entry 3790 (class 2606 OID 17993)
+-- TOC entry 3905 (class 2606 OID 17993)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_body_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2442,7 +3082,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3791 (class 2606 OID 17998)
+-- TOC entry 3906 (class 2606 OID 17998)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2451,7 +3091,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3792 (class 2606 OID 18003)
+-- TOC entry 3907 (class 2606 OID 18003)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_pillar_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2460,7 +3100,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3793 (class 2606 OID 18008)
+-- TOC entry 3908 (class 2606 OID 18008)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_therapy_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2469,7 +3109,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3794 (class 2606 OID 18013)
+-- TOC entry 3909 (class 2606 OID 18013)
 -- Name: therapies_bodies_pillars therapies_bodies_pillars_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2478,7 +3118,7 @@ ALTER TABLE ONLY public.therapies_bodies_pillars
 
 
 --
--- TOC entry 3788 (class 2606 OID 18018)
+-- TOC entry 3903 (class 2606 OID 18018)
 -- Name: therapies therapies_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2487,7 +3127,7 @@ ALTER TABLE ONLY public.therapies
 
 
 --
--- TOC entry 3789 (class 2606 OID 18023)
+-- TOC entry 3904 (class 2606 OID 18023)
 -- Name: therapies therapies_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2496,7 +3136,25 @@ ALTER TABLE ONLY public.therapies
 
 
 --
--- TOC entry 3796 (class 2606 OID 18028)
+-- TOC entry 3911 (class 2606 OID 61067)
+-- Name: therapy_tasks therapy_tasks_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.therapy_tasks
+    ADD CONSTRAINT therapy_tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3912 (class 2606 OID 61072)
+-- Name: therapy_tasks therapy_tasks_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.therapy_tasks
+    ADD CONSTRAINT therapy_tasks_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
+
+
+--
+-- TOC entry 3913 (class 2606 OID 18028)
 -- Name: therapytype therapytype_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2505,7 +3163,7 @@ ALTER TABLE ONLY public.therapytype
 
 
 --
--- TOC entry 3797 (class 2606 OID 18033)
+-- TOC entry 3914 (class 2606 OID 18033)
 -- Name: therapytype therapytype_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2514,7 +3172,7 @@ ALTER TABLE ONLY public.therapytype
 
 
 --
--- TOC entry 3800 (class 2606 OID 59442)
+-- TOC entry 3917 (class 2606 OID 59442)
 -- Name: user_menu_permissions user_menu_permissions_granted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2523,7 +3181,7 @@ ALTER TABLE ONLY public.user_menu_permissions
 
 
 --
--- TOC entry 3801 (class 2606 OID 59437)
+-- TOC entry 3918 (class 2606 OID 59437)
 -- Name: user_menu_permissions user_menu_permissions_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2532,7 +3190,7 @@ ALTER TABLE ONLY public.user_menu_permissions
 
 
 --
--- TOC entry 3798 (class 2606 OID 18038)
+-- TOC entry 3915 (class 2606 OID 18038)
 -- Name: vendors vendors_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2541,7 +3199,7 @@ ALTER TABLE ONLY public.vendors
 
 
 --
--- TOC entry 3799 (class 2606 OID 18043)
+-- TOC entry 3916 (class 2606 OID 18043)
 -- Name: vendors vendors_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2550,7 +3208,7 @@ ALTER TABLE ONLY public.vendors
 
 
 --
--- TOC entry 4002 (class 3256 OID 18069)
+-- TOC entry 4158 (class 3256 OID 18069)
 -- Name: audit_logs all_access_audit_logs; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2558,7 +3216,7 @@ CREATE POLICY all_access_audit_logs ON public.audit_logs FOR SELECT USING (true)
 
 
 --
--- TOC entry 4003 (class 3256 OID 18070)
+-- TOC entry 4159 (class 3256 OID 18070)
 -- Name: bodies all_access_bodies; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2566,7 +3224,7 @@ CREATE POLICY all_access_bodies ON public.bodies USING (true);
 
 
 --
--- TOC entry 4004 (class 3256 OID 18071)
+-- TOC entry 4160 (class 3256 OID 18071)
 -- Name: buckets all_access_buckets; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2574,7 +3232,7 @@ CREATE POLICY all_access_buckets ON public.buckets USING (true);
 
 
 --
--- TOC entry 4005 (class 3256 OID 18072)
+-- TOC entry 4161 (class 3256 OID 18072)
 -- Name: campaigns all_access_campaigns; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2582,7 +3240,15 @@ CREATE POLICY all_access_campaigns ON public.campaigns USING (true);
 
 
 --
--- TOC entry 4006 (class 3256 OID 18073)
+-- TOC entry 4181 (class 3256 OID 63748)
+-- Name: financing_types all_access_financing_types; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY all_access_financing_types ON public.financing_types USING (true);
+
+
+--
+-- TOC entry 4162 (class 3256 OID 18073)
 -- Name: leads all_access_leads; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2590,7 +3256,23 @@ CREATE POLICY all_access_leads ON public.leads USING (true);
 
 
 --
--- TOC entry 4007 (class 3256 OID 18074)
+-- TOC entry 4183 (class 3256 OID 64975)
+-- Name: member_program_finances all_access_member_program_finances; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY all_access_member_program_finances ON public.member_program_finances USING (true);
+
+
+--
+-- TOC entry 4178 (class 3256 OID 62308)
+-- Name: member_program_item_tasks all_access_member_program_item_tasks; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY all_access_member_program_item_tasks ON public.member_program_item_tasks USING (true);
+
+
+--
+-- TOC entry 4163 (class 3256 OID 18074)
 -- Name: member_program_items all_access_member_program_items; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2598,15 +3280,15 @@ CREATE POLICY all_access_member_program_items ON public.member_program_items USI
 
 
 --
--- TOC entry 4008 (class 3256 OID 18075)
--- Name: member_program_schedule all_access_member_program_schedule; Type: POLICY; Schema: public; Owner: postgres
+-- TOC entry 4182 (class 3256 OID 63750)
+-- Name: member_program_payments all_access_member_program_payments; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY all_access_member_program_schedule ON public.member_program_schedule USING (true);
+CREATE POLICY all_access_member_program_payments ON public.member_program_payments USING (true);
 
 
 --
--- TOC entry 4009 (class 3256 OID 18076)
+-- TOC entry 4164 (class 3256 OID 18076)
 -- Name: member_programs all_access_member_programs; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2614,7 +3296,7 @@ CREATE POLICY all_access_member_programs ON public.member_programs USING (true);
 
 
 --
--- TOC entry 4020 (class 3256 OID 59738)
+-- TOC entry 4175 (class 3256 OID 59738)
 -- Name: menu_items all_access_menu_items; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2622,7 +3304,23 @@ CREATE POLICY all_access_menu_items ON public.menu_items USING (true);
 
 
 --
--- TOC entry 4010 (class 3256 OID 18077)
+-- TOC entry 4180 (class 3256 OID 63747)
+-- Name: payment_methods all_access_payment_methods; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY all_access_payment_methods ON public.payment_methods USING (true);
+
+
+--
+-- TOC entry 4179 (class 3256 OID 63746)
+-- Name: payment_status all_access_payment_status; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY all_access_payment_status ON public.payment_status USING (true);
+
+
+--
+-- TOC entry 4165 (class 3256 OID 18077)
 -- Name: pillars all_access_pillars; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2630,7 +3328,7 @@ CREATE POLICY all_access_pillars ON public.pillars USING (true);
 
 
 --
--- TOC entry 4011 (class 3256 OID 18078)
+-- TOC entry 4166 (class 3256 OID 18078)
 -- Name: program_status all_access_program_status; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2638,7 +3336,7 @@ CREATE POLICY all_access_program_status ON public.program_status USING (true);
 
 
 --
--- TOC entry 4012 (class 3256 OID 18079)
+-- TOC entry 4167 (class 3256 OID 18079)
 -- Name: program_template all_access_program_template; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2646,7 +3344,7 @@ CREATE POLICY all_access_program_template ON public.program_template USING (true
 
 
 --
--- TOC entry 4013 (class 3256 OID 18080)
+-- TOC entry 4168 (class 3256 OID 18080)
 -- Name: program_template_items all_access_program_template_items; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2654,7 +3352,7 @@ CREATE POLICY all_access_program_template_items ON public.program_template_items
 
 
 --
--- TOC entry 4014 (class 3256 OID 18081)
+-- TOC entry 4169 (class 3256 OID 18081)
 -- Name: status all_access_status; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2662,7 +3360,7 @@ CREATE POLICY all_access_status ON public.status USING (true);
 
 
 --
--- TOC entry 4015 (class 3256 OID 18082)
+-- TOC entry 4170 (class 3256 OID 18082)
 -- Name: therapies all_access_therapies; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2670,7 +3368,7 @@ CREATE POLICY all_access_therapies ON public.therapies USING (true);
 
 
 --
--- TOC entry 4016 (class 3256 OID 18083)
+-- TOC entry 4171 (class 3256 OID 18083)
 -- Name: therapies_bodies_pillars all_access_therapies_bodies_pillars; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2678,7 +3376,7 @@ CREATE POLICY all_access_therapies_bodies_pillars ON public.therapies_bodies_pil
 
 
 --
--- TOC entry 4017 (class 3256 OID 18084)
+-- TOC entry 4172 (class 3256 OID 18084)
 -- Name: therapy_tasks all_access_therapy_tasks; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2686,7 +3384,7 @@ CREATE POLICY all_access_therapy_tasks ON public.therapy_tasks USING (true);
 
 
 --
--- TOC entry 4018 (class 3256 OID 18085)
+-- TOC entry 4173 (class 3256 OID 18085)
 -- Name: therapytype all_access_therapy_type; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2694,7 +3392,7 @@ CREATE POLICY all_access_therapy_type ON public.therapytype USING (true);
 
 
 --
--- TOC entry 4021 (class 3256 OID 59840)
+-- TOC entry 4176 (class 3256 OID 59840)
 -- Name: user_menu_permissions all_access_user_menu_permissions; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2702,7 +3400,7 @@ CREATE POLICY all_access_user_menu_permissions ON public.user_menu_permissions U
 
 
 --
--- TOC entry 4022 (class 3256 OID 59882)
+-- TOC entry 4177 (class 3256 OID 59882)
 -- Name: users all_access_users; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -2710,206 +3408,239 @@ CREATE POLICY all_access_users ON public.users USING (true);
 
 
 --
--- TOC entry 4019 (class 3256 OID 18086)
+-- TOC entry 4174 (class 3256 OID 18086)
 -- Name: vendors all_access_vendors; Type: POLICY; Schema: public; Owner: postgres
 --
 
 CREATE POLICY all_access_vendors ON public.vendors USING (true);
 
--- Create policies for new finance tables (following existing pattern)
-CREATE POLICY all_access_payment_status ON public.payment_status USING (true);
-CREATE POLICY all_access_payment_methods ON public.payment_methods USING (true);
-CREATE POLICY all_access_financing_types ON public.financing_types USING (true);
-CREATE POLICY all_access_member_program_finances ON public.member_program_finances USING (true);
-CREATE POLICY all_access_member_program_payments ON public.member_program_payments USING (true);
-
 
 --
--- TOC entry 3981 (class 0 OID 17330)
--- Dependencies: 265
+-- TOC entry 4130 (class 0 OID 17330)
+-- Dependencies: 269
 -- Name: audit_logs; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3982 (class 0 OID 17338)
--- Dependencies: 268
+-- TOC entry 4131 (class 0 OID 17338)
+-- Dependencies: 272
 -- Name: bodies; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.bodies ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3983 (class 0 OID 17350)
--- Dependencies: 270
+-- TOC entry 4132 (class 0 OID 17350)
+-- Dependencies: 274
 -- Name: buckets; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.buckets ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3984 (class 0 OID 17361)
--- Dependencies: 271
+-- TOC entry 4133 (class 0 OID 17361)
+-- Dependencies: 275
 -- Name: campaigns; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.campaigns ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3985 (class 0 OID 17372)
--- Dependencies: 273
+-- TOC entry 4153 (class 0 OID 63528)
+-- Dependencies: 326
+-- Name: financing_types; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.financing_types ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4134 (class 0 OID 17372)
+-- Dependencies: 277
 -- Name: leads; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3986 (class 0 OID 17383)
--- Dependencies: 275
+-- TOC entry 4155 (class 0 OID 64937)
+-- Dependencies: 330
+-- Name: member_program_finances; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.member_program_finances ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4156 (class 0 OID 66099)
+-- Dependencies: 332
+-- Name: member_program_item_schedule; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.member_program_item_schedule ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4150 (class 0 OID 62265)
+-- Dependencies: 321
+-- Name: member_program_item_tasks; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.member_program_item_tasks ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4135 (class 0 OID 17383)
+-- Dependencies: 279
 -- Name: member_program_items; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.member_program_items ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3987 (class 0 OID 17399)
--- Dependencies: 277
--- Name: member_program_schedule; Type: ROW SECURITY; Schema: public; Owner: postgres
+-- TOC entry 4157 (class 0 OID 66120)
+-- Dependencies: 334
+-- Name: member_program_items_task_schedule; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
-ALTER TABLE public.member_program_schedule ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.member_program_items_task_schedule ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3988 (class 0 OID 17411)
--- Dependencies: 279
+-- TOC entry 4154 (class 0 OID 63559)
+-- Dependencies: 328
+-- Name: member_program_payments; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.member_program_payments ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4136 (class 0 OID 17411)
+-- Dependencies: 281
 -- Name: member_programs; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.member_programs ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 4000 (class 0 OID 59417)
--- Dependencies: 315
+-- TOC entry 4148 (class 0 OID 59417)
+-- Dependencies: 317
 -- Name: menu_items; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3989 (class 0 OID 17424)
--- Dependencies: 282
+-- TOC entry 4152 (class 0 OID 63514)
+-- Dependencies: 324
+-- Name: payment_methods; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.payment_methods ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4151 (class 0 OID 63500)
+-- Dependencies: 322
+-- Name: payment_status; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.payment_status ENABLE ROW LEVEL SECURITY;
+
+--
+-- TOC entry 4137 (class 0 OID 17424)
+-- Dependencies: 284
 -- Name: pillars; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.pillars ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3990 (class 0 OID 17437)
--- Dependencies: 285
+-- TOC entry 4138 (class 0 OID 17437)
+-- Dependencies: 287
 -- Name: program_status; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.program_status ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3991 (class 0 OID 17449)
--- Dependencies: 287
+-- TOC entry 4139 (class 0 OID 17449)
+-- Dependencies: 289
 -- Name: program_template; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.program_template ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3992 (class 0 OID 17461)
--- Dependencies: 289
+-- TOC entry 4140 (class 0 OID 17461)
+-- Dependencies: 291
 -- Name: program_template_items; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.program_template_items ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3993 (class 0 OID 17476)
--- Dependencies: 291
+-- TOC entry 4141 (class 0 OID 17476)
+-- Dependencies: 293
 -- Name: status; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.status ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3994 (class 0 OID 17488)
--- Dependencies: 294
+-- TOC entry 4142 (class 0 OID 17488)
+-- Dependencies: 296
 -- Name: therapies; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.therapies ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3995 (class 0 OID 17499)
--- Dependencies: 295
+-- TOC entry 4143 (class 0 OID 17499)
+-- Dependencies: 297
 -- Name: therapies_bodies_pillars; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.therapies_bodies_pillars ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3996 (class 0 OID 17508)
--- Dependencies: 297
+-- TOC entry 4144 (class 0 OID 17508)
+-- Dependencies: 299
 -- Name: therapy_tasks; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.therapy_tasks ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3997 (class 0 OID 17520)
--- Dependencies: 299
+-- TOC entry 4145 (class 0 OID 17520)
+-- Dependencies: 301
 -- Name: therapytype; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.therapytype ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 4001 (class 0 OID 59428)
--- Dependencies: 317
+-- TOC entry 4149 (class 0 OID 59428)
+-- Dependencies: 319
 -- Name: user_menu_permissions; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.user_menu_permissions ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3998 (class 0 OID 17531)
--- Dependencies: 300
+-- TOC entry 4146 (class 0 OID 17531)
+-- Dependencies: 302
 -- Name: users; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 --
--- TOC entry 3999 (class 0 OID 17537)
--- Dependencies: 301
+-- TOC entry 4147 (class 0 OID 17537)
+-- Dependencies: 303
 -- Name: vendors; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
 ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 
--- Enable Row Level Security for new finance tables
-ALTER TABLE public.payment_status ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.payment_methods ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.financing_types ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.member_program_finances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.member_program_payments ENABLE ROW LEVEL SECURITY;
-
 --
--- TOC entry 4030 (class 0 OID 0)
--- Dependencies: 4029
--- Name: DATABASE postgres; Type: ACL; Schema: -; Owner: postgres
---
-
-GRANT ALL ON DATABASE postgres TO dashboard_user;
-
-
---
--- TOC entry 4032 (class 0 OID 0)
+-- TOC entry 4191 (class 0 OID 0)
 -- Dependencies: 19
 -- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
 --
@@ -2921,8 +3652,63 @@ GRANT USAGE ON SCHEMA public TO service_role;
 
 
 --
--- TOC entry 4033 (class 0 OID 0)
--- Dependencies: 358
+-- TOC entry 4192 (class 0 OID 0)
+-- Dependencies: 353
+-- Name: FUNCTION audit_financing_types(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.audit_financing_types() TO anon;
+GRANT ALL ON FUNCTION public.audit_financing_types() TO authenticated;
+GRANT ALL ON FUNCTION public.audit_financing_types() TO service_role;
+
+
+--
+-- TOC entry 4193 (class 0 OID 0)
+-- Dependencies: 336
+-- Name: FUNCTION audit_member_program_finances(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.audit_member_program_finances() TO anon;
+GRANT ALL ON FUNCTION public.audit_member_program_finances() TO authenticated;
+GRANT ALL ON FUNCTION public.audit_member_program_finances() TO service_role;
+
+
+--
+-- TOC entry 4194 (class 0 OID 0)
+-- Dependencies: 354
+-- Name: FUNCTION audit_member_program_payments(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.audit_member_program_payments() TO anon;
+GRANT ALL ON FUNCTION public.audit_member_program_payments() TO authenticated;
+GRANT ALL ON FUNCTION public.audit_member_program_payments() TO service_role;
+
+
+--
+-- TOC entry 4195 (class 0 OID 0)
+-- Dependencies: 352
+-- Name: FUNCTION audit_payment_methods(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.audit_payment_methods() TO anon;
+GRANT ALL ON FUNCTION public.audit_payment_methods() TO authenticated;
+GRANT ALL ON FUNCTION public.audit_payment_methods() TO service_role;
+
+
+--
+-- TOC entry 4196 (class 0 OID 0)
+-- Dependencies: 351
+-- Name: FUNCTION audit_payment_status(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.audit_payment_status() TO anon;
+GRANT ALL ON FUNCTION public.audit_payment_status() TO authenticated;
+GRANT ALL ON FUNCTION public.audit_payment_status() TO service_role;
+
+
+--
+-- TOC entry 4197 (class 0 OID 0)
+-- Dependencies: 381
 -- Name: FUNCTION audit_trigger_function(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2932,8 +3718,8 @@ GRANT ALL ON FUNCTION public.audit_trigger_function() TO service_role;
 
 
 --
--- TOC entry 4034 (class 0 OID 0)
--- Dependencies: 390
+-- TOC entry 4198 (class 0 OID 0)
+-- Dependencies: 416
 -- Name: FUNCTION create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2943,8 +3729,8 @@ GRANT ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integ
 
 
 --
--- TOC entry 4035 (class 0 OID 0)
--- Dependencies: 391
+-- TOC entry 4199 (class 0 OID 0)
+-- Dependencies: 413
 -- Name: FUNCTION example_create_member_program(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2954,8 +3740,8 @@ GRANT ALL ON FUNCTION public.example_create_member_program() TO service_role;
 
 
 --
--- TOC entry 4036 (class 0 OID 0)
--- Dependencies: 361
+-- TOC entry 4200 (class 0 OID 0)
+-- Dependencies: 384
 -- Name: FUNCTION handle_new_user(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2965,8 +3751,8 @@ GRANT ALL ON FUNCTION public.handle_new_user() TO service_role;
 
 
 --
--- TOC entry 4037 (class 0 OID 0)
--- Dependencies: 364
+-- TOC entry 4201 (class 0 OID 0)
+-- Dependencies: 387
 -- Name: FUNCTION update_timestamp_function(); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2976,8 +3762,8 @@ GRANT ALL ON FUNCTION public.update_timestamp_function() TO service_role;
 
 
 --
--- TOC entry 4038 (class 0 OID 0)
--- Dependencies: 265
+-- TOC entry 4202 (class 0 OID 0)
+-- Dependencies: 269
 -- Name: TABLE audit_logs; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2988,8 +3774,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.au
 
 
 --
--- TOC entry 4040 (class 0 OID 0)
--- Dependencies: 266
+-- TOC entry 4204 (class 0 OID 0)
+-- Dependencies: 270
 -- Name: SEQUENCE audit_logs_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -2999,8 +3785,8 @@ GRANT ALL ON SEQUENCE public.audit_logs_id_seq TO service_role;
 
 
 --
--- TOC entry 4041 (class 0 OID 0)
--- Dependencies: 267
+-- TOC entry 4205 (class 0 OID 0)
+-- Dependencies: 271
 -- Name: SEQUENCE bodies_body_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3011,8 +3797,8 @@ GRANT ALL ON SEQUENCE public.bodies_body_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4042 (class 0 OID 0)
--- Dependencies: 268
+-- TOC entry 4206 (class 0 OID 0)
+-- Dependencies: 272
 -- Name: TABLE bodies; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3023,8 +3809,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.bo
 
 
 --
--- TOC entry 4043 (class 0 OID 0)
--- Dependencies: 269
+-- TOC entry 4207 (class 0 OID 0)
+-- Dependencies: 273
 -- Name: SEQUENCE buckets_bucket_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3035,8 +3821,8 @@ GRANT ALL ON SEQUENCE public.buckets_bucket_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4044 (class 0 OID 0)
--- Dependencies: 270
+-- TOC entry 4208 (class 0 OID 0)
+-- Dependencies: 274
 -- Name: TABLE buckets; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3047,8 +3833,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.bu
 
 
 --
--- TOC entry 4045 (class 0 OID 0)
--- Dependencies: 271
+-- TOC entry 4209 (class 0 OID 0)
+-- Dependencies: 275
 -- Name: TABLE campaigns; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3059,8 +3845,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.ca
 
 
 --
--- TOC entry 4047 (class 0 OID 0)
--- Dependencies: 272
+-- TOC entry 4211 (class 0 OID 0)
+-- Dependencies: 276
 -- Name: SEQUENCE campaigns_campaign_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3071,8 +3857,30 @@ GRANT SELECT,USAGE ON SEQUENCE public.campaigns_campaign_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4048 (class 0 OID 0)
--- Dependencies: 273
+-- TOC entry 4213 (class 0 OID 0)
+-- Dependencies: 326
+-- Name: TABLE financing_types; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.financing_types TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.financing_types TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.financing_types TO service_role;
+
+
+--
+-- TOC entry 4215 (class 0 OID 0)
+-- Dependencies: 327
+-- Name: SEQUENCE financing_types_financing_type_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.financing_types_financing_type_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.financing_types_financing_type_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.financing_types_financing_type_id_seq TO service_role;
+
+
+--
+-- TOC entry 4216 (class 0 OID 0)
+-- Dependencies: 277
 -- Name: TABLE leads; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3083,8 +3891,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.le
 
 
 --
--- TOC entry 4050 (class 0 OID 0)
--- Dependencies: 274
+-- TOC entry 4218 (class 0 OID 0)
+-- Dependencies: 278
 -- Name: SEQUENCE leads_lead_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3094,44 +3902,63 @@ GRANT ALL ON SEQUENCE public.leads_lead_id_seq TO service_role;
 
 
 --
--- TOC entry 4051 (class 0 OID 0)
--- Dependencies: 275
--- Name: TABLE member_program_items; Type: ACL; Schema: public; Owner: postgres
+-- TOC entry 4219 (class 0 OID 0)
+-- Dependencies: 330
+-- Name: TABLE member_program_finances; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO anon;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO authenticated;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO service_role;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO PUBLIC;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_finances TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_finances TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_finances TO service_role;
 
 
 --
--- TOC entry 4052.5 (class 0 OID 0)
--- Dependencies: 277.6
+-- TOC entry 4221 (class 0 OID 0)
+-- Dependencies: 331
+-- Name: SEQUENCE member_program_finances_member_program_finance_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.member_program_finances_member_program_finance_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.member_program_finances_member_program_finance_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.member_program_finances_member_program_finance_id_seq TO service_role;
+
+
+--
+-- TOC entry 4222 (class 0 OID 0)
+-- Dependencies: 332
+-- Name: TABLE member_program_item_schedule; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_schedule TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_schedule TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_schedule TO service_role;
+
+
+--
+-- TOC entry 4224 (class 0 OID 0)
+-- Dependencies: 333
+-- Name: SEQUENCE member_program_item_schedule_member_program_item_schedule_id_se; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se TO anon;
+GRANT ALL ON SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se TO authenticated;
+GRANT ALL ON SEQUENCE public.member_program_item_schedule_member_program_item_schedule_id_se TO service_role;
+
+
+--
+-- TOC entry 4225 (class 0 OID 0)
+-- Dependencies: 321
 -- Name: TABLE member_program_item_tasks; Type: ACL; Schema: public; Owner: postgres
 --
 
 GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_tasks TO anon;
 GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_tasks TO authenticated;
 GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_tasks TO service_role;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_item_tasks TO PUBLIC;
 
 
 --
--- TOC entry 4053 (class 0 OID 0)
--- Dependencies: 276
--- Name: SEQUENCE member_program_items_member_program_item_id_seq; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO anon;
-GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO authenticated;
-GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO service_role;
-GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO PUBLIC;
-
-
---
--- TOC entry 4053.5 (class 0 OID 0)
--- Dependencies: 277.5
+-- TOC entry 4227 (class 0 OID 0)
+-- Dependencies: 320
 -- Name: SEQUENCE member_program_item_tasks_member_program_item_task_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3142,32 +3969,76 @@ GRANT ALL ON SEQUENCE public.member_program_item_tasks_member_program_item_task_
 
 
 --
--- TOC entry 4054 (class 0 OID 0)
--- Dependencies: 277
--- Name: TABLE member_program_schedule; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_schedule TO anon;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_schedule TO authenticated;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_schedule TO service_role;
-GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_schedule TO PUBLIC;
-
-
---
--- TOC entry 4056 (class 0 OID 0)
--- Dependencies: 278
--- Name: SEQUENCE member_program_schedule_program_schedule_id_seq; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT ALL ON SEQUENCE public.member_program_schedule_program_schedule_id_seq TO anon;
-GRANT ALL ON SEQUENCE public.member_program_schedule_program_schedule_id_seq TO authenticated;
-GRANT ALL ON SEQUENCE public.member_program_schedule_program_schedule_id_seq TO service_role;
-GRANT ALL ON SEQUENCE public.member_program_schedule_program_schedule_id_seq TO PUBLIC;
-
-
---
--- TOC entry 4057 (class 0 OID 0)
+-- TOC entry 4228 (class 0 OID 0)
 -- Dependencies: 279
+-- Name: TABLE member_program_items; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO service_role;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items TO PUBLIC;
+
+
+--
+-- TOC entry 4230 (class 0 OID 0)
+-- Dependencies: 280
+-- Name: SEQUENCE member_program_items_member_program_item_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO service_role;
+GRANT ALL ON SEQUENCE public.member_program_items_member_program_item_id_seq TO PUBLIC;
+
+
+--
+-- TOC entry 4231 (class 0 OID 0)
+-- Dependencies: 334
+-- Name: TABLE member_program_items_task_schedule; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items_task_schedule TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items_task_schedule TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_items_task_schedule TO service_role;
+
+
+--
+-- TOC entry 4233 (class 0 OID 0)
+-- Dependencies: 335
+-- Name: SEQUENCE member_program_items_task_schedule_member_program_item_task_sch; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch TO anon;
+GRANT ALL ON SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch TO authenticated;
+GRANT ALL ON SEQUENCE public.member_program_items_task_schedule_member_program_item_task_sch TO service_role;
+
+
+--
+-- TOC entry 4238 (class 0 OID 0)
+-- Dependencies: 328
+-- Name: TABLE member_program_payments; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_payments TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_payments TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.member_program_payments TO service_role;
+
+
+--
+-- TOC entry 4240 (class 0 OID 0)
+-- Dependencies: 329
+-- Name: SEQUENCE member_program_payments_member_program_payment_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.member_program_payments_member_program_payment_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.member_program_payments_member_program_payment_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.member_program_payments_member_program_payment_id_seq TO service_role;
+
+
+--
+-- TOC entry 4241 (class 0 OID 0)
+-- Dependencies: 281
 -- Name: TABLE member_programs; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3178,8 +4049,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.me
 
 
 --
--- TOC entry 4059 (class 0 OID 0)
--- Dependencies: 280
+-- TOC entry 4243 (class 0 OID 0)
+-- Dependencies: 282
 -- Name: SEQUENCE member_programs_member_program_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3189,8 +4060,8 @@ GRANT ALL ON SEQUENCE public.member_programs_member_program_id_seq TO service_ro
 
 
 --
--- TOC entry 4060 (class 0 OID 0)
--- Dependencies: 315
+-- TOC entry 4244 (class 0 OID 0)
+-- Dependencies: 317
 -- Name: TABLE menu_items; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3200,8 +4071,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.me
 
 
 --
--- TOC entry 4062 (class 0 OID 0)
--- Dependencies: 314
+-- TOC entry 4246 (class 0 OID 0)
+-- Dependencies: 316
 -- Name: SEQUENCE menu_items_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3211,8 +4082,52 @@ GRANT ALL ON SEQUENCE public.menu_items_id_seq TO service_role;
 
 
 --
--- TOC entry 4063 (class 0 OID 0)
--- Dependencies: 281
+-- TOC entry 4248 (class 0 OID 0)
+-- Dependencies: 324
+-- Name: TABLE payment_methods; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_methods TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_methods TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_methods TO service_role;
+
+
+--
+-- TOC entry 4250 (class 0 OID 0)
+-- Dependencies: 325
+-- Name: SEQUENCE payment_methods_payment_method_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.payment_methods_payment_method_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.payment_methods_payment_method_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.payment_methods_payment_method_id_seq TO service_role;
+
+
+--
+-- TOC entry 4252 (class 0 OID 0)
+-- Dependencies: 322
+-- Name: TABLE payment_status; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_status TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_status TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.payment_status TO service_role;
+
+
+--
+-- TOC entry 4254 (class 0 OID 0)
+-- Dependencies: 323
+-- Name: SEQUENCE payment_status_payment_status_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.payment_status_payment_status_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.payment_status_payment_status_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.payment_status_payment_status_id_seq TO service_role;
+
+
+--
+-- TOC entry 4255 (class 0 OID 0)
+-- Dependencies: 283
 -- Name: SEQUENCE pillars_pillar_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3223,8 +4138,8 @@ GRANT ALL ON SEQUENCE public.pillars_pillar_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4064 (class 0 OID 0)
--- Dependencies: 282
+-- TOC entry 4256 (class 0 OID 0)
+-- Dependencies: 284
 -- Name: TABLE pillars; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3235,8 +4150,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.pi
 
 
 --
--- TOC entry 4065 (class 0 OID 0)
--- Dependencies: 283
+-- TOC entry 4257 (class 0 OID 0)
+-- Dependencies: 285
 -- Name: SEQUENCE program_items_program_item_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3247,8 +4162,8 @@ GRANT ALL ON SEQUENCE public.program_items_program_item_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4066 (class 0 OID 0)
--- Dependencies: 284
+-- TOC entry 4258 (class 0 OID 0)
+-- Dependencies: 286
 -- Name: SEQUENCE program_status_program_status_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3259,8 +4174,8 @@ GRANT ALL ON SEQUENCE public.program_status_program_status_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4067 (class 0 OID 0)
--- Dependencies: 285
+-- TOC entry 4259 (class 0 OID 0)
+-- Dependencies: 287
 -- Name: TABLE program_status; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3271,8 +4186,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.pr
 
 
 --
--- TOC entry 4068 (class 0 OID 0)
--- Dependencies: 286
+-- TOC entry 4260 (class 0 OID 0)
+-- Dependencies: 288
 -- Name: SEQUENCE program_template_program_template_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3283,8 +4198,8 @@ GRANT ALL ON SEQUENCE public.program_template_program_template_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4069 (class 0 OID 0)
--- Dependencies: 287
+-- TOC entry 4261 (class 0 OID 0)
+-- Dependencies: 289
 -- Name: TABLE program_template; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3295,8 +4210,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.pr
 
 
 --
--- TOC entry 4070 (class 0 OID 0)
--- Dependencies: 288
+-- TOC entry 4262 (class 0 OID 0)
+-- Dependencies: 290
 -- Name: SEQUENCE program_template_items_program_template_items_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3307,8 +4222,8 @@ GRANT ALL ON SEQUENCE public.program_template_items_program_template_items_id_se
 
 
 --
--- TOC entry 4071 (class 0 OID 0)
--- Dependencies: 289
+-- TOC entry 4263 (class 0 OID 0)
+-- Dependencies: 291
 -- Name: TABLE program_template_items; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3319,8 +4234,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.pr
 
 
 --
--- TOC entry 4072 (class 0 OID 0)
--- Dependencies: 290
+-- TOC entry 4264 (class 0 OID 0)
+-- Dependencies: 292
 -- Name: SEQUENCE programs_program_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3331,8 +4246,8 @@ GRANT ALL ON SEQUENCE public.programs_program_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4073 (class 0 OID 0)
--- Dependencies: 291
+-- TOC entry 4265 (class 0 OID 0)
+-- Dependencies: 293
 -- Name: TABLE status; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3343,8 +4258,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.st
 
 
 --
--- TOC entry 4075 (class 0 OID 0)
--- Dependencies: 292
+-- TOC entry 4267 (class 0 OID 0)
+-- Dependencies: 294
 -- Name: SEQUENCE status_status_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3355,8 +4270,8 @@ GRANT SELECT,USAGE ON SEQUENCE public.status_status_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4076 (class 0 OID 0)
--- Dependencies: 293
+-- TOC entry 4268 (class 0 OID 0)
+-- Dependencies: 295
 -- Name: SEQUENCE therapies_therapy_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3367,8 +4282,8 @@ GRANT ALL ON SEQUENCE public.therapies_therapy_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4077 (class 0 OID 0)
--- Dependencies: 294
+-- TOC entry 4269 (class 0 OID 0)
+-- Dependencies: 296
 -- Name: TABLE therapies; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3379,8 +4294,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.th
 
 
 --
--- TOC entry 4078 (class 0 OID 0)
--- Dependencies: 295
+-- TOC entry 4270 (class 0 OID 0)
+-- Dependencies: 297
 -- Name: TABLE therapies_bodies_pillars; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3391,8 +4306,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.th
 
 
 --
--- TOC entry 4079 (class 0 OID 0)
--- Dependencies: 296
+-- TOC entry 4271 (class 0 OID 0)
+-- Dependencies: 298
 -- Name: SEQUENCE therapy_tasks_task_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3402,8 +4317,8 @@ GRANT ALL ON SEQUENCE public.therapy_tasks_task_id_seq TO service_role;
 
 
 --
--- TOC entry 4080 (class 0 OID 0)
--- Dependencies: 297
+-- TOC entry 4272 (class 0 OID 0)
+-- Dependencies: 299
 -- Name: TABLE therapy_tasks; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3414,8 +4329,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.th
 
 
 --
--- TOC entry 4081 (class 0 OID 0)
--- Dependencies: 298
+-- TOC entry 4273 (class 0 OID 0)
+-- Dependencies: 300
 -- Name: SEQUENCE therapy_type_therapy_type_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3426,8 +4341,8 @@ GRANT ALL ON SEQUENCE public.therapy_type_therapy_type_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 4082 (class 0 OID 0)
--- Dependencies: 299
+-- TOC entry 4274 (class 0 OID 0)
+-- Dependencies: 301
 -- Name: TABLE therapytype; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3438,8 +4353,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.th
 
 
 --
--- TOC entry 4083 (class 0 OID 0)
--- Dependencies: 317
+-- TOC entry 4275 (class 0 OID 0)
+-- Dependencies: 319
 -- Name: TABLE user_menu_permissions; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3449,8 +4364,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.us
 
 
 --
--- TOC entry 4085 (class 0 OID 0)
--- Dependencies: 316
+-- TOC entry 4277 (class 0 OID 0)
+-- Dependencies: 318
 -- Name: SEQUENCE user_menu_permissions_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3460,8 +4375,8 @@ GRANT ALL ON SEQUENCE public.user_menu_permissions_id_seq TO service_role;
 
 
 --
--- TOC entry 4086 (class 0 OID 0)
--- Dependencies: 300
+-- TOC entry 4278 (class 0 OID 0)
+-- Dependencies: 302
 -- Name: TABLE users; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3471,8 +4386,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.us
 
 
 --
--- TOC entry 4087 (class 0 OID 0)
--- Dependencies: 301
+-- TOC entry 4279 (class 0 OID 0)
+-- Dependencies: 303
 -- Name: TABLE vendors; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3483,8 +4398,8 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.ve
 
 
 --
--- TOC entry 4089 (class 0 OID 0)
--- Dependencies: 312
+-- TOC entry 4281 (class 0 OID 0)
+-- Dependencies: 304
 -- Name: SEQUENCE vendors_vendor_id_seq; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -3495,7 +4410,7 @@ GRANT SELECT,USAGE ON SEQUENCE public.vendors_vendor_id_seq TO PUBLIC;
 
 
 --
--- TOC entry 2392 (class 826 OID 18106)
+-- TOC entry 2436 (class 826 OID 18106)
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: postgres
 --
 
@@ -3506,7 +4421,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENC
 
 
 --
--- TOC entry 2395 (class 826 OID 18107)
+-- TOC entry 2439 (class 826 OID 18107)
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -3517,7 +4432,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON S
 
 
 --
--- TOC entry 2397 (class 826 OID 18108)
+-- TOC entry 2441 (class 826 OID 18108)
 -- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: postgres
 --
 
@@ -3528,7 +4443,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIO
 
 
 --
--- TOC entry 2398 (class 826 OID 18109)
+-- TOC entry 2442 (class 826 OID 18109)
 -- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -3539,7 +4454,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON F
 
 
 --
--- TOC entry 2399 (class 826 OID 18110)
+-- TOC entry 2443 (class 826 OID 18110)
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: postgres
 --
 
@@ -3550,7 +4465,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT,INSERT,
 
 
 --
--- TOC entry 2400 (class 826 OID 18111)
+-- TOC entry 2444 (class 826 OID 18111)
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
 --
 
@@ -3559,202 +4474,12 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT,I
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLES TO service_role;
 
--- Add missing audit foreign key constraints for finance lookup tables
-ALTER TABLE public.payment_status 
-    ADD CONSTRAINT payment_status_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
 
-ALTER TABLE public.payment_status 
-    ADD CONSTRAINT payment_status_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.payment_methods 
-    ADD CONSTRAINT payment_methods_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.payment_methods 
-    ADD CONSTRAINT payment_methods_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.financing_types 
-    ADD CONSTRAINT financing_types_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.financing_types 
-    ADD CONSTRAINT financing_types_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
--- Foreign key constraints for member_program_finances
-ALTER TABLE ONLY public.member_program_finances
-    ADD CONSTRAINT fk_member_program_finances_program FOREIGN KEY (program_id) REFERENCES public.member_programs(member_program_id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.member_program_finances
-    ADD CONSTRAINT fk_member_program_finances_financing_type FOREIGN KEY (financing_type_id) REFERENCES public.financing_types(financing_type_id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.member_program_finances 
-    ADD CONSTRAINT member_program_finances_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.member_program_finances 
-    ADD CONSTRAINT member_program_finances_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
--- Foreign key constraints for member_program_payments
-ALTER TABLE ONLY public.member_program_payments
-    ADD CONSTRAINT fk_member_program_payments_program FOREIGN KEY (program_id) REFERENCES public.member_programs(member_program_id) ON UPDATE CASCADE ON DELETE CASCADE;
-
-ALTER TABLE ONLY public.member_program_payments
-    ADD CONSTRAINT fk_member_program_payments_status FOREIGN KEY (payment_status_id) REFERENCES public.payment_status(payment_status_id) ON UPDATE CASCADE ON DELETE RESTRICT;
-
-ALTER TABLE ONLY public.member_program_payments
-    ADD CONSTRAINT fk_member_program_payments_method FOREIGN KEY (payment_method_id) REFERENCES public.payment_methods(payment_method_id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.member_program_payments 
-    ADD CONSTRAINT member_program_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE public.member_program_payments 
-    ADD CONSTRAINT member_program_payments_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON UPDATE CASCADE ON DELETE SET NULL;
-
--- Default data for lookup tables
-INSERT INTO public.payment_status (payment_status_name, active_flag) VALUES
-('Pending', true),
-('Paid', true),
-('Late', true),
-('Cancelled', true),
-('Refunded', true);
-
-INSERT INTO public.payment_methods (payment_method_name, active_flag) VALUES
-('Cash', true),
-('Check', true),
-('Credit Card', true),
-('Bank Transfer', true),
-('Financing', true);
-
-INSERT INTO public.financing_types (financing_type_name, active_flag) VALUES
-('Cash', true),
-('Financing', true),
-('Payment Plan', true);
-
--- Audit functions for member_program_finances
-CREATE OR REPLACE FUNCTION audit_member_program_finances()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', NEW.member_program_finance_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', NEW.member_program_finance_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', OLD.member_program_finance_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Audit functions for member_program_payments
-CREATE OR REPLACE FUNCTION audit_member_program_payments()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_payments', NEW.member_program_payment_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_payments', NEW.member_program_payment_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_payments', OLD.member_program_payment_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create triggers for audit functions
-CREATE TRIGGER audit_member_program_finances_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON public.member_program_finances
-    FOR EACH ROW EXECUTE FUNCTION audit_member_program_finances();
-
-CREATE TRIGGER audit_member_program_payments_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON public.member_program_payments
-    FOR EACH ROW EXECUTE FUNCTION audit_member_program_payments();
-
--- Audit functions for lookup tables
-CREATE OR REPLACE FUNCTION audit_payment_status()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_status', NEW.payment_status_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_status', NEW.payment_status_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_status', OLD.payment_status_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION audit_payment_methods()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_methods', NEW.payment_method_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_methods', NEW.payment_method_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('payment_methods', OLD.payment_method_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION audit_financing_types()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('financing_types', NEW.financing_type_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('financing_types', NEW.financing_type_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('financing_types', OLD.financing_type_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create triggers for lookup table audit functions
-CREATE TRIGGER audit_payment_status_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON public.payment_status
-    FOR EACH ROW EXECUTE FUNCTION audit_payment_status();
-
-CREATE TRIGGER audit_payment_methods_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON public.payment_methods
-    FOR EACH ROW EXECUTE FUNCTION audit_payment_methods();
-
-CREATE TRIGGER audit_financing_types_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON public.financing_types
-    FOR EACH ROW EXECUTE FUNCTION audit_financing_types();
-
--- Completed on 2025-09-08 10:57:39
+-- Completed on 2025-09-13 22:03:16
 
 --
 -- PostgreSQL database dump complete
 --
+
+\unrestrict yBqt8sY4pHZPwd4VPOajwEm6bZDdLjbnyNUpqaURl0rk1FVX2LZbJTAjbHOuMN5
 

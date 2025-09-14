@@ -171,7 +171,6 @@ export interface MemberPrograms {
   description: string | null;
   total_cost: number | null;
   total_charge: number | null;
-  margin_percentage: number | null;
   lead_id: number | null;
   start_date: string | null;
   active_flag: boolean;
@@ -191,6 +190,8 @@ export interface MemberPrograms {
   lead_name?: string | null;
   template_name?: string | null;
   status_name?: string | null;
+  // Joined fields from finances table
+  margin?: number | null;
 }
 
 export interface MemberProgramFinances {

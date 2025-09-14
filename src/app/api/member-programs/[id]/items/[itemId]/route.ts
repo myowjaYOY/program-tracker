@@ -129,15 +129,12 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       totalCharge += charge * quantity;
     });
 
-    const marginPercentage = totalCharge > 0 ? ((totalCharge - totalCost) / totalCharge) * 100 : 0;
-
     // Update the member program
     const { data: updateData, error: updateError } = await supabase
       .from('member_programs')
       .update({
         total_cost: totalCost,
         total_charge: totalCharge,
-        margin_percentage: marginPercentage,
         updated_by: (await supabase.auth.getUser()).data.user?.id,
       })
       .eq('member_program_id', memberProgramId)
@@ -147,6 +144,53 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       console.error('Error updating member program calculated fields:', updateError);
     } else {
       console.log(`Successfully updated member program ${memberProgramId} calculated fields:`, updateData);
+    }
+
+    // Calculate and update margin in finances table
+    const margin = totalCharge > 0 ? ((totalCharge - totalCost) / totalCharge) * 100 : 0;
+    
+    // Check if finances record exists
+    const { data: existingFinances, error: financesFetchError } = await supabase
+      .from('member_program_finances')
+      .select('member_program_finance_id')
+      .eq('member_program_id', memberProgramId)
+      .single();
+
+    if (financesFetchError && financesFetchError.code !== 'PGRST116') {
+      console.error('Error checking existing finances:', financesFetchError);
+    } else if (!existingFinances) {
+      // Create default finances record
+      const { data: newFinances, error: createFinancesError } = await supabase
+        .from('member_program_finances')
+        .insert({
+          member_program_id: memberProgramId,
+          margin: margin,
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+          updated_by: (await supabase.auth.getUser()).data.user?.id,
+        })
+        .select();
+
+      if (createFinancesError) {
+        console.error('Error creating default finances record:', createFinancesError);
+      } else {
+        console.log(`Successfully created default finances record for member program ${memberProgramId}:`, newFinances);
+      }
+    } else {
+      // Update existing finances record
+      const { data: updatedFinances, error: updateFinancesError } = await supabase
+        .from('member_program_finances')
+        .update({
+          margin: margin,
+          updated_by: (await supabase.auth.getUser()).data.user?.id,
+        })
+        .eq('member_program_id', memberProgramId)
+        .select();
+
+      if (updateFinancesError) {
+        console.error('Error updating finances margin:', updateFinancesError);
+      } else {
+        console.log(`Successfully updated finances margin for member program ${memberProgramId}:`, updatedFinances);
+      }
     }
   } catch (error) {
     console.error('Error in updateMemberProgramCalculatedFields:', error);

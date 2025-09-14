@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
         updated_user:users!member_programs_updated_by_fkey(id, email, full_name),
         lead:leads!fk_member_programs_lead(lead_id, first_name, last_name, email),
         program_status:program_status!fk_member_programs_program_status(program_status_id, status_name),
-        program_template:program_template!fk_member_programs_source_template(program_template_id, program_template_name)
+        program_template:program_template!fk_member_programs_source_template(program_template_id, program_template_name),
+        finances:member_program_finances!fk_member_program_finances_program(margin)
       `)
       .order('program_template_name');
 
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
       lead_email: program.lead?.email || null,
       template_name: program.program_template?.program_template_name || null,
       status_name: program.program_status?.status_name || null,
+      margin: program.finances?.margin || null,
     }));
 
     console.log('Mapped member program data:', mapped);
@@ -89,7 +91,11 @@ export async function POST(req: NextRequest) {
 
     if (functionError) {
       console.error('Error calling create_member_program_from_template:', functionError);
-      return NextResponse.json({ error: 'Failed to create member program from template' }, { status: 500 });
+      console.error('Function error details:', JSON.stringify(functionError, null, 2));
+      return NextResponse.json({ 
+        error: 'Failed to create member program from template', 
+        details: functionError.message || 'Unknown database error' 
+      }, { status: 500 });
     }
 
     // Update the created program with custom name and description if provided

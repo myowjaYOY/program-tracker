@@ -99,12 +99,12 @@ const memberProgramColumns: GridColDef[] = [
     },
   },
   {
-    field: 'margin_percentage',
+    field: 'margin',
     headerName: 'Margin',
     width: 100,
     type: 'number',
     renderCell: (params: any) => {
-      const value = params.row.margin_percentage;
+      const value = params.row.margin;
       if (value == null || value === undefined || value === '') {
         return '-';
       }

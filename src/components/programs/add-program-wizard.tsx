@@ -80,6 +80,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
     watch,
     setValue,
     trigger,
+    reset,
   } = useForm<WizardFormData>({
     resolver: zodResolver(wizardSchema),
     mode: 'onChange',
@@ -90,6 +91,20 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
       description: '',
     },
   });
+
+  // Reset form when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      reset({
+        lead_id: 0,
+        source_template_id: 0,
+        program_template_name: '',
+        description: '',
+      });
+      setActiveStep(0);
+      setCompletedSteps(new Set());
+    }
+  }, [open, reset]);
 
   const watchedValues = watch();
 
@@ -206,17 +221,25 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                   <Select
                     {...field}
                     label="Program Template"
-                    value={field.value || ''}
+                    value={field.value && field.value > 0 ? field.value : ''}
                     onChange={(e) => {
-                      field.onChange(Number(e.target.value));
-                      // Auto-populate program name and description from template
-                      const selectedTemplate = programTemplates.find(t => t.program_template_id === Number(e.target.value));
-                      if (selectedTemplate) {
-                        setValue('program_template_name', selectedTemplate.program_template_name || '');
-                        setValue('description', selectedTemplate.description || '');
+                      const value = e.target.value;
+                      if (value === '') {
+                        field.onChange(0);
+                      } else {
+                        field.onChange(Number(value));
+                        // Auto-populate program name and description from template
+                        const selectedTemplate = programTemplates.find(t => t.program_template_id === Number(value));
+                        if (selectedTemplate) {
+                          setValue('program_template_name', selectedTemplate.program_template_name || '');
+                          setValue('description', selectedTemplate.description || '');
+                        }
                       }
                     }}
                   >
+                    <MenuItem value="">
+                      <em>Select a program template</em>
+                    </MenuItem>
                     {programTemplates.map((template) => (
                       <MenuItem key={template.program_template_id} value={template.program_template_id}>
                         {template.program_template_name}

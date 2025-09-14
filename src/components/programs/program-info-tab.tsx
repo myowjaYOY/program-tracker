@@ -122,6 +122,15 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                   label="Member"
                   fullWidth
                   {...field}
+                  value={field.value && leads.some(lead => lead.lead_id === field.value) ? field.value : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      field.onChange(null);
+                    } else {
+                      field.onChange(Number(value));
+                    }
+                  }}
                   error={!!errors.lead_id}
                   helperText={errors.lead_id?.message}
                 >
@@ -146,7 +155,15 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                   label="Status"
                   fullWidth
                   {...field}
-                  value={field.value || ''}
+                  value={field.value && programStatuses.some(status => status.program_status_id === field.value) ? field.value : ''}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      field.onChange(null);
+                    } else {
+                      field.onChange(Number(value));
+                    }
+                  }}
                   error={!!errors.program_status_id}
                   helperText={errors.program_status_id?.message}
                 >
