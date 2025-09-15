@@ -78,18 +78,14 @@ export function useDeleteProgramTemplateItem() {
   
   return useMutation<void, Error, { templateId: number; itemId: number }>({
     mutationFn: async ({ templateId, itemId }) => {
-      console.log(`Making DELETE request to /api/program-templates/${templateId}/items/${itemId}`);
       const res = await fetch(`/api/program-templates/${templateId}/items/${itemId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
-      console.log('DELETE response status:', res.status);
       if (!res.ok) {
         const json = await res.json();
-        console.error('DELETE request failed:', json);
         throw new Error(json.error || 'Failed to delete program template item');
       }
-      console.log('DELETE request successful');
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: programTemplateItemKeys.byTemplate(variables.templateId) });

@@ -4,12 +4,11 @@ import { MemberPrograms } from '@/types/database.types';
 export const memberProgramKeys = {
   all: ['member-programs'] as const,
   list: () => [...memberProgramKeys.all, 'list'] as const,
-  active: () => [...memberProgramKeys.all, 'active'] as const,
   detail: (id: number) => [...memberProgramKeys.all, 'detail', id] as const,
 };
 
 export function useMemberPrograms() {
-  return useQuery<MemberPrograms[], Error>({
+  return useQuery({
     queryKey: memberProgramKeys.list(),
     queryFn: async () => {
       const res = await fetch('/api/member-programs', {
@@ -23,8 +22,8 @@ export function useMemberPrograms() {
 }
 
 export function useActiveMemberPrograms() {
-  return useQuery<MemberPrograms[], Error>({
-    queryKey: memberProgramKeys.active(),
+  return useQuery({
+    queryKey: [...memberProgramKeys.list(), 'active'],
     queryFn: async () => {
       const res = await fetch('/api/member-programs?active=true', {
         credentials: 'include',
@@ -37,7 +36,7 @@ export function useActiveMemberPrograms() {
 }
 
 export function useMemberProgram(id: number) {
-  return useQuery<MemberPrograms, Error>({
+  return useQuery({
     queryKey: memberProgramKeys.detail(id),
     queryFn: async () => {
       const res = await fetch(`/api/member-programs/${id}`, {
@@ -63,11 +62,11 @@ export function useCreateMemberProgram() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create member program');
+      if (!res.ok) throw new Error(json.error || 'Failed to create member program from template');
       return json.data as MemberPrograms;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.all });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }
@@ -88,8 +87,8 @@ export function useUpdateMemberProgram() {
       return json.data as MemberPrograms;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.all });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(data.member_program_id) });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }
@@ -97,7 +96,7 @@ export function useUpdateMemberProgram() {
 export function useDeleteMemberProgram() {
   const queryClient = useQueryClient();
   
-  return useMutation<void, Error, string>({
+  return useMutation<void, Error, number>({
     mutationFn: async (id) => {
       const res = await fetch(`/api/member-programs/${id}`, {
         method: 'DELETE',
@@ -109,10 +108,7 @@ export function useDeleteMemberProgram() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.all });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }
-
-
-

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MemberProgramFinancesFormData } from '@/lib/validations/member-program-finances';
+import { memberProgramKeys } from './use-member-programs';
 
 export const memberProgramFinancesKeys = {
   all: ['member-program-finances'] as const,
@@ -43,6 +44,8 @@ export function useCreateMemberProgramFinances() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: memberProgramFinancesKeys.byProgram(variables.programId) });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }
@@ -64,6 +67,8 @@ export function useUpdateMemberProgramFinances() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: memberProgramFinancesKeys.byProgram(variables.programId) });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }

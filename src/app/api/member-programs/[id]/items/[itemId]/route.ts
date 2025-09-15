@@ -49,7 +49,6 @@ export async function PUT(
       .single();
 
     if (error) {
-      console.error('Error updating member program item:', error);
       return NextResponse.json({ error: 'Failed to update member program item' }, { status: 500 });
     }
 
@@ -58,7 +57,6 @@ export async function PUT(
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error('Error in member program item PUT:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -84,7 +82,6 @@ export async function DELETE(
       .eq('member_program_id', id);
 
     if (error) {
-      console.error('Error deleting member program item:', error);
       return NextResponse.json({ error: 'Failed to delete member program item' }, { status: 500 });
     }
 
@@ -93,7 +90,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error in member program item DELETE:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -112,7 +108,6 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .eq('active_flag', true);
 
     if (itemsError) {
-      console.error('Error fetching items for calculation:', itemsError);
       return;
     }
 
@@ -140,14 +135,23 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .eq('member_program_id', memberProgramId)
       .select();
 
-    if (updateError) {
-      console.error('Error updating member program calculated fields:', updateError);
-    } else {
-      console.log(`Successfully updated member program ${memberProgramId} calculated fields:`, updateData);
-    }
+    
 
-    // Calculate and update margin in finances table
-    const margin = totalCharge > 0 ? ((totalCharge - totalCost) / totalCharge) * 100 : 0;
+    // Calculate and update margin in finances table (match Financials tab)
+    // finalTotal = totalCharge + finance_charges + discounts
+    let financeCharges = 0;
+    let discounts = 0;
+    const { data: finVals } = await supabase
+      .from('member_program_finances')
+      .select('finance_charges, discounts')
+      .eq('member_program_id', memberProgramId)
+      .maybeSingle();
+    if (finVals) {
+      financeCharges = Number(finVals.finance_charges || 0);
+      discounts = Number(finVals.discounts || 0);
+    }
+    const finalTotal = totalCharge + financeCharges + discounts;
+    const margin = finalTotal > 0 ? ((finalTotal - totalCost) / finalTotal) * 100 : 0;
     
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
@@ -157,7 +161,7 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .single();
 
     if (financesFetchError && financesFetchError.code !== 'PGRST116') {
-      console.error('Error checking existing finances:', financesFetchError);
+      
     } else if (!existingFinances) {
       // Create default finances record
       const { data: newFinances, error: createFinancesError } = await supabase
@@ -170,11 +174,7 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
         })
         .select();
 
-      if (createFinancesError) {
-        console.error('Error creating default finances record:', createFinancesError);
-      } else {
-        console.log(`Successfully created default finances record for member program ${memberProgramId}:`, newFinances);
-      }
+      
     } else {
       // Update existing finances record
       const { data: updatedFinances, error: updateFinancesError } = await supabase
@@ -186,13 +186,8 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
         .eq('member_program_id', memberProgramId)
         .select();
 
-      if (updateFinancesError) {
-        console.error('Error updating finances margin:', updateFinancesError);
-      } else {
-        console.log(`Successfully updated finances margin for member program ${memberProgramId}:`, updatedFinances);
-      }
+      
     }
   } catch (error) {
-    console.error('Error in updateMemberProgramCalculatedFields:', error);
   }
 }

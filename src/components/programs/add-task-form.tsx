@@ -53,18 +53,7 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
   // Fetch program items for the dropdown
   const { data: programItems = [], isLoading: itemsLoading, error: itemsError } = useMemberProgramItems(programId);
   
-  // Debug logging
-  console.log('AddTaskForm - programId:', programId);
-  console.log('AddTaskForm - programItems:', programItems);
-  console.log('AddTaskForm - itemsLoading:', itemsLoading);
-  console.log('AddTaskForm - itemsError:', itemsError);
   
-  // Log the full error details
-  if (itemsError) {
-    console.error('Full itemsError object:', itemsError);
-    console.error('Error message:', itemsError.message);
-    console.error('Error stack:', itemsError.stack);
-  }
 
   const handleFormSubmit = (data: MemberProgramItemTaskFormData) => {
     // Set task_id to 0 for new tasks (not associated with therapy tasks)

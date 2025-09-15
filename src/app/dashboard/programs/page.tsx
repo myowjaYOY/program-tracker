@@ -64,19 +64,15 @@ export default function ProgramsPage() {
   const updateProgram = useUpdateMemberProgram();
 
   const handleProgramSelect = (program: MemberPrograms | null) => {
-    console.log('Program selected:', program);
     setSelectedProgram(program);
     setTabValue(0); // Reset to first tab when selecting new program
   };
 
-  // Debug logging for program changes
-  React.useEffect(() => {
-    console.log('Selected program changed:', selectedProgram);
-  }, [selectedProgram]);
+  
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    // If there are unsaved changes, show warning instead of changing tabs
-    if (hasUnsavedChanges && tabValue === 0) {
+    // If there are unsaved changes on any editable tab, show warning instead of changing tabs
+    if (hasUnsavedChanges) {
       setPendingTabChange(newValue);
       setShowUnsavedWarning(true);
     } else {
@@ -186,10 +182,8 @@ export default function ProgramsPage() {
               <TabPanel value={tabValue} index={1}>
                 <ProgramFinancialsTab 
                   program={selectedProgram}
-                  onFinancesUpdate={(finances) => {
-                    console.log('Finances updated:', finances);
-                    // TODO: Implement finances update logic
-                  }}
+                  onFinancesUpdate={() => {}}
+                  onUnsavedChangesChange={(hasChanges) => setHasUnsavedChanges(hasChanges)}
                 />
               </TabPanel>
               
@@ -218,7 +212,7 @@ export default function ProgramsPage() {
           Unsaved Changes
         </DialogTitle>
         <DialogContent>
-          You have unsaved changes on the PROGRAM tab. If you continue, these changes will be lost.
+          You have unsaved changes. If you continue, these changes will be lost.
         </DialogContent>
         <DialogActions>
           <Button onClick={handleUnsavedWarningCancel} color="primary" sx={{ borderRadius: 0 }}>

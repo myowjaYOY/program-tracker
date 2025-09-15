@@ -17,8 +17,6 @@ import {
   FormControl,
   InputLabel,
   Select,
-  FormControlLabel,
-  Switch,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -64,7 +62,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
 
   // Filter leads: exclude Lost, UNK, or No PME status and sort by first name
   const leads = allLeads
-    .filter(lead => lead.status_name && !['Lost', 'UNK', 'No PME'].includes(lead.status_name))
+    .filter(lead => (lead as any).status_name && !['Lost', 'UNK', 'No PME'].includes((lead as any).status_name))
     .sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
 
   // Filter program templates: only active ones and sort by name
@@ -76,8 +74,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
   const {
     control,
     handleSubmit,
-    formState: { errors, isValid },
-    watch,
+    formState: { errors },
     setValue,
     trigger,
     reset,
@@ -91,6 +88,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
       description: '',
     },
   });
+
 
   // Reset form when dialog opens
   React.useEffect(() => {
@@ -106,9 +104,8 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
     }
   }, [open, reset]);
 
-  const watchedValues = watch();
-
   const handleNext = async () => {
+    
     let isValidStep = false;
     
     if (activeStep === 0) {
@@ -174,16 +171,21 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
             </Typography>
             
             <Controller
+              key={`lead_id_${activeStep}`}
               name="lead_id"
               control={control}
-              render={({ field }) => (
+              render={({ field }) => {
+                return (
                 <FormControl fullWidth error={!!errors.lead_id}>
                   <InputLabel>Lead</InputLabel>
                   <Select
-                    {...field}
                     label="Lead"
                     value={field.value || ''}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
+                    onChange={(e) => {
+                      field.onChange(Number(e.target.value));
+                    }}
+                    onBlur={field.onBlur}
+                    name={field.name}
                   >
                     {leads.map((lead) => (
                       <MenuItem key={lead.lead_id} value={lead.lead_id}>
@@ -197,7 +199,8 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                     </Typography>
                   )}
                 </FormControl>
-              )}
+                );
+              }}
             />
           </Box>
         );
@@ -213,22 +216,21 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
             </Typography>
             
             <Controller
+              key={`source_template_id_${activeStep}`}
               name="source_template_id"
               control={control}
-              render={({ field }) => (
+              render={({ field }) => {
+                return (
                 <FormControl fullWidth error={!!errors.source_template_id}>
                   <InputLabel>Program Template</InputLabel>
                   <Select
-                    {...field}
                     label="Program Template"
-                    value={field.value && field.value > 0 ? field.value : ''}
+                    value={field.value ? String(field.value) : ''}
                     onChange={(e) => {
                       const value = e.target.value;
-                      if (value === '') {
-                        field.onChange(0);
-                      } else {
-                        field.onChange(Number(value));
-                        // Auto-populate program name and description from template
+                      field.onChange(value === '' ? 0 : Number(value));
+                      // Auto-populate program name and description from template
+                      if (value !== '') {
                         const selectedTemplate = programTemplates.find(t => t.program_template_id === Number(value));
                         if (selectedTemplate) {
                           setValue('program_template_name', selectedTemplate.program_template_name || '');
@@ -236,6 +238,8 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                         }
                       }
                     }}
+                    onBlur={field.onBlur}
+                    name={field.name}
                   >
                     <MenuItem value="">
                       <em>Select a program template</em>
@@ -257,7 +261,8 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                     </Typography>
                   )}
                 </FormControl>
-              )}
+                );
+              }}
             />
           </Box>
         );

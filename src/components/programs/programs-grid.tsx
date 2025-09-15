@@ -133,12 +133,7 @@ export default function ProgramsGrid({ onProgramSelect, selectedProgram }: Progr
   const deleteProgram = useDeleteMemberProgram();
   
 
-  // Debug logging
-  console.log('ProgramsGrid render:', {
-    programs,
-    isLoading,
-    error
-  });
+  
 
   const handleDelete = (id: string | number) => {
     deleteProgram.mutate(String(id));
@@ -185,19 +180,7 @@ export default function ProgramsGrid({ onProgramSelect, selectedProgram }: Progr
     updated_by: program.updated_by_email || '-',
   }));
 
-  // Debug: Check the first program's calculated fields
-  if (programsWithId.length > 0) {
-    console.log('First program in programsWithId:', {
-      id: programsWithId[0].id,
-      name: programsWithId[0].program_template_name,
-      lead_id: programsWithId[0].lead_id,
-      start_date: programsWithId[0].start_date,
-      status_name: programsWithId[0].status_name,
-      created_by: programsWithId[0].created_by,
-      created_by_email: programsWithId[0].created_by_email,
-      lead_name: programsWithId[0].lead_name,
-    });
-  }
+  
 
   const handleRowClick = (row: MemberProgramEntity) => {
     // Convert MemberProgramEntity back to MemberPrograms for selection

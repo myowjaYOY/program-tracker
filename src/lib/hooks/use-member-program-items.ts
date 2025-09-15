@@ -78,18 +78,14 @@ export function useDeleteMemberProgramItem() {
   
   return useMutation<void, Error, { programId: number; itemId: number }>({
     mutationFn: async ({ programId, itemId }) => {
-      console.log(`Making DELETE request to /api/member-programs/${programId}/items/${itemId}`);
       const res = await fetch(`/api/member-programs/${programId}/items/${itemId}`, {
         method: 'DELETE',
         credentials: 'include',
       });
-      console.log('DELETE response status:', res.status);
       if (!res.ok) {
         const json = await res.json();
-        console.error('DELETE request failed:', json);
         throw new Error(json.error || 'Failed to delete member program item');
       }
-      console.log('DELETE request successful');
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.byProgram(variables.programId) });

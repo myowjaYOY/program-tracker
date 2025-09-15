@@ -60,14 +60,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
     }
   }, [updatedProgram, onProgramUpdate]);
 
-  // Debug logging
-  console.log('ProgramItemsTab render:', {
-    programId: program.member_program_id,
-    programItems,
-    isLoading,
-    error,
-    updatedProgram
-  });
+  
 
   // Map program items to include id field for DataGrid and cast to extended type
   const mappedProgramItems = programItems.map(item => ({
@@ -103,23 +96,17 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
   };
 
   const handleDeleteItem = async (item: MemberProgramItems) => {
-    console.log('Delete button clicked for item:', item);
-    console.log('Program ID:', program.member_program_id);
-    console.log('Item ID:', item.member_program_item_id);
-    
     if (window.confirm('Are you sure you want to remove this item from the program?')) {
-      console.log('User confirmed deletion, calling API...');
       try {
         await deleteItem.mutateAsync({
           programId: program.member_program_id,
           itemId: item.member_program_item_id
         });
-        console.log('Delete API call completed successfully');
       } catch (error) {
         console.error('Error deleting program item:', error);
       }
     } else {
-      console.log('User cancelled deletion');
+      
     }
   };
 

@@ -53,7 +53,6 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
   // Reset form when initialValues change (for edit mode)
   React.useEffect(() => {
     if (initialValues && mode === 'edit') {
-      console.log('Resetting form with initialValues:', initialValues);
       reset({
         therapy_type_id: initialValues.therapy_type_id || 0,
         therapy_id: initialValues.therapy_id || 0,

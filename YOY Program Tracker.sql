@@ -73,20 +73,25 @@ ALTER FUNCTION public.audit_financing_types() OWNER TO postgres;
 --
 
 CREATE FUNCTION public.audit_member_program_finances() RETURNS trigger
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
     AS $$
+DECLARE
+    user_id UUID;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', NEW.member_program_finance_id, 'INSERT', NULL, row_to_json(NEW), auth.uid(), now());
+        user_id := COALESCE(NEW.created_by::uuid, NULL);
+        INSERT INTO public.audit_logs (table_name, record_id, operation, old_value, new_value, changed_by, changed_at)
+        VALUES ('member_program_finances', NEW.member_program_finance_id, 'INSERT', NULL, row_to_json(NEW), user_id, now());
         RETURN NEW;
     ELSIF TG_OP = 'UPDATE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', NEW.member_program_finance_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), auth.uid(), now());
+        user_id := COALESCE(NEW.updated_by::uuid, NEW.created_by::uuid, NULL);
+        INSERT INTO public.audit_logs (table_name, record_id, operation, old_value, new_value, changed_by, changed_at)
+        VALUES ('member_program_finances', NEW.member_program_finance_id, 'UPDATE', row_to_json(OLD), row_to_json(NEW), user_id, now());
         RETURN NEW;
     ELSIF TG_OP = 'DELETE' THEN
-        INSERT INTO public.audit_logs (table_name, record_id, action, old_values, new_values, user_id, timestamp)
-        VALUES ('member_program_finances', OLD.member_program_finance_id, 'DELETE', row_to_json(OLD), NULL, auth.uid(), now());
+        user_id := COALESCE(OLD.updated_by::uuid, OLD.created_by::uuid, NULL);
+        INSERT INTO public.audit_logs (table_name, record_id, operation, old_value, new_value, changed_by, changed_at)
+        VALUES ('member_program_finances', OLD.member_program_finance_id, 'DELETE', row_to_json(OLD), NULL, user_id, now());
         RETURN OLD;
     END IF;
     RETURN NULL;
@@ -292,7 +297,9 @@ BEGIN
         discounts,
         final_total_price,
         margin,
-        financing_type_id
+        financing_type_id,
+        created_by,
+        updated_by
     ) VALUES (
         new_member_program_id,
         0.00, -- Default finance charges
@@ -300,7 +307,9 @@ BEGIN
         0.00, -- Default discounts
         (SELECT total_charge FROM program_template WHERE program_template_id = p_template_id), -- Initial final total price
         calculated_margin, -- Calculated margin from template
-        NULL -- No financing type initially
+        NULL, -- No financing type initially
+        (SELECT created_by FROM member_programs WHERE member_program_id = new_member_program_id), -- Use the same user who created the program
+        (SELECT created_by FROM member_programs WHERE member_program_id = new_member_program_id)  -- Use the same user who created the program
     );
     
     -- Copy template items to member program items

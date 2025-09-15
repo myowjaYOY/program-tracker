@@ -18,25 +18,7 @@ export async function GET(
     
     const { data, error } = await supabase
       .from('member_program_finances')
-      .select(`
-        *,
-        financing_type:financing_types!fk_member_program_finances_financing_type(
-          financing_type_id,
-          financing_type_name
-        ),
-        created_by_user:users!fk_member_program_finances_created_by(
-          user_id,
-          email,
-          first_name,
-          last_name
-        ),
-        updated_by_user:users!fk_member_program_finances_updated_by(
-          user_id,
-          email,
-          first_name,
-          last_name
-        )
-      `)
+      .select('*')
       .eq('member_program_id', id)
       .single();
 
@@ -44,25 +26,12 @@ export async function GET(
       if (error.code === 'PGRST116') {
         return NextResponse.json({ error: 'Program finances not found' }, { status: 404 });
       }
-      console.error('Error fetching program finances:', error);
       return NextResponse.json({ error: 'Failed to fetch program finances' }, { status: 500 });
     }
 
-    // Map to flat fields for frontend
-    const mapped = {
-      ...data,
-      created_by_email: data.created_by_user?.email || null,
-      created_by_full_name: data.created_by_user ? 
-        `${data.created_by_user.first_name} ${data.created_by_user.last_name}` : null,
-      updated_by_email: data.updated_by_user?.email || null,
-      updated_by_full_name: data.updated_by_user ? 
-        `${data.updated_by_user.first_name} ${data.updated_by_user.last_name}` : null,
-      financing_type_name: data.financing_type?.financing_type_name || null,
-    };
-
-    return NextResponse.json({ data: mapped });
+    // Return the data directly without foreign key joins for now
+    return NextResponse.json({ data });
   } catch (error) {
-    console.error('Error in program finances GET:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -101,7 +70,6 @@ export async function POST(
       .single();
 
     if (error) {
-      console.error('Error creating program finances:', error);
       return NextResponse.json({ error: 'Failed to create program finances' }, { status: 500 });
     }
 
@@ -110,7 +78,6 @@ export async function POST(
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
     }
-    console.error('Error in program finances POST:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -150,7 +117,6 @@ export async function PUT(
       if (error.code === 'PGRST116') {
         return NextResponse.json({ error: 'Program finances not found' }, { status: 404 });
       }
-      console.error('Error updating program finances:', error);
       return NextResponse.json({ error: 'Failed to update program finances' }, { status: 500 });
     }
 
@@ -159,7 +125,6 @@ export async function PUT(
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
     }
-    console.error('Error in program finances PUT:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
