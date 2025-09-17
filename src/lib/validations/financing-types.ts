@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const financingTypesSchema = z.object({
   financing_type_name: z.string().min(1, 'Financing type name is required').max(50, 'Financing type name must be 50 characters or less'),
   financing_type_description: z.string().max(500, 'Description must be 500 characters or less').optional(),
+  financing_source: z.enum(['internal', 'external']).default('internal'),
   active_flag: z.boolean().default(true),
 });
 

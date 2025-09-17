@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { TextField, Switch, FormControlLabel } from '@mui/material';
+import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
 import { FinancingTypesFormData, financingTypesSchema } from '@/lib/validations/financing-types';
 import { useCreateFinancingTypes, useUpdateFinancingTypes } from '@/lib/hooks/use-financing-types';
 import BaseForm from './base-form';
@@ -26,6 +26,7 @@ export default function FinancingTypesForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
     setValue,
     watch,
@@ -34,6 +35,7 @@ export default function FinancingTypesForm({
     defaultValues: {
       financing_type_name: '',
       financing_type_description: '',
+      financing_source: 'internal',
       active_flag: true,
       ...initialValues,
     },
@@ -84,6 +86,27 @@ export default function FinancingTypesForm({
         {...register('financing_type_description')}
         error={!!errors.financing_type_description}
         helperText={errors.financing_type_description?.message}
+      />
+
+      <Controller
+        name="financing_source"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            select
+            label="Financing Source"
+            fullWidth
+            required
+            value={field.value || 'internal'}
+            onChange={field.onChange}
+            onBlur={field.onBlur}
+            error={!!errors.financing_source}
+            helperText={errors.financing_source?.message}
+          >
+            <MenuItem value="internal">Internal</MenuItem>
+            <MenuItem value="external">External</MenuItem>
+          </TextField>
+        )}
       />
 
       <FormControlLabel

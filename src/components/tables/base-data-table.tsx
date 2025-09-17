@@ -46,11 +46,19 @@ export const renderCurrency = (params: GridRenderCellParams) => (
   </Typography>
 );
 
-export const renderDate = (params: GridRenderCellParams) => (
-  <Typography variant="body2">
-    {params && params.value ? new Date(params.value).toLocaleDateString('en-US') : '-'}
-  </Typography>
-);
+export const renderDate = (params: GridRenderCellParams) => {
+  if (!params || !params.value) return <Typography variant="body2">-</Typography>;
+  const v = params.value as string;
+  // If value is a date-only string (YYYY-MM-DD), avoid UTC parsing shift
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split('-').map(Number);
+    const local = new Date(y, (m || 1) - 1, d || 1);
+    return <Typography variant="body2">{local.toLocaleDateString('en-US')}</Typography>;
+  }
+  return (
+    <Typography variant="body2">{new Date(v).toLocaleDateString('en-US')}</Typography>
+  );
+};
 
 export const renderDateTime = (params: GridRenderCellParams) => (
   <Typography variant="body2">

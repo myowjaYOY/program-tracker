@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
         template_name: program.program_template?.program_template_name || null,
         status_name: program.program_status?.status_name || null,
         margin: financeRecord?.margin ?? null,
+        final_total_price: financeRecord?.final_total_price ?? null,
       };
     });
 

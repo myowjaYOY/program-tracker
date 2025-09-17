@@ -62,7 +62,13 @@ export function useUpdateMemberProgramFinances() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update program finances');
+      if (!res.ok) {
+        // Normalize server error into a user-friendly message without crashing
+        const message =
+          (typeof json?.error === 'string' && json.error) ||
+          'Failed to update program finances';
+        throw new Error(message);
+      }
       return json.data;
     },
     onSuccess: (data, variables) => {
@@ -70,6 +76,9 @@ export function useUpdateMemberProgramFinances() {
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
+    onError: (_err) => {
+      // Do not crash the app; caller shows toast and UI stays responsive
+    }
   });
 }
 

@@ -1,0 +1,67 @@
+'use client';
+
+import React from 'react';
+import { Box } from '@mui/material';
+import BaseDataTable, { commonColumns, renderCurrency, renderDate } from '@/components/tables/base-data-table';
+import { MemberPrograms, MemberProgramPayments } from '@/types/database.types';
+import { 
+  useMemberProgramPayments
+} from '@/lib/hooks/use-member-program-payments';
+import MemberProgramPaymentForm from '@/components/forms/member-program-payment-form';
+
+interface ProgramPaymentsTabProps {
+  program: MemberPrograms;
+}
+
+interface PaymentRow extends MemberProgramPayments {
+  id: number;
+}
+
+export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps) {
+  const { data = [], isLoading, error } = useMemberProgramPayments(program.member_program_id);
+
+  const rows: PaymentRow[] = (data || []).map(p => ({
+    ...p,
+    id: p.member_program_payment_id,
+  }));
+
+  const columns = [
+    { field: 'payment_due_date', headerName: 'Due Date', width: 130, renderCell: renderDate },
+    { field: 'payment_date', headerName: 'Paid Date', width: 130, renderCell: renderDate },
+    { field: 'payment_amount', headerName: 'Amount', width: 120, renderCell: renderCurrency },
+    { field: 'payment_status_name', headerName: 'Status', width: 140 },
+    { field: 'payment_method_name', headerName: 'Method', width: 140 },
+    { field: 'payment_reference', headerName: 'Reference', width: 180 },
+    { field: 'notes', headerName: 'Notes', width: 240 },
+  ];
+
+  return (
+    <Box>
+      <BaseDataTable<PaymentRow>
+        title="Payments"
+        data={rows}
+        columns={columns as any}
+        loading={isLoading}
+        error={error?.message || null}
+        getRowId={(row) => row.member_program_payment_id}
+        showCreateButton={false}
+        showActionsColumn={true}
+        onEdit={() => {}}
+        renderForm={({ onClose, initialValues, mode }) => (
+          <MemberProgramPaymentForm
+            programId={program.member_program_id}
+            initialValues={initialValues as any}
+            mode={mode}
+            onSuccess={onClose}
+          />
+        )}
+        pageSize={10}
+        pageSizeOptions={[10, 25, 50]}
+        autoHeight={true}
+      />
+    </Box>
+  );
+}
+
+
+

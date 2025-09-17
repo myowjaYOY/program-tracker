@@ -101,10 +101,45 @@ export async function PUT(
     const { member_program_id, ...updateFields } = body;
     const validatedData = memberProgramFinancesSchema.omit({ member_program_id: true }).parse(updateFields);
 
+    // Load current finances to compare for regeneration pre-check
+    const { data: currentFinances } = await supabase
+      .from('member_program_finances')
+      .select('financing_type_id, finance_charges, discounts, taxes')
+      .eq('member_program_id', id)
+      .single();
+
     const updateData = {
       ...validatedData,
       updated_by: session.user.id,
     };
+
+    // Determine if changes would require payments regeneration
+    const finTypeChanged =
+      (updateData as any).financing_type_id !== undefined &&
+      (currentFinances ? (updateData as any).financing_type_id !== currentFinances.financing_type_id : true);
+    const financeChargesChanged =
+      (updateData as any).finance_charges !== undefined &&
+      (currentFinances ? Number((updateData as any).finance_charges) !== Number(currentFinances.finance_charges) : true);
+    const discountsChanged =
+      (updateData as any).discounts !== undefined &&
+      (currentFinances ? Number((updateData as any).discounts) !== Number(currentFinances.discounts) : true);
+    const shouldRegenerate = finTypeChanged || financeChargesChanged || discountsChanged;
+
+    if (shouldRegenerate) {
+      // Block update if any payment is already marked paid to keep data consistent
+      const { data: paidRows, error: paidErr } = await supabase
+        .from('member_program_payments')
+        .select('member_program_payment_id')
+        .eq('member_program_id', id)
+        .not('payment_date', 'is', null)
+        .limit(1);
+      if (paidErr) {
+        return NextResponse.json({ error: 'Failed to validate payments state' }, { status: 500 });
+      }
+      if (paidRows && paidRows.length > 0) {
+        return NextResponse.json({ error: 'Cannot update finances because at least one payment is already paid.' }, { status: 400 });
+      }
+    }
 
     const { data, error } = await supabase
       .from('member_program_finances')

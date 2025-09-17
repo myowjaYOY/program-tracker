@@ -24,6 +24,11 @@ const financingTypesColumns: GridColDef[] = [
     flex: 1,
   },
   {
+    field: 'financing_source',
+    headerName: 'Source',
+    width: 140,
+  },
+  {
     field: 'financing_type_description',
     headerName: 'Description',
     width: 300,

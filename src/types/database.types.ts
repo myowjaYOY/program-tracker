@@ -171,6 +171,7 @@ export interface MemberPrograms {
   description: string | null;
   total_cost: number | null;
   total_charge: number | null;
+  final_total_price?: number | null;
   lead_id: number | null;
   start_date: string | null;
   active_flag: boolean;
@@ -219,9 +220,11 @@ export interface MemberProgramPayments {
   member_program_payment_id: number;
   member_program_id: number;
   payment_amount: number | null;
+  payment_due_date: string | null;
   payment_date: string | null;
   payment_status_id: number | null;
   payment_method_id: number | null;
+  payment_reference: string | null;
   notes: string | null;
   created_at: string | null;
   created_by: string | null;
@@ -272,6 +275,7 @@ export interface FinancingTypes {
   financing_type_id: number;
   financing_type_name: string;
   description: string | null;
+  financing_source: 'internal' | 'external';
   active_flag: boolean;
   created_at: string | null;
   created_by: string | null;
@@ -484,6 +488,7 @@ export interface FinancingTypes {
   financing_type_id: number;
   financing_type_name: string;
   financing_type_description: string | null;
+  financing_source: 'internal' | 'external';
   active_flag: boolean;
   created_at: string | null;
   created_by: string | null;

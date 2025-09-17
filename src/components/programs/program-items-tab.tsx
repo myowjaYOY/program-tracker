@@ -17,6 +17,7 @@ import { MemberPrograms, MemberProgramItems } from '@/types/database.types';
 import { useMemberProgramItems, useCreateMemberProgramItem, useUpdateMemberProgramItem, useDeleteMemberProgramItem } from '@/lib/hooks/use-member-program-items';
 import { useTherapies } from '@/lib/hooks/use-therapies';
 import { useMemberProgram } from '@/lib/hooks/use-member-programs';
+import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import AddProgramItemForm from './add-program-item-form';
 
 interface ProgramItemsTabProps {
@@ -45,6 +46,9 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MemberProgramItems | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [stagedChanges, setStagedChanges] = useState<any[]>([]);
+  const [preview, setPreview] = useState<{ ok: boolean; locked?: { price: number; margin: number }; projected?: { price: number; margin: number; charge: number; cost: number }; deltas?: { price: number; margin: number }; loading?: boolean; error?: string | null }>({ ok: true, loading: false, error: null });
   
   const { data: programItems = [], isLoading, error } = useMemberProgramItems(program.member_program_id);
   const { data: therapies = [] } = useTherapies();
@@ -52,6 +56,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
   const createItem = useCreateMemberProgramItem();
   const updateItem = useUpdateMemberProgramItem();
   const deleteItem = useDeleteMemberProgramItem();
+  const { data: finances } = useMemberProgramFinances(program.member_program_id);
 
   // Update parent component when program data changes
   React.useEffect(() => {
@@ -59,6 +64,37 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
       onProgramUpdate(updatedProgram);
     }
   }, [updatedProgram, onProgramUpdate]);
+
+  // Auto-preview when editing
+  React.useEffect(() => {
+    if (!isEditing) return;
+    const run = async () => {
+      setPreview(p => ({ ...p, loading: true, error: null }));
+      try {
+        const res = await fetch(`/api/member-programs/${program.member_program_id}/items/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ changes: stagedChanges, tolerance: { priceCents: 1, marginPct: 0.1 } })
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Preview failed');
+        setPreview({ ok: !!json.ok, locked: json.locked, projected: json.projected, deltas: json.deltas, loading: false, error: null });
+      } catch (e: any) {
+        setPreview({ ok: false, loading: false, error: e?.message || 'Preview failed' });
+      }
+    };
+    run();
+  }, [isEditing, stagedChanges, program.member_program_id]);
+
+  const resetEditing = () => {
+    setIsEditing(false);
+    setStagedChanges([]);
+    setPreview({ ok: true, loading: false, error: null });
+    setEditingItem(null);
+    setIsAddModalOpen(false);
+    setIsEditModalOpen(false);
+  };
 
   
 
@@ -228,7 +264,30 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {isEditing && (
+            <>
+              <Chip label={`Changes: ${stagedChanges.length}`} color={stagedChanges.length > 0 ? 'primary' : 'default'} />
+              {preview.loading ? (
+                <Chip label="Previewing..." />
+              ) : preview.error ? (
+                <Chip label={preview.error} color="error" />
+              ) : preview.locked ? (
+                <>
+                  <Chip label={`Locked Price $${preview.locked.price?.toFixed(2)}`} />
+                  <Chip label={`Locked Margin ${preview.locked.margin?.toFixed(1)}%`} />
+                  {preview.projected && (
+                    <>
+                      <Chip label={`Projected Price $${preview.projected.price?.toFixed(2)}`} color={preview.ok ? 'success' : 'error'} />
+                      <Chip label={`Projected Margin ${preview.projected.margin?.toFixed(1)}%`} color={preview.ok ? 'success' : 'error'} />
+                    </>
+                  )}
+                </>
+              ) : null}
+            </>
+          )}
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -240,6 +299,38 @@ export default function ProgramItemsTab({ program, onProgramUpdate }: ProgramIte
         >
           Add Item
         </Button>
+        <Button
+          variant="outlined"
+          onClick={() => { if (isEditing) { resetEditing(); } else { setIsEditing(true); } }}
+          sx={{ ml: 2, borderRadius: 0, fontWeight: 600 }}
+        >{isEditing ? 'Exit Edit Mode' : 'Enter Edit Mode'}</Button>
+        {isEditing && (
+          <>
+            <Button
+              variant="contained"
+              color="success"
+              disabled={stagedChanges.length === 0 || !preview.ok || preview.loading}
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/member-programs/${program.member_program_id}/items/batch-apply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ changes: stagedChanges, expectedLocked: { price: finances?.final_total_price ?? preview.locked?.price ?? 0, margin: finances?.margin ?? preview.locked?.margin ?? 0 }, tolerance: { priceCents: 1, marginPct: 0.1 } })
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error || 'Apply failed');
+                  await refetchProgram();
+                  resetEditing();
+                } catch (e: any) {
+                  alert(e?.message || 'Failed to apply changes');
+                }
+              }}
+              sx={{ ml: 2, borderRadius: 0, fontWeight: 600 }}
+            >Apply Changes</Button>
+            <Button variant="text" onClick={resetEditing} sx={{ ml: 1 }}>Cancel</Button>
+          </>
+        )}
       </Box>
 
       <BaseDataTable<any>

@@ -99,6 +99,24 @@ const memberProgramColumns: GridColDef[] = [
     },
   },
   {
+    field: 'final_total_price',
+    headerName: 'Program Price',
+    width: 140,
+    type: 'number',
+    renderCell: (params: any) => {
+      const value = params.row.final_total_price;
+      if (value == null || value === undefined || value === '') {
+        return '-';
+      }
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(value));
+    },
+  },
+  {
     field: 'margin',
     headerName: 'Margin',
     width: 100,

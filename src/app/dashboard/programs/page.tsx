@@ -19,13 +19,15 @@ import {
   Description as DescriptionIcon,
   AttachMoney as AttachMoneyIcon,
   Inventory as InventoryIcon,
-  Assignment as AssignmentIcon
+  Assignment as AssignmentIcon,
+  Payment as PaymentIcon
 } from '@mui/icons-material';
 import ProgramsGrid from '@/components/programs/programs-grid';
 import ProgramInfoTab from '@/components/programs/program-info-tab';
 import ProgramFinancialsTab from '@/components/programs/program-financials-tab';
 import ProgramItemsTab from '@/components/programs/program-items-tab';
 import ProgramTasksTab from '@/components/programs/program-tasks-tab';
+import ProgramPaymentsTab from '@/components/programs/program-payments-tab';
 import { MemberPrograms } from '@/types/database.types';
 import { useUpdateMemberProgram } from '@/lib/hooks/use-member-programs';
 
@@ -159,6 +161,11 @@ export default function ProgramsPage() {
                     iconPosition="start"
                   />
                   <Tab 
+                    icon={<PaymentIcon />} 
+                    label="Payments" 
+                    iconPosition="start"
+                  />
+                  <Tab 
                     icon={<InventoryIcon />} 
                     label="Items" 
                     iconPosition="start"
@@ -188,13 +195,19 @@ export default function ProgramsPage() {
               </TabPanel>
               
               <TabPanel value={tabValue} index={2}>
+                <ProgramPaymentsTab 
+                  program={selectedProgram}
+                />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={3}>
                 <ProgramItemsTab 
                   program={selectedProgram}
                   onProgramUpdate={(updatedProgram) => setSelectedProgram(updatedProgram)}
                 />
               </TabPanel>
               
-              <TabPanel value={tabValue} index={3}>
+              <TabPanel value={tabValue} index={4}>
                 <ProgramTasksTab program={selectedProgram} />
               </TabPanel>
             </CardContent>
