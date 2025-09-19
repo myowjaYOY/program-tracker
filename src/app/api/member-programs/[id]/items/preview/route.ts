@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { toCents } from '@/lib/utils/money';
 
 type Change =
   | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string }
@@ -133,7 +134,7 @@ export async function POST(
   const projectedPrice = projectedCharge + financeCharges + discounts;
   const projectedMargin = lockedPrice > 0 ? ((lockedPrice - projectedCost) / lockedPrice) * 100 : 0;
 
-  const priceDeltaCents = Math.round((projectedPrice - lockedPrice) * 100);
+  const priceDeltaCents = toCents(projectedPrice) - toCents(lockedPrice);
   const marginDelta = projectedMargin - lockedMargin;
   const ok = Math.abs(priceDeltaCents) <= priceCentsTol && Math.abs(marginDelta) <= marginTol;
 

@@ -34,8 +34,31 @@ export async function GET(
     if (error) {
       return NextResponse.json({ error: 'Failed to fetch member program items' }, { status: 500 });
     }
-    
-    return NextResponse.json({ data });
+
+    // Compute used_count per item (completed schedule rows)
+    const itemIds = (data || []).map((it: any) => it.member_program_item_id);
+    let idToUsed: Record<string, number> = {};
+    if (itemIds.length > 0) {
+      const { data: schedRows, error: schedErr } = await supabase
+        .from('member_program_item_schedule')
+        .select('member_program_item_id, completed_flag')
+        .in('member_program_item_id', itemIds);
+      if (!schedErr && schedRows) {
+        for (const r of schedRows as any[]) {
+          if (r.completed_flag) {
+            const key = String(r.member_program_item_id);
+            idToUsed[key] = (idToUsed[key] || 0) + 1;
+          }
+        }
+      }
+    }
+
+    const withUsed = (data || []).map((it: any) => ({
+      ...it,
+      used_count: idToUsed[String(it.member_program_item_id)] || 0,
+    }));
+
+    return NextResponse.json({ data: withUsed });
   } catch (error) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -96,6 +119,32 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create member program item' }, { status: 500 });
     }
 
+    // Copy default tasks from therapy_tasks into member_program_item_tasks for this item
+    // (idempotent: avoid duplicates if someone replays the request)
+    try {
+      const { data: tasks } = await supabase
+        .from('therapy_tasks')
+        .select('task_id, task_name, description, task_delay')
+        .eq('therapy_id', body.therapy_id);
+      if (tasks && tasks.length > 0 && data?.member_program_item_id) {
+        const payload = tasks.map((t: any) => ({
+          member_program_item_id: data.member_program_item_id,
+          task_id: t.task_id,
+          task_name: t.task_name,
+          description: t.description,
+          task_delay: t.task_delay,
+          created_by: session.user.id,
+          updated_by: session.user.id,
+        }));
+        // Insert missing only
+        if (payload.length > 0) {
+          await supabase
+            .from('member_program_item_tasks')
+            .upsert(payload, { onConflict: 'member_program_item_id,task_id' });
+        }
+      }
+    } catch {}
+
     // Update the member program's calculated fields
     await updateMemberProgramCalculatedFields(supabase, parseInt(id));
 
@@ -148,8 +197,9 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
 
     
 
-    // Calculate and update margin in finances table (match Financials tab)
-    // finalTotal = totalCharge + finance_charges + discounts
+    // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
+    // Program Price = totalCharge + max(0, finance_charges) + discounts
+    // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
     let financeCharges = 0;
     let discounts = 0;
     const { data: finVals } = await supabase
@@ -161,8 +211,10 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       financeCharges = Number(finVals.finance_charges || 0);
       discounts = Number(finVals.discounts || 0);
     }
-    const finalTotal = totalCharge + financeCharges + discounts;
-    const margin = finalTotal > 0 ? ((finalTotal - totalCost) / finalTotal) * 100 : 0;
+    const positiveFinance = Math.max(0, financeCharges);
+    const negativeFinanceFee = Math.max(0, -financeCharges);
+    const finalTotal = totalCharge + positiveFinance + discounts;
+    const margin = finalTotal > 0 ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100 : 0;
     
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
@@ -191,6 +243,7 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       const { data: updatedFinances, error: updateFinancesError } = await supabase
         .from('member_program_finances')
         .update({
+          final_total_price: finalTotal,
           margin: margin,
           updated_by: (await supabase.auth.getUser()).data.user?.id,
         })

@@ -23,8 +23,13 @@ const memberProgramColumns: GridColDef[] = [
   {
     field: 'program_template_name',
     headerName: 'Program Name',
-    width: 200,
     flex: 1,
+    minWidth: 240,
+    renderCell: (params: any) => (
+      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={params.value}>
+        {params.value}
+      </span>
+    ),
   },
   {
     field: 'lead_name',

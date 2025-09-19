@@ -137,8 +137,9 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
 
     
 
-    // Calculate and update margin in finances table (match Financials tab)
-    // finalTotal = totalCharge + finance_charges + discounts
+  // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
+  // Program Price = totalCharge + max(0, finance_charges) + discounts
+  // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
     let financeCharges = 0;
     let discounts = 0;
     const { data: finVals } = await supabase
@@ -150,8 +151,10 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       financeCharges = Number(finVals.finance_charges || 0);
       discounts = Number(finVals.discounts || 0);
     }
-    const finalTotal = totalCharge + financeCharges + discounts;
-    const margin = finalTotal > 0 ? ((finalTotal - totalCost) / finalTotal) * 100 : 0;
+  const positiveFinance = Math.max(0, financeCharges);
+  const negativeFinanceFee = Math.max(0, -financeCharges);
+  const finalTotal = totalCharge + positiveFinance + discounts;
+  const margin = finalTotal > 0 ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100 : 0;
     
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
@@ -175,16 +178,17 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
         .select();
 
       
-    } else {
-      // Update existing finances record
-      const { data: updatedFinances, error: updateFinancesError } = await supabase
-        .from('member_program_finances')
-        .update({
-          margin: margin,
-          updated_by: (await supabase.auth.getUser()).data.user?.id,
-        })
-        .eq('member_program_id', memberProgramId)
-        .select();
+  } else {
+    // Update existing finances record
+    const { data: updatedFinances, error: updateFinancesError } = await supabase
+      .from('member_program_finances')
+      .update({
+        final_total_price: finalTotal,
+        margin: margin,
+        updated_by: (await supabase.auth.getUser()).data.user?.id,
+      })
+      .eq('member_program_id', memberProgramId)
+      .select();
 
       
     }

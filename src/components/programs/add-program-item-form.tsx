@@ -26,6 +26,7 @@ interface AddProgramItemFormProps {
 
 export default function AddProgramItemForm({ therapies, onSave, onCancel, initialValues, mode = 'create' }: AddProgramItemFormProps) {
   const { data: therapyTypes = [] } = useTherapyTypes();
+  const usedCount = Number((initialValues as any)?.used_count || 0);
   
   const {
     control,
@@ -168,9 +169,13 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
                   fullWidth
                   required
                   disabled={mode === 'create' && !selectedTherapyId}
-                  inputProps={{ min: 1 }}
-                  error={!!errors.quantity}
-                  helperText={errors.quantity?.message}
+                  inputProps={{ min: Math.max(1, usedCount) }}
+                  error={!!errors.quantity || (mode === 'edit' && quantity < usedCount)}
+                  helperText={
+                    (mode === 'edit' && quantity < usedCount)
+                      ? `Minimum is ${usedCount} (used)`
+                      : (errors.quantity?.message || (usedCount > 0 ? `${usedCount} used` : undefined))
+                  }
                   onChange={(e) => field.onChange(Number(e.target.value))}
                 />
               )}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { toCents } from '@/lib/utils/money';
 
 type Change =
   | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string }
@@ -52,7 +53,30 @@ export async function POST(
     return NextResponse.json({ error: 'Locked values changed; refresh and preview again.' }, { status: 409 });
   }
 
-  // Load current items
+  // Try authoritative transactional RPC first (if database function exists)
+  try {
+    const rpcPayload: any = {
+      p_program_id: Number(id),
+      p_changes: body.changes,
+      p_locked_price: lockedPrice,
+      p_locked_margin: lockedMargin,
+      p_price_cents_tol: priceCentsTol,
+      p_margin_tol: marginTol,
+    };
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('apply_member_program_items_changes', rpcPayload);
+    if (!rpcErr && rpcData) {
+      // Expect shape: { ok: boolean, projected: { price, margin, charge, cost }, deltas?: { price, margin } }
+      if (rpcData.ok) {
+        return NextResponse.json({ ok: true, projected: rpcData.projected });
+      }
+      return NextResponse.json({ error: 'Locked values would change. No changes committed.', deltas: rpcData.deltas }, { status: 409 });
+    }
+    // If RPC missing or failed unexpectedly, fall back to sequential method below
+  } catch (e) {
+    // ignore and fallback
+  }
+
+  // Load current items (fallback path)
   const { data: currentItems, error: itemsErr } = await supabase
     .from('member_program_items')
     .select('member_program_item_id, therapy_id, quantity')
@@ -135,7 +159,7 @@ export async function POST(
   }
   const projectedPrice = charge + financeCharges + discounts;
   const projectedMargin = lockedPrice > 0 ? ((lockedPrice - cost) / lockedPrice) * 100 : 0;
-  const priceDeltaCents = Math.round((projectedPrice - lockedPrice) * 100);
+  const priceDeltaCents = toCents(projectedPrice) - toCents(lockedPrice);
   const marginDelta = projectedMargin - lockedMargin;
   const ok = Math.abs(priceDeltaCents) <= priceCentsTol && Math.abs(marginDelta) <= marginTol;
 

@@ -20,13 +20,16 @@ import {
   AttachMoney as AttachMoneyIcon,
   Inventory as InventoryIcon,
   Assignment as AssignmentIcon,
-  Payment as PaymentIcon
+  Payment as PaymentIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon
 } from '@mui/icons-material';
 import ProgramsGrid from '@/components/programs/programs-grid';
 import ProgramInfoTab from '@/components/programs/program-info-tab';
 import ProgramFinancialsTab from '@/components/programs/program-financials-tab';
 import ProgramItemsTab from '@/components/programs/program-items-tab';
 import ProgramTasksTab from '@/components/programs/program-tasks-tab';
+import ProgramToDoTab from '@/components/programs/program-todo-tab';
+import ProgramScriptTab from '@/components/programs/program-script-tab';
 import ProgramPaymentsTab from '@/components/programs/program-payments-tab';
 import { MemberPrograms } from '@/types/database.types';
 import { useUpdateMemberProgram } from '@/lib/hooks/use-member-programs';
@@ -144,9 +147,9 @@ export default function ProgramsPage() {
                   aria-label="program tabs"
                   sx={{
                     '& .MuiTab-root': {
-                      minHeight: 48,
-                      paddingX: 8, // Double the previous padding (was 4)
-                      marginX: 2, // Double the previous margin (was 1)
+                      minHeight: 44,
+                      paddingX: 4,
+                      marginX: 1,
                     }
                   }}
                 >
@@ -170,11 +173,13 @@ export default function ProgramsPage() {
                     label="Items" 
                     iconPosition="start"
                   />
+                  <Tab icon={<AssignmentIcon />} label="Tasks" iconPosition="start" />
                   <Tab 
-                    icon={<AssignmentIcon />} 
-                    label="Tasks" 
+                    icon={<AssignmentTurnedInIcon />} 
+                    label="Script" 
                     iconPosition="start"
                   />
+                  <Tab icon={<AssignmentIcon />} label="To Do" iconPosition="start" />
                 </Tabs>
               </Box>
               
@@ -204,11 +209,18 @@ export default function ProgramsPage() {
                 <ProgramItemsTab 
                   program={selectedProgram}
                   onProgramUpdate={(updatedProgram) => setSelectedProgram(updatedProgram)}
+                  onUnsavedChangesChange={setHasUnsavedChanges}
                 />
               </TabPanel>
               
               <TabPanel value={tabValue} index={4}>
                 <ProgramTasksTab program={selectedProgram} />
+              </TabPanel>
+              <TabPanel value={tabValue} index={5}>
+                <ProgramScriptTab program={selectedProgram} />
+              </TabPanel>
+              <TabPanel value={tabValue} index={6}>
+                <ProgramToDoTab program={selectedProgram} />
               </TabPanel>
             </CardContent>
           </Card>

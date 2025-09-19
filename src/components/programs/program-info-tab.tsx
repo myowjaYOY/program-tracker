@@ -11,15 +11,23 @@ import {
   Button,
   CircularProgress,
   MenuItem,
-  Grid
+  Grid,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { useQueryClient } from '@tanstack/react-query';
+import { scheduleKeys } from '@/lib/hooks/use-program-schedule';
+import { memberProgramItemTaskKeys } from '@/lib/hooks/use-member-program-item-tasks';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { memberProgramSchema, MemberProgramFormData } from '@/lib/validations/member-program';
 import { MemberPrograms } from '@/types/database.types';
 import { useActiveLeads } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
+import FormStatus from '@/components/ui/FormStatus';
 
 interface ProgramInfoTabProps {
   program: MemberPrograms;
@@ -29,7 +37,12 @@ interface ProgramInfoTabProps {
 
 export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChangesChange }: ProgramInfoTabProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ ok: boolean; message: string } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState<string>('');
+  const [pendingSave, setPendingSave] = useState<MemberProgramFormData | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const queryClient = useQueryClient();
   
   const { data: leads = [] } = useActiveLeads();
   const { data: programStatuses = [] } = useActiveProgramStatus();
@@ -38,7 +51,8 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
     control,
     handleSubmit,
     formState: { errors, isDirty },
-    reset
+    reset,
+    getValues
   } = useForm<MemberProgramFormData>({
     resolver: zodResolver(memberProgramSchema),
     defaultValues: {
@@ -70,10 +84,9 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
     onUnsavedChangesChange(isDirty);
   }, [isDirty, onUnsavedChangesChange]);
 
-  const onSubmit = async (data: MemberProgramFormData) => {
+  const performSave = async (data: MemberProgramFormData) => {
     setIsSaving(true);
-    setSaveSuccess(false);
-    
+    setStatusMsg(null);
     try {
       const updatedProgram = { 
         ...program, 
@@ -81,15 +94,54 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
         description: data.description || null,
       };
       await onProgramUpdate(updatedProgram);
-      setSaveSuccess(true);
-      
-      // Hide success message after 3 seconds
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setStatusMsg({ ok: true, message: 'Changes saved successfully' });
+      // Reset form values to saved state so isDirty becomes false and Save disables
+      reset({
+        program_template_name: updatedProgram.program_template_name || '',
+        description: updatedProgram.description || '',
+        lead_id: updatedProgram.lead_id,
+        start_date: updatedProgram.start_date || '',
+        program_status_id: updatedProgram.program_status_id || null,
+        active_flag: updatedProgram.active_flag,
+      });
+      onUnsavedChangesChange(false);
     } catch (error) {
-      console.error('Failed to save program:', error);
+      const msg = (error as any)?.message || 'Failed to save program';
+      setStatusMsg({ ok: false, message: msg });
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const onSubmit = async (data: MemberProgramFormData) => {
+    // Business rules
+    const currentStatus = (programStatuses.find(s => s.program_status_id === data.program_status_id)?.status_name || '').toLowerCase();
+    const prevStatus = (programStatuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+
+    // 1) If status is Active, Start Date cannot be null
+    if (currentStatus === 'active' && (!data.start_date || data.start_date === '')) {
+      // Surface validation on the field like other forms (MUI TextField error state)
+      // We do this by setting a temporary error message in local status and aborting save.
+      setStatusMsg({ ok: false, message: 'Start Date is required when status is Active.' });
+      return;
+    }
+
+    // 2) Status transitions: show confirm dialog using our standard pattern
+    if (prevStatus === 'active' && currentStatus === 'paused') {
+      setConfirmText('All incomplete script items and tasks will be put on hold. Do you want to change status from Active to Paused?');
+      setPendingSave(data);
+      setConfirmOpen(true);
+      return;
+    }
+    if (prevStatus === 'paused' && currentStatus === 'active') {
+      setConfirmText('When reactivating the program, incomplete script items and tasks will be shifted forward by the pause duration. Proceed?');
+      setPendingSave(data);
+      setConfirmOpen(true);
+      return;
+    }
+
+    // No confirm needed → save directly
+    await performSave(data);
   };
 
   return (
@@ -122,6 +174,7 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                   label="Member"
                   fullWidth
                   {...field}
+              disabled={!!program.member_program_id}
                   value={field.value && leads.some(lead => lead.lead_id === field.value) ? field.value : ''}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -190,8 +243,8 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                   InputLabelProps={{ shrink: true }}
                   {...field}
                   value={field.value || ''}
-                  error={!!errors.start_date}
-                  helperText={errors.start_date?.message}
+                  error={!!errors.start_date || (statusMsg && !statusMsg.ok && statusMsg.message?.toLowerCase().includes('start date'))}
+                  helperText={errors.start_date?.message || (statusMsg && !statusMsg.ok && statusMsg.message?.toLowerCase().includes('start date') ? statusMsg.message : undefined)}
                 />
               )}
             />
@@ -242,34 +295,66 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
         </Box>
         
         {/* Save Button and Status */}
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}>
-          {/* Success Message */}
-          {saveSuccess && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              color: 'success.main',
-              fontSize: '0.875rem'
-            }}>
-              ✓ Changes saved successfully!
-            </Box>
-          )}
-          
-          {/* Save Button */}
+        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+          {/* Right-side status + actions (aligned right like other screens) */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <FormStatus status={statusMsg} onClose={() => setStatusMsg(null)} />
+            {/* Generate Schedule Button */}
+            <Button
+            variant="contained"
+            color="primary"
+            onClick={async () => {
+              try {
+                setIsGenerating(true);
+                const currentStatus = (programStatuses.find(s => s.program_status_id === (getValues('program_status_id') ?? program.program_status_id))?.status_name || '').toLowerCase();
+                const date = getValues('start_date') || program.start_date;
+                if (currentStatus !== 'active' || !date) {
+                  setStatusMsg({ ok: false, message: 'Program must be Active and have a Start Date to generate schedule.' });
+                  return;
+                }
+                const res = await fetch(`/api/member-programs/${program.member_program_id}/schedule/generate`, { method: 'POST', credentials: 'include' });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || 'Failed to generate schedule');
+                setStatusMsg({ ok: true, message: 'Schedule generated successfully' });
+                queryClient.invalidateQueries({ queryKey: scheduleKeys.lists(program.member_program_id) });
+                queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+              } catch (e: any) {
+                setStatusMsg({ ok: false, message: e?.message || 'Failed to generate schedule' });
+              } finally {
+                setIsGenerating(false);
+              }
+            }}
+            disabled={(() => {
+              const currentStatus = (programStatuses.find(s => s.program_status_id === (getValues('program_status_id') ?? program.program_status_id))?.status_name || '').toLowerCase();
+              const date = getValues('start_date') || program.start_date;
+              return isGenerating || currentStatus !== 'active' || !date;
+            })()}
+            sx={{ borderRadius: 0, fontWeight: 600 }}
+          >
+              {isGenerating ? (<><CircularProgress size={16} sx={{ mr: 1 }} /> Generating...</>) : 'Generate Schedule'}
+          </Button>
+          {/* Save Button (far right) */}
           <Button
             variant="contained"
             color="primary"
             onClick={handleSubmit(onSubmit)}
             disabled={!isDirty || isSaving}
             startIcon={isSaving ? <CircularProgress size={16} /> : null}
-            sx={{
-              borderRadius: 0,
-              fontWeight: 600,
-            }}
+            sx={{ borderRadius: 0, fontWeight: 600 }}
           >
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
+          </Box>
         </Box>
+      {/* Status Transition Confirmation Dialog */}
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogTitle>Confirm Status Change</DialogTitle>
+        <DialogContent>{confirmText}</DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setConfirmOpen(false); setPendingSave(null); }} color="primary" sx={{ borderRadius: 0 }}>Cancel</Button>
+          <Button onClick={async () => { setConfirmOpen(false); if (pendingSave) { await performSave(pendingSave); setPendingSave(null); } }} color="error" variant="contained" sx={{ borderRadius: 0 }}>Proceed</Button>
+        </DialogActions>
+      </Dialog>
       </Paper>
     </Box>
   );
