@@ -6,6 +6,7 @@ import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
 import { useProgramSchedule, useUpdateSchedule } from '@/lib/hooks/use-program-schedule';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 
@@ -30,6 +31,9 @@ type Row = {
 export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
   const { data = [], isLoading, error } = useProgramSchedule(program.member_program_id);
   const update = useUpdateSchedule(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+  const statusName = (statuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+  const readOnly = statusName === 'quote' || statusName === 'paused' || statusName === 'completed' || statusName === 'cancelled';
 
   const rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
@@ -53,7 +57,7 @@ export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
             label={isCompleted ? 'Yes' : 'No'}
             color={isCompleted ? 'success' : 'default'}
             size="small"
-            onClick={() => update.mutate({ scheduleId: row.member_program_item_schedule_id, completed_flag: !isCompleted })}
+            onClick={() => { if (!readOnly) update.mutate({ scheduleId: row.member_program_item_schedule_id, completed_flag: !isCompleted }); }}
             sx={{ cursor: 'pointer' }}
           />
         );
@@ -66,8 +70,8 @@ export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
           <IconButton
             size="small"
             color={params.row.completed_flag ? 'success' : 'primary'}
-            disabled={update.isPending}
-            onClick={() => update.mutate({ scheduleId: params.row.member_program_item_schedule_id, completed_flag: !params.row.completed_flag })}
+            disabled={update.isPending || readOnly}
+            onClick={() => { if (!readOnly) update.mutate({ scheduleId: params.row.member_program_item_schedule_id, completed_flag: !params.row.completed_flag }); }}
           >
             {params.row.completed_flag ? <CheckCircleOutlineIcon /> : <RadioButtonUncheckedIcon />}
           </IconButton>

@@ -21,6 +21,7 @@ import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
 import { scheduleKeys } from '@/lib/hooks/use-program-schedule';
 import { memberProgramItemTaskKeys } from '@/lib/hooks/use-member-program-item-tasks';
+import { todoKeys } from '@/lib/hooks/use-program-todo';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { memberProgramSchema, MemberProgramFormData } from '@/lib/validations/member-program';
@@ -84,7 +85,7 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
     onUnsavedChangesChange(isDirty);
   }, [isDirty, onUnsavedChangesChange]);
 
-  const performSave = async (data: MemberProgramFormData) => {
+  const performSave = async (data: MemberProgramFormData): Promise<boolean> => {
     setIsSaving(true);
     setStatusMsg(null);
     try {
@@ -105,9 +106,11 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
         active_flag: updatedProgram.active_flag,
       });
       onUnsavedChangesChange(false);
+      return true;
     } catch (error) {
       const msg = (error as any)?.message || 'Failed to save program';
       setStatusMsg({ ok: false, message: msg });
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -117,6 +120,14 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
     // Business rules
     const currentStatus = (programStatuses.find(s => s.program_status_id === data.program_status_id)?.status_name || '').toLowerCase();
     const prevStatus = (programStatuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+
+    // 0) Block transitions out of Completed/Cancelled
+    if ((prevStatus === 'completed' || prevStatus === 'cancelled') && currentStatus !== prevStatus) {
+      setConfirmText('Programs in Completed or Cancelled status cannot transition to another status. Changes will be discarded.');
+      setPendingSave(null);
+      setConfirmOpen(true);
+      return;
+    }
 
     // 1) If status is Active, Start Date cannot be null
     if (currentStatus === 'active' && (!data.start_date || data.start_date === '')) {
@@ -306,6 +317,14 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
             onClick={async () => {
               try {
                 setIsGenerating(true);
+              // If there are unsaved changes, save first to prevent inconsistencies
+              if (isDirty) {
+                const ok = await performSave(getValues());
+                if (!ok) {
+                  // Abort generation if save failed
+                  return;
+                }
+              }
                 const currentStatus = (programStatuses.find(s => s.program_status_id === (getValues('program_status_id') ?? program.program_status_id))?.status_name || '').toLowerCase();
                 const date = getValues('start_date') || program.start_date;
                 if (currentStatus !== 'active' || !date) {
@@ -318,6 +337,7 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                 setStatusMsg({ ok: true, message: 'Schedule generated successfully' });
                 queryClient.invalidateQueries({ queryKey: scheduleKeys.lists(program.member_program_id) });
                 queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+                queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
               } catch (e: any) {
                 setStatusMsg({ ok: false, message: e?.message || 'Failed to generate schedule' });
               } finally {
@@ -352,7 +372,34 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
         <DialogContent>{confirmText}</DialogContent>
         <DialogActions>
           <Button onClick={() => { setConfirmOpen(false); setPendingSave(null); }} color="primary" sx={{ borderRadius: 0 }}>Cancel</Button>
-          <Button onClick={async () => { setConfirmOpen(false); if (pendingSave) { await performSave(pendingSave); setPendingSave(null); } }} color="error" variant="contained" sx={{ borderRadius: 0 }}>Proceed</Button>
+          <Button onClick={async () => {
+            setConfirmOpen(false);
+            if (!pendingSave) {
+              // Blocked transition case: revert UI to previous status
+              setValue('program_status_id', program.program_status_id || null, { shouldDirty: false });
+              setPendingSave(null);
+              return;
+            }
+            try {
+              const nextStatus = (programStatuses.find(s => s.program_status_id === pendingSave.program_status_id)?.status_name || '').toLowerCase();
+              const prevStatusName = (programStatuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+              // If Active -> Paused, call pause RPC first
+              if (prevStatusName === 'active' && nextStatus === 'paused') {
+                const res = await fetch(`/api/member-programs/${program.member_program_id}?action=pause`, { method: 'POST', credentials: 'include' });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error || 'Failed to pause program');
+              }
+              await performSave(pendingSave);
+              // Invalidate derived data (Script/Tasks/ToDo) when status changes, especially when paused
+              queryClient.invalidateQueries({ queryKey: scheduleKeys.lists(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
+            } catch (e: any) {
+              setStatusMsg({ ok: false, message: e?.message || 'Failed to update program status' });
+            } finally {
+              setPendingSave(null);
+            }
+          }} color="error" variant="contained" sx={{ borderRadius: 0 }}>Proceed</Button>
         </DialogActions>
       </Dialog>
       </Paper>

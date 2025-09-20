@@ -15,9 +15,10 @@ import {
 import { Close as CloseIcon } from '@mui/icons-material';
 import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
 import FormStatus from '@/components/ui/FormStatus';
-import BaseDataTable, { commonColumns } from '@/components/tables/base-data-table';
+import BaseDataTable from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms, MemberProgramItems } from '@/types/database.types';
+import { MemberProgramItemFormData } from '@/lib/validations/member-program-item';
 import { useMemberProgramItems, useCreateMemberProgramItem, useUpdateMemberProgramItem, useDeleteMemberProgramItem } from '@/lib/hooks/use-member-program-items';
 import { useTherapies } from '@/lib/hooks/use-therapies';
 import { useQueryClient } from '@tanstack/react-query';
@@ -29,6 +30,8 @@ import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payment
 import { formatCurrency } from '@/lib/utils/money';
 import AddProgramItemForm from './add-program-item-form';
 import useFinancialsLock from '@/lib/hooks/use-financials-lock';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { todoKeys } from '@/lib/hooks/use-program-todo';
 
 interface ProgramItemsTabProps {
   program: MemberPrograms;
@@ -41,8 +44,9 @@ interface ProgramItemWithTherapy extends MemberProgramItems {
   id: number;
   therapies: {
     therapy_name: string;
-    cost: number;
-    charge: number;
+    cost: number | null;
+    charge: number | null;
+    therapy_type_id: number | null;
     active_flag: boolean;
     therapytype: {
       therapy_type_name: string;
@@ -60,9 +64,9 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
   const [editingItem, setEditingItem] = useState<MemberProgramItems | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   type StagedChange =
-    | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string }
+    | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string | undefined }
     | { type: 'remove'; itemId: number }
-    | { type: 'update'; itemId: number; therapy_id?: number; quantity?: number; days_from_start?: number; days_between?: number; instructions?: string };
+    | { type: 'update'; itemId: number; therapy_id?: number; quantity?: number; days_from_start?: number; days_between?: number; instructions?: string | undefined };
   interface PreviewState {
     ok: boolean;
     locked?: { price: number; margin: number };
@@ -74,7 +78,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
   const [preview, setPreview] = useState<PreviewState>({ ok: true, loading: false, error: null });
   
-  const { data: programItems = [], isLoading, error } = useMemberProgramItems(program.member_program_id);
+  const { data: programItems = [], isLoading } = useMemberProgramItems(program.member_program_id);
   const { data: therapies = [] } = useTherapies();
   const { data: updatedProgram, refetch: refetchProgram } = useMemberProgram(program.member_program_id);
   const createItem = useCreateMemberProgramItem();
@@ -101,9 +105,12 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     return () => window.removeEventListener('beforeunload', handler);
   }, [isEditing, stagedChanges.length]);
   const { data: freshProgram } = useMemberProgram(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
   const { data: payments = [] } = useMemberProgramPayments(program.member_program_id);
   const lock = useFinancialsLock(freshProgram || program, payments as any);
   const isLocked = lock.locked;
+  const statusName = (statuses.find(s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id))?.status_name || '').toLowerCase();
+  const readOnlyAll = statusName === 'paused' || statusName === 'completed' || statusName === 'cancelled';
   const [applying, setApplying] = useState(false);
 
   // Update parent component when program data changes
@@ -251,14 +258,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     return Array.from(rowsById.values());
   }, [isEditing, stagedChanges, mappedProgramItems, therapies, program.member_program_id]);
 
-  const handleAddItem = async (formData: {
-    therapy_type_id: number;
-    therapy_id: number;
-    quantity: number;
-    days_from_start: number;
-    days_between: number;
-    instructions?: string;
-  }) => {
+  const handleAddItem = async (formData: MemberProgramItemFormData) => {
     if (isEditing) {
       const ch: StagedChange = { type: 'add', therapy_id: formData.therapy_id, quantity: formData.quantity, days_from_start: formData.days_from_start, days_between: formData.days_between, instructions: formData.instructions };
       setStagedChanges(prev => [...prev, ch]);
@@ -266,7 +266,14 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       return;
     }
     try {
-      await createItem.mutateAsync({ member_program_id: program.member_program_id, ...formData });
+      await createItem.mutateAsync({
+        member_program_id: program.member_program_id,
+        therapy_id: formData.therapy_id,
+        quantity: formData.quantity,
+        days_from_start: formData.days_from_start,
+        days_between: formData.days_between,
+        instructions: formData.instructions ?? null,
+      });
       setIsAddModalOpen(false);
     } catch (error) {
       console.error('Error adding program item:', error);
@@ -295,14 +302,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateItem = async (formData: {
-    therapy_type_id: number;
-    therapy_id: number;
-    quantity: number;
-    days_from_start: number;
-    days_between: number;
-    instructions?: string;
-  }) => {
+  const handleUpdateItem = async (formData: MemberProgramItemFormData) => {
     if (!editingItem) return;
     
     if (isEditing) {
@@ -313,7 +313,17 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       return;
     }
     try {
-      await updateItem.mutateAsync({ programId: program.member_program_id, itemId: editingItem.member_program_item_id, data: formData });
+      await updateItem.mutateAsync({
+        programId: program.member_program_id,
+        itemId: editingItem.member_program_item_id,
+        data: {
+          therapy_id: formData.therapy_id,
+          quantity: formData.quantity,
+          days_from_start: formData.days_from_start,
+          days_between: formData.days_between,
+          instructions: formData.instructions ?? null,
+        },
+      });
       setIsEditModalOpen(false);
       setEditingItem(null);
     } catch (error) {
@@ -399,7 +409,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       sortable: false,
       renderCell: (params) => {
         if (!params?.row) return null;
-        const actionsDisabled = isLocked && !isEditing;
+        const actionsDisabled = (isLocked && !isEditing) || readOnlyAll;
         const usedCount = Number((params as any).row?.used_count || 0);
         const deleteDisabled = actionsDisabled || (isEditing && usedCount > 0);
         return (
@@ -461,7 +471,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
                 <Button
                   variant="contained"
                   color="primary"
-                  disabled={applying || stagedChanges.length === 0 || !preview.ok || preview.loading}
+                  disabled={applying || stagedChanges.length === 0 || !preview.ok || !!preview.loading}
                   onClick={async () => {
                     setApplying(true);
                     try {
@@ -486,6 +496,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
                       } catch {}
                       // Refresh Tasks and Script/ToDo tabs derived data
                       queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+                      queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
                     } catch (e: any) {
                       setInline({ ok: false, message: e?.message || 'Failed to apply changes' });
                     } finally {
@@ -503,7 +514,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         {/* Right side controls: keep positions stable (Edit Mode + Add Item) */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {/* Edit Mode button visible only when locked; hidden when unlocked */}
-          {isLocked && (
+          {isLocked && !readOnlyAll && (
             <Button
               variant="outlined"
               onClick={() => { if (isEditing) { resetEditing(); } else { setIsEditing(true); } }}
@@ -514,7 +525,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => setIsAddModalOpen(true)}
-            disabled={isLocked && !isEditing}
+            disabled={(isLocked && !isEditing) || readOnlyAll}
             sx={{
               borderRadius: 0,
               fontWeight: 600,
@@ -533,9 +544,6 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         loading={isLoading}
         getRowId={(row) => row.member_program_item_id}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         pageSize={5}
         pageSizeOptions={[5, 10, 25]}
@@ -626,10 +634,10 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
                 quantity: editingItem.quantity || 1,
                 days_from_start: editingItem.days_from_start || 0,
                 days_between: editingItem.days_between || 0,
-                      instructions: editingItem.instructions || '',
-                      // surfaced for edit modal min guards & helper text
-                      used_count: (editingItem as any)?.used_count || 0,
-              }}
+                instructions: editingItem.instructions || '',
+                // surfaced for edit modal min guards & helper text
+                used_count: (editingItem as any)?.used_count || 0,
+              } as any}
               mode="edit"
             />
           )}

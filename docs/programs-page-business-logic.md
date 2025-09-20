@@ -123,3 +123,4 @@ Key aspects (PL/pgSQL, `SECURITY DEFINER`):
 
 
 
+

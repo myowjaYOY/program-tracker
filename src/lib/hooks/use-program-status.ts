@@ -34,7 +34,9 @@ export function useActiveProgramStatus() {
       const json = await res.json();
       if (!res.ok)
         throw new Error(json.error || 'Failed to fetch program status');
-      return (json.data as ProgramStatus[]).filter(ps => ps.active_flag);
+      return (json.data as ProgramStatus[])
+        .filter(ps => ps.active_flag)
+        .sort((a, b) => a.status_name.localeCompare(b.status_name, undefined, { sensitivity: 'accent' }));
     },
   });
 }

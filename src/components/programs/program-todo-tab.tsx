@@ -6,6 +6,7 @@ import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
 import { useProgramToDo, useUpdateToDo } from '@/lib/hooks/use-program-todo';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 
@@ -16,6 +17,9 @@ interface ProgramToDoTabProps {
 export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
   const { data = [], isLoading, error } = useProgramToDo(program.member_program_id);
   const update = useUpdateToDo(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+  const statusName = (statuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+  const readOnly = statusName === 'quote' || statusName === 'paused' || statusName === 'completed' || statusName === 'cancelled';
 
   const rows = (data as any[]).map((r) => {
     const tt = r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapytype?.therapy_type_name || '—';
@@ -45,7 +49,7 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
           label={params.value ? 'Yes' : 'No'}
           color={params.value ? 'success' : 'default'}
           size="small"
-          onClick={() => update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.value })}
+          onClick={() => { if (!readOnly) update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.value }); }}
           sx={{ cursor: 'pointer' }}
         />
       )
@@ -57,8 +61,8 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
           <IconButton
             size="small"
             color={params.row.completed_flag ? 'success' : 'primary'}
-            disabled={update.isPending}
-            onClick={() => update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.row.completed_flag })}
+            disabled={update.isPending || readOnly}
+            onClick={() => { if (!readOnly) update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.row.completed_flag }); }}
           >
             {params.row.completed_flag ? <CheckCircleOutlineIcon /> : <RadioButtonUncheckedIcon />}
           </IconButton>

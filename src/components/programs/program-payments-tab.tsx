@@ -7,6 +7,7 @@ import { MemberPrograms, MemberProgramPayments } from '@/types/database.types';
 import { 
   useMemberProgramPayments
 } from '@/lib/hooks/use-member-program-payments';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import MemberProgramPaymentForm from '@/components/forms/member-program-payment-form';
 
 interface ProgramPaymentsTabProps {
@@ -19,6 +20,9 @@ interface PaymentRow extends MemberProgramPayments {
 
 export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps) {
   const { data = [], isLoading, error } = useMemberProgramPayments(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+  const statusName = (statuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+  const canEdit = statusName === 'quote' || statusName === 'active';
 
   const rows: PaymentRow[] = (data || []).map(p => ({
     ...p,
@@ -45,8 +49,8 @@ export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps)
         error={error?.message || null}
         getRowId={(row) => row.member_program_payment_id}
         showCreateButton={false}
-        showActionsColumn={true}
-        onEdit={() => {}}
+        showActionsColumn={canEdit}
+        onEdit={canEdit ? () => {} : (undefined as unknown as any)}
         renderForm={({ onClose, initialValues, mode }) => (
           <MemberProgramPaymentForm
             programId={program.member_program_id}

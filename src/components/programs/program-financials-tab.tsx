@@ -372,15 +372,7 @@ export default function ProgramFinancialsTab({
         <CardContent>
           {isLocked && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              {hasPaidPayment && isLockedByStatus && (
-                <>Program status is not Quote and at least one payment is paid. All finance fields are locked.</>
-              )}
-              {!hasPaidPayment && isLockedByStatus && (
-                <>Program status is not Quote. All finance fields are locked.</>
-              )}
-              {hasPaidPayment && !isLockedByStatus && (
-                <>This program has at least one paid payment. All finance fields are locked.</>
-              )}
+              Program must be in Quote status to change any information on this tab.
             </Alert>
           )}
           {/* Items/Program Price banner removed per simplified rules */}

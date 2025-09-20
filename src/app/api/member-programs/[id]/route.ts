@@ -1,6 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
+export async function POST(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string; action?: string }> }
+) {
+  const supabase = await createClient();
+  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  if (authError || !session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const { id } = await context.params;
+    const programId = Number(id);
+    if (!Number.isFinite(programId)) {
+      return NextResponse.json({ error: 'Invalid program id' }, { status: 400 });
+    }
+
+    // Expect a query parameter ?action=pause
+    // Example: POST /api/member-programs/123?action=pause
+    const url = new URL(_req.url);
+    const action = url.searchParams.get('action');
+    if (action !== 'pause') {
+      return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
+    }
+
+    const { error } = await supabase.rpc('pause_member_program', { p_program_id: programId });
+    if (error) {
+      return NextResponse.json({ error: error.message || 'Failed to pause program schedules' }, { status: 500 });
+    }
+
+    return NextResponse.json({ data: { ok: true } });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+// (imports already declared at top)
+
 export async function GET(
   req: NextRequest,
   context: { params: { id: string } }
