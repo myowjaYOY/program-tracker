@@ -25,7 +25,7 @@ export async function GET(
 
     const { data: scheduleRows, error: schedErr } = await supabase
       .from('member_program_item_schedule')
-      .select('member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag')
+      .select('member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag, created_at, created_by, updated_at, updated_by')
       .in('member_program_item_id', itemIds)
       .order('scheduled_date', { ascending: true });
     if (schedErr) {
@@ -49,9 +49,34 @@ export async function GET(
       });
     });
 
+    // Step 3: resolve user emails for created_by / updated_by
+    const userIds = Array.from(new Set([
+      ...((scheduleRows || []).map((r: any) => r.created_by).filter(Boolean)),
+      ...((scheduleRows || []).map((r: any) => r.updated_by).filter(Boolean)),
+    ]));
+
+    let users: any[] = [];
+    if (userIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .in('id', userIds as any);
+      users = usersData || [];
+    }
+    const userMap = new Map(users.map(u => [u.id, u]));
+
     const flattened = (scheduleRows || []).map((r: any) => {
       const t = idToTherapy.get(String(r.member_program_item_id)) || { therapy_name: null, therapy_type_name: null };
-      return { ...r, ...t };
+      const createdUser = r.created_by ? userMap.get(r.created_by) : null;
+      const updatedUser = r.updated_by ? userMap.get(r.updated_by) : null;
+      return {
+        ...r,
+        ...t,
+        created_by_email: createdUser?.email || null,
+        created_by_full_name: createdUser?.full_name || null,
+        updated_by_email: updatedUser?.email || null,
+        updated_by_full_name: updatedUser?.full_name || null,
+      };
     });
 
     return NextResponse.json({ data: flattened });

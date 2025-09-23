@@ -21,6 +21,7 @@ import {
 import {
   Dashboard as DashboardIcon,
   BarChart as ReportsIcon,
+  AssignmentTurnedIn as CoordinatorIcon,
   Event as EventsIcon,
   GroupAdd as LeadsIcon,
   School as ProgramsIcon,
@@ -53,6 +54,7 @@ interface SidebarProps {
 
 const mainNav = [
   { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
+  { label: 'Coordinator', icon: <CoordinatorIcon />, path: '/dashboard/coordinator' },
   { label: 'Reports', icon: <ReportsIcon />, path: '/dashboard/reports' },
   { label: 'Audit Report', icon: <AuditIcon />, path: '/dashboard/audit-report' },
 ];

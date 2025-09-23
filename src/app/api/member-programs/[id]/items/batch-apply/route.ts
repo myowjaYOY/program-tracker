@@ -53,41 +53,7 @@ export async function POST(
     return NextResponse.json({ error: 'Locked values changed; refresh and preview again.' }, { status: 409 });
   }
 
-  // Try authoritative transactional RPC first (if database function exists)
-  try {
-    const rpcPayload: any = {
-      p_program_id: Number(id),
-      p_changes: body.changes,
-      p_locked_price: lockedPrice,
-      p_locked_margin: lockedMargin,
-      p_price_cents_tol: priceCentsTol,
-      p_margin_tol: marginTol,
-    };
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('apply_member_program_items_changes', rpcPayload);
-    if (!rpcErr && rpcData) {
-      // Expect shape: { ok: boolean, projected: { price, margin, charge, cost }, deltas?: { price, margin } }
-      if (rpcData.ok) {
-        return NextResponse.json({ ok: true, projected: rpcData.projected });
-      }
-      return NextResponse.json({ error: 'Locked values would change. No changes committed.', deltas: rpcData.deltas }, { status: 409 });
-    }
-    // If RPC missing or failed unexpectedly, fall back to sequential method below
-  } catch (e) {
-    // ignore and fallback
-  }
-
-  // Load current items (fallback path)
-  const { data: currentItems, error: itemsErr } = await supabase
-    .from('member_program_items')
-    .select('member_program_item_id, therapy_id, quantity')
-    .eq('member_program_id', id);
-  if (itemsErr) {
-    return NextResponse.json({ error: 'Failed to load program items' }, { status: 500 });
-  }
-
-  // Apply all changes sequentially; although Supabase lacks explicit BEGIN/COMMIT here,
-  // we emulate atomicity by validating totals AFTER all writes and rejecting on mismatch.
-  // (For true DB transactions, this endpoint should be backed by a Postgres function.)
+  // Apply all changes sequentially
   for (const ch of body.changes || []) {
     if (ch.type === 'remove') {
       const { error } = await supabase
@@ -95,15 +61,17 @@ export async function POST(
         .delete()
         .eq('member_program_item_id', ch.itemId)
         .eq('member_program_id', id);
-      if (error) return NextResponse.json({ error: 'Failed to remove item' }, { status: 500 });
+      if (error) {
+        console.error('batch-apply remove error:', error);
+        return NextResponse.json({ error: 'Failed to remove item', details: error.message }, { status: 500 });
+      }
     } else if (ch.type === 'update') {
       const upd: any = {};
       if (typeof ch.quantity === 'number') upd.quantity = Math.max(0, ch.quantity);
       if (typeof ch.days_from_start === 'number') upd.days_from_start = ch.days_from_start;
       if (typeof ch.days_between === 'number') upd.days_between = ch.days_between;
-      if (typeof ch.instructions === 'string') upd.instructions = ch.instructions;
+      if (typeof ch.instructions === 'string') upd.instructions = ch.instructions ?? '';
       if (typeof ch.therapy_id === 'number') {
-        // refresh cost/charge from therapy
         const { data: t, error: thErr } = await supabase
           .from('therapies')
           .select('cost, charge')
@@ -114,12 +82,16 @@ export async function POST(
         upd.item_cost = Number(t.cost || 0);
         upd.item_charge = Number(t.charge || 0);
       }
+      upd.updated_by = session.user.id;
       const { error } = await supabase
         .from('member_program_items')
         .update(upd)
         .eq('member_program_item_id', ch.itemId)
         .eq('member_program_id', id);
-      if (error) return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
+      if (error) {
+        console.error('batch-apply update error:', error, 'payload:', upd);
+        return NextResponse.json({ error: 'Failed to update item', details: error.message }, { status: 500 });
+      }
     } else if (ch.type === 'add') {
       const { data: t, error: thErr } = await supabase
         .from('therapies')
@@ -136,11 +108,54 @@ export async function POST(
         days_from_start: ch.days_from_start ?? 0,
         days_between: ch.days_between ?? 0,
         instructions: ch.instructions ?? '',
+        active_flag: true,
+        created_by: session.user.id,
+        updated_by: session.user.id,
       };
-      const { error } = await supabase
+      const { data: newItem, error } = await supabase
         .from('member_program_items')
-        .insert(ins);
-      if (error) return NextResponse.json({ error: 'Failed to add item' }, { status: 500 });
+        .insert(ins)
+        .select()
+        .single();
+      if (error) {
+        console.error('batch-apply add error:', error, 'payload:', ins);
+        return NextResponse.json({ error: 'Failed to add item', details: error.message }, { status: 500 });
+      }
+
+      // Copy default tasks for the therapy into member_program_item_tasks (insert missing)
+      try {
+        const { data: tasks } = await supabase
+          .from('therapy_tasks')
+          .select('task_id, task_name, description, task_delay')
+          .eq('therapy_id', ch.therapy_id)
+          .eq('active_flag', true);
+        if (tasks && tasks.length > 0 && newItem?.member_program_item_id) {
+          const newItemId = newItem.member_program_item_id;
+          const { data: existing } = await supabase
+            .from('member_program_item_tasks')
+            .select('task_id')
+            .eq('member_program_item_id', newItemId);
+          const existingSet = new Set((existing || []).map((r: any) => r.task_id));
+          const toInsert = tasks
+            .filter((t: any) => !existingSet.has(t.task_id))
+            .map((t: any) => ({
+              member_program_item_id: newItemId,
+              task_id: t.task_id,
+              task_name: t.task_name,
+              description: t.description,
+              task_delay: t.task_delay,
+              created_by: session.user.id,
+              updated_by: session.user.id,
+            }));
+          if (toInsert.length > 0) {
+            await supabase
+              .from('member_program_item_tasks')
+              .insert(toInsert);
+          }
+        }
+      } catch (e) {
+        console.error('batch-apply task copy error:', e);
+      }
     }
   }
 
@@ -150,7 +165,8 @@ export async function POST(
     .select('item_cost, item_charge, quantity')
     .eq('member_program_id', id);
   if (postErr) {
-    return NextResponse.json({ error: 'Failed to load updated items' }, { status: 500 });
+    console.error('batch-apply post load items error:', postErr);
+    return NextResponse.json({ error: 'Failed to load updated items', details: postErr.message }, { status: 500 });
   }
   let charge = 0; let cost = 0;
   for (const r of postItems || []) {
@@ -164,8 +180,6 @@ export async function POST(
   const ok = Math.abs(priceDeltaCents) <= priceCentsTol && Math.abs(marginDelta) <= marginTol;
 
   if (!ok) {
-    // Reject by reverting to original state: since we cannot txn rollback with Supabase client easily,
-    // we must inform caller to refresh and correct; recommend backing this endpoint with a DB function for full atomicity.
     return NextResponse.json({
       error: 'Locked values would change. No changes committed.',
       deltas: { price: projectedPrice - lockedPrice, margin: marginDelta },
@@ -177,5 +191,4 @@ export async function POST(
     projected: { price: projectedPrice, margin: projectedMargin, charge, cost },
   });
 }
-
 

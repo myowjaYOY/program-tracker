@@ -37,6 +37,10 @@ export async function GET(
         member_program_item_task_id,
         due_date,
         completed_flag,
+        created_at,
+        created_by,
+        updated_at,
+        updated_by,
         member_program_item_tasks:member_program_item_task_id(
           task_name,
           description,
@@ -50,7 +54,36 @@ export async function GET(
       .order('due_date', { ascending: true });
 
     if (error) return NextResponse.json({ error: 'Failed to fetch task schedule' }, { status: 500 });
-    return NextResponse.json({ data });
+
+    // Resolve user emails for audit fields
+    const userIds = Array.from(new Set([
+      ...((data || []).map((r: any) => r.created_by).filter(Boolean)),
+      ...((data || []).map((r: any) => r.updated_by).filter(Boolean)),
+    ]));
+
+    let users: any[] = [];
+    if (userIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .in('id', userIds as any);
+      users = usersData || [];
+    }
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    const enriched = (data || []).map((r: any) => {
+      const createdUser = r.created_by ? userMap.get(r.created_by) : null;
+      const updatedUser = r.updated_by ? userMap.get(r.updated_by) : null;
+      return {
+        ...r,
+        created_by_email: createdUser?.email || null,
+        created_by_full_name: createdUser?.full_name || null,
+        updated_by_email: updatedUser?.email || null,
+        updated_by_full_name: updatedUser?.full_name || null,
+      };
+    });
+
+    return NextResponse.json({ data: enriched });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
   }

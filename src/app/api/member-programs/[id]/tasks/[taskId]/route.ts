@@ -6,7 +6,7 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string; taskId: string }> }
 ) {
-  const { id, taskId } = await context.params;
+  const { taskId } = await context.params;
   const supabase = await createClient();
   
   const {
@@ -30,8 +30,8 @@ export async function PUT(
     updateData.completed_date = new Date().toISOString();
     updateData.completed_by = user.id;
   } else if (validatedData.completed_flag === false) {
-    updateData.completed_date = null;
-    updateData.completed_by = null;
+    updateData.completed_date = undefined;
+    updateData.completed_by = undefined;
   }
 
   const { data, error } = await supabase
@@ -45,6 +45,11 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Regenerate schedule rows for this task (idempotent)
+  try {
+    await supabase.rpc('regen_member_program_task_schedule', { p_member_program_item_task_id: Number(taskId) });
+  } catch (_) {}
+
   return NextResponse.json({ data }, { status: 200 });
 }
 
@@ -52,7 +57,7 @@ export async function DELETE(
   _req: NextRequest,
   context: { params: Promise<{ id: string; taskId: string }> }
 ) {
-  const { id, taskId } = await context.params;
+  const { taskId } = await context.params;
   const supabase = await createClient();
   
   const {

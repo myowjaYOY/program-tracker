@@ -120,30 +120,40 @@ export async function POST(
     }
 
     // Copy default tasks from therapy_tasks into member_program_item_tasks for this item
-    // (idempotent: avoid duplicates if someone replays the request)
+    // Idempotent without requiring a DB unique index: insert only missing
     try {
       const { data: tasks } = await supabase
         .from('therapy_tasks')
         .select('task_id, task_name, description, task_delay')
-        .eq('therapy_id', body.therapy_id);
+        .eq('therapy_id', body.therapy_id)
+        .eq('active_flag', true);
       if (tasks && tasks.length > 0 && data?.member_program_item_id) {
-        const payload = tasks.map((t: any) => ({
-          member_program_item_id: data.member_program_item_id,
-          task_id: t.task_id,
-          task_name: t.task_name,
-          description: t.description,
-          task_delay: t.task_delay,
-          created_by: session.user.id,
-          updated_by: session.user.id,
-        }));
-        // Insert missing only
-        if (payload.length > 0) {
+        const newItemId = data.member_program_item_id;
+        const { data: existing } = await supabase
+          .from('member_program_item_tasks')
+          .select('task_id')
+          .eq('member_program_item_id', newItemId);
+        const existingSet = new Set((existing || []).map((r: any) => r.task_id));
+        const toInsert = tasks
+          .filter((t: any) => !existingSet.has(t.task_id))
+          .map((t: any) => ({
+            member_program_item_id: newItemId,
+            task_id: t.task_id,
+            task_name: t.task_name,
+            description: t.description,
+            task_delay: t.task_delay,
+            created_by: session.user.id,
+            updated_by: session.user.id,
+          }));
+        if (toInsert.length > 0) {
           await supabase
             .from('member_program_item_tasks')
-            .upsert(payload, { onConflict: 'member_program_item_id,task_id' });
+            .insert(toInsert);
         }
       }
-    } catch {}
+    } catch (_) {
+      // Non-fatal: item was created successfully; task copying failed silently
+    }
 
     // Update the member program's calculated fields
     await updateMemberProgramCalculatedFields(supabase, parseInt(id));
@@ -255,3 +265,5 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
   } catch (error) {
   }
 }
+
+

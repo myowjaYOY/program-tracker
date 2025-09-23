@@ -149,10 +149,14 @@ export async function PUT(
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
+      if ((error as any)?.code === 'PGRST116') {
         return NextResponse.json({ error: 'Program finances not found' }, { status: 404 });
       }
-      return NextResponse.json({ error: 'Failed to update program finances' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to update program finances',
+        details: (error as any)?.message ?? null,
+        hint: (error as any)?.hint ?? null,
+      }, { status: 500 });
     }
 
     return NextResponse.json({ data });
@@ -160,7 +164,7 @@ export async function PUT(
     if (error instanceof Error && error.name === 'ZodError') {
       return NextResponse.json({ error: 'Invalid data provided' }, { status: 400 });
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error', details: (error as any)?.message ?? null }, { status: 500 });
   }
 }
 

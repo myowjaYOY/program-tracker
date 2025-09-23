@@ -13,6 +13,7 @@ export interface MenuItem {
 export const MENU_ITEMS: MenuItem[] = [
   // Main Navigation
   { path: '/dashboard', label: 'Dashboard', section: 'main', icon: 'Dashboard' },
+  { path: '/dashboard/coordinator', label: 'Coordinator', section: 'main', icon: 'AssignmentTurnedIn' },
   { path: '/dashboard/reports', label: 'Reports', section: 'main', icon: 'BarChart' },
   { path: '/dashboard/audit-report', label: 'Audit Report', section: 'main', icon: 'History' },
   

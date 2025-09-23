@@ -29,6 +29,8 @@ import { MemberPrograms } from '@/types/database.types';
 import { useActiveLeads } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
+import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
+import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
 
 interface ProgramInfoTabProps {
   program: MemberPrograms;
@@ -47,6 +49,8 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
   
   const { data: leads = [] } = useActiveLeads();
   const { data: programStatuses = [] } = useActiveProgramStatus();
+  const { data: finances } = useMemberProgramFinances(program.member_program_id);
+  const { data: payments = [] } = useMemberProgramPayments(program.member_program_id);
   
   const {
     control,
@@ -134,6 +138,12 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
       // Surface validation on the field like other forms (MUI TextField error state)
       // We do this by setting a temporary error message in local status and aborting save.
       setStatusMsg({ ok: false, message: 'Start Date is required when status is Active.' });
+      return;
+    }
+
+    // 1b) If status is Active, program must have at least one payment row
+    if (currentStatus === 'active' && (!payments || payments.length === 0)) {
+      setStatusMsg({ ok: false, message: 'Program must have at least one payment before activating.' });
       return;
     }
 
@@ -234,11 +244,15 @@ export default function ProgramInfoTab({ program, onProgramUpdate, onUnsavedChan
                   <MenuItem value="">
                     <em>Select a status</em>
                   </MenuItem>
-                  {programStatuses.map((status) => (
-                    <MenuItem key={status.program_status_id} value={status.program_status_id}>
-                      {status.status_name}
-                    </MenuItem>
-                  ))}
+                  {programStatuses.map((status) => {
+                    const isActive = (status.status_name || '').toLowerCase() === 'active';
+                    const disableActive = isActive && (!payments || payments.length === 0);
+                    return (
+                      <MenuItem key={status.program_status_id} value={status.program_status_id} disabled={disableActive}>
+                        {status.status_name}
+                      </MenuItem>
+                    );
+                  })}
                 </TextField>
               )}
             />

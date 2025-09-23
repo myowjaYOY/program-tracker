@@ -21,6 +21,7 @@ import {
   GridRowId,
   GridRenderCellParams,
 } from '@mui/x-data-grid-pro';
+import { alpha } from '@mui/material/styles';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -125,6 +126,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   onRowClick?: (row: T) => void;
   autoHeight?: boolean;
   selectedRowId?: GridRowId | null;
+  // Optional: add custom row class names (combined with selection class)
+  rowClassName?: (row: T) => string;
   // Expandable rows functionality
   renderDetailPanel?: (row: T) => React.ReactNode;
   getDetailPanelHeight?: (row: T) => number;
@@ -155,6 +158,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   additionalHeaderButtons,
   autoHeight = false,
   selectedRowId = null,
+  rowClassName,
   renderDetailPanel,
   getDetailPanelHeight,
   gridHeight,
@@ -337,9 +341,11 @@ export default function BaseDataTable<T extends BaseEntity>({
           }}
           pageSizeOptions={pageSizeOptions}
           {...(onRowClick && { onRowClick: (params: any) => onRowClick(params.row) })}
-          getRowClassName={(params) => 
-            selectedRowId && params.id === selectedRowId ? 'selected-row' : ''
-          }
+          getRowClassName={(params) => {
+            const selected = selectedRowId && params.id === selectedRowId ? 'selected-row' : '';
+            const extra = rowClassName ? rowClassName(params.row as T) : '';
+            return [extra, selected].filter(Boolean).join(' ');
+          }}
           {...detailPanelProps}
           sx={{
             '& .MuiDataGrid-cell:focus': {
@@ -353,6 +359,25 @@ export default function BaseDataTable<T extends BaseEntity>({
               '&:hover': {
                 backgroundColor: 'primary.main',
               },
+            },
+            // Due-date / schedule gradient classes
+            '& .MuiDataGrid-row.row-late, & .MuiDataGrid-row.row-late:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.24),
+            },
+            '& .MuiDataGrid-row.row-due-0, & .MuiDataGrid-row.row-due-0:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.20),
+            },
+            '& .MuiDataGrid-row.row-due-1, & .MuiDataGrid-row.row-due-1:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.16),
+            },
+            '& .MuiDataGrid-row.row-due-2, & .MuiDataGrid-row.row-due-2:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
+            },
+            '& .MuiDataGrid-row.row-due-3, & .MuiDataGrid-row.row-due-3:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
+            },
+            '& .MuiDataGrid-row.row-due-4, & .MuiDataGrid-row.row-due-4:hover': {
+              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.04),
             },
           }}
         />

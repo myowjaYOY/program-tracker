@@ -5,6 +5,7 @@ import {
   MemberProgramItemTaskFormData,
   MemberProgramItemTaskUpdateData,
 } from '@/lib/validations/member-program-item-task';
+import { todoKeys } from '@/lib/hooks/use-program-todo';
 
 // Query keys
 export const memberProgramItemTaskKeys = {
@@ -109,6 +110,10 @@ export function useUpdateMemberProgramItemTask() {
     onSuccess: (_, { programId }) => {
       queryClient.invalidateQueries({
         queryKey: memberProgramItemTaskKeys.byProgram(programId),
+      });
+      // Also refresh To Do schedules derived from tasks
+      queryClient.invalidateQueries({
+        queryKey: todoKeys.lists(programId),
       });
       toast.success('Task updated successfully');
     },
