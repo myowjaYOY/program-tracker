@@ -25,14 +25,17 @@ export default [
     files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
       '@next/next': nextPlugin,
-      'react-hooks': reactHooks, // ✅ REGISTER HERE
+      'react-hooks': reactHooks,
+    },
+    settings: {
+      next: {
+        rootDir: __dirname, // <-- REQUIRED for Vercel to recognize Next.js
+      },
     },
     rules: {
       ...nextPlugin.configs['core-web-vitals'].rules,
-
-      // ✅ React Hooks rules now work
       'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn', // temporarily warn
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 
