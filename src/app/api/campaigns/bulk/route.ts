@@ -20,15 +20,24 @@ export async function POST(req: NextRequest) {
   }
 
   if (!Array.isArray(body.campaigns)) {
-    return NextResponse.json({ error: 'Campaigns must be an array' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Campaigns must be an array' },
+      { status: 400 }
+    );
   }
 
   if (body.campaigns.length === 0) {
-    return NextResponse.json({ error: 'Campaigns array cannot be empty' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Campaigns array cannot be empty' },
+      { status: 400 }
+    );
   }
 
   if (body.campaigns.length > 1000) {
-    return NextResponse.json({ error: 'Maximum 1000 campaigns per bulk import' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Maximum 1000 campaigns per bulk import' },
+      { status: 400 }
+    );
   }
 
   // Validate each campaign
@@ -38,7 +47,7 @@ export async function POST(req: NextRequest) {
   for (let i = 0; i < body.campaigns.length; i++) {
     const campaign = body.campaigns[i];
     const parse = campaignSchema.safeParse(campaign);
-    
+
     if (!parse.success) {
       errors.push(`Row ${i + 1}: ${parse.error.flatten().fieldErrors}`);
     } else {
@@ -51,17 +60,19 @@ export async function POST(req: NextRequest) {
   }
 
   if (errors.length > 0) {
-    return NextResponse.json({ 
-      error: 'Validation errors found', 
-      details: errors 
-    }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: 'Validation errors found',
+        details: errors,
+      },
+      { status: 400 }
+    );
   }
 
   // Use Supabase's bulk insert capability
   const { data, error } = await supabase
     .from('campaigns')
-    .insert(validatedCampaigns)
-    .select(`
+    .insert(validatedCampaigns).select(`
       *,
       vendor:vendors!campaigns_vendor_id_fkey(vendor_id,vendor_name),
       created_user:users!campaigns_created_by_fkey(id,email,full_name),
@@ -83,9 +94,12 @@ export async function POST(req: NextRequest) {
     updated_by_full_name: campaign.updated_user?.full_name || null,
   }));
 
-  return NextResponse.json({ 
-    data: mapped,
-    message: `${validatedCampaigns.length} campaigns created successfully`,
-    count: validatedCampaigns.length
-  }, { status: 201 });
+  return NextResponse.json(
+    {
+      data: mapped,
+      message: `${validatedCampaigns.length} campaigns created successfully`,
+      count: validatedCampaigns.length,
+    },
+    { status: 201 }
+  );
 }

@@ -8,7 +8,7 @@ export async function PUT(
 ) {
   const { taskId } = await context.params;
   const supabase = await createClient();
-  
+
   const {
     data: { user },
     error: userError,
@@ -47,7 +47,9 @@ export async function PUT(
 
   // Regenerate schedule rows for this task (idempotent)
   try {
-    await supabase.rpc('regen_member_program_task_schedule', { p_member_program_item_task_id: Number(taskId) });
+    await supabase.rpc('regen_member_program_task_schedule', {
+      p_member_program_item_task_id: Number(taskId),
+    });
   } catch (_) {}
 
   return NextResponse.json({ data }, { status: 200 });
@@ -59,7 +61,7 @@ export async function DELETE(
 ) {
   const { taskId } = await context.params;
   const supabase = await createClient();
-  
+
   const {
     data: { user },
     error: userError,
@@ -79,5 +81,3 @@ export async function DELETE(
 
   return NextResponse.json({ success: true }, { status: 200 });
 }
-
-

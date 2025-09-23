@@ -6,7 +6,10 @@ export async function PUT(
   context: { params: Promise<{ id: string; paymentId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
 
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -26,14 +29,19 @@ export async function PUT(
       .update(updateData)
       .eq('member_program_payment_id', paymentId)
       .eq('member_program_id', id)
-      .select(`*,
+      .select(
+        `*,
         payment_status:payment_status(payment_status_name),
         payment_methods:payment_methods(payment_method_name)
-      `)
+      `
+      )
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message || 'Failed to update payment' }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message || 'Failed to update payment' },
+        { status: 500 }
+      );
     }
 
     const mapped = data && {
@@ -44,7 +52,10 @@ export async function PUT(
 
     return NextResponse.json({ data: mapped }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -53,7 +64,10 @@ export async function DELETE(
   context: { params: Promise<{ id: string; paymentId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
 
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -69,13 +83,17 @@ export async function DELETE(
       .eq('member_program_id', id);
 
     if (error) {
-      return NextResponse.json({ error: error.message || 'Failed to delete payment' }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message || 'Failed to delete payment' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
-
-

@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Box,
+  Card,
+  CardContent,
+  CardHeader,
   Typography,
   Tabs,
   Tab,
@@ -13,12 +13,12 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button
+  Button,
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
   Inventory as InventoryIcon,
-  Assignment as AssignmentIcon
+  Assignment as AssignmentIcon,
 } from '@mui/icons-material';
 import ProgramTemplatesGrid from '@/components/admin/program-templates/program-templates-grid';
 import TemplateInfoTab from '@/components/admin/program-templates/template-info-tab';
@@ -44,17 +44,14 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`template-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
 
 export default function ProgramTemplatesPage() {
-  const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<ProgramTemplate | null>(null);
   const [tabValue, setTabValue] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -71,8 +68,6 @@ export default function ProgramTemplatesPage() {
   React.useEffect(() => {
     console.log('Selected template changed:', selectedTemplate);
   }, [selectedTemplate]);
-
-
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     // If there are unsaved changes, show warning instead of changing tabs
@@ -93,9 +88,9 @@ export default function ProgramTemplatesPage() {
           program_template_name: updatedTemplate.program_template_name,
           description: updatedTemplate.description,
           active_flag: updatedTemplate.active_flag,
-        }
+        },
       });
-      
+
       // Update local state after successful API call
       setSelectedTemplate(updatedTemplate);
       setHasUnsavedChanges(false);
@@ -122,10 +117,18 @@ export default function ProgramTemplatesPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, height: '100vh', width: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      sx={{
+        p: { xs: 2, md: 3 },
+        height: '100vh',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       {/* Templates Grid - matches Vendors page exactly */}
       <Box sx={{ mb: 2 }}>
-        <ProgramTemplatesGrid 
+        <ProgramTemplatesGrid
           onTemplateSelect={handleTemplateSelect}
           selectedTemplate={selectedTemplate}
         />
@@ -137,51 +140,53 @@ export default function ProgramTemplatesPage() {
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ height: '100%', overflow: 'auto' }}>
               <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs 
-                  value={tabValue} 
-                  onChange={handleTabChange} 
+                <Tabs
+                  value={tabValue}
+                  onChange={handleTabChange}
                   aria-label="template tabs"
                   sx={{
                     '& .MuiTab-root': {
                       minHeight: 48,
                       paddingX: 8, // Double the previous padding (was 4)
                       marginX: 2, // Double the previous margin (was 1)
-                    }
+                    },
                   }}
                 >
-                  <Tab 
-                    icon={<DescriptionIcon />} 
-                    label="TEMPLATE" 
+                  <Tab
+                    icon={<DescriptionIcon />}
+                    label="TEMPLATE"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<InventoryIcon />} 
-                    label="Items" 
+                  <Tab
+                    icon={<InventoryIcon />}
+                    label="Items"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<AssignmentIcon />} 
-                    label="Tasks" 
+                  <Tab
+                    icon={<AssignmentIcon />}
+                    label="Tasks"
                     iconPosition="start"
                   />
                 </Tabs>
               </Box>
-              
+
               <TabPanel value={tabValue} index={0}>
-                <TemplateInfoTab 
+                <TemplateInfoTab
                   template={selectedTemplate}
                   onTemplateUpdate={handleTemplateUpdate}
                   onUnsavedChangesChange={setHasUnsavedChanges}
                 />
               </TabPanel>
-              
+
               <TabPanel value={tabValue} index={1}>
-                <TemplateItemsTab 
+                <TemplateItemsTab
                   template={selectedTemplate}
-                  onTemplateUpdate={(updatedTemplate) => setSelectedTemplate(updatedTemplate)}
+                  onTemplateUpdate={updatedTemplate =>
+                    setSelectedTemplate(updatedTemplate)
+                  }
                 />
               </TabPanel>
-              
+
               <TabPanel value={tabValue} index={2}>
                 <TemplateTasksTab template={selectedTemplate} />
               </TabPanel>
@@ -200,13 +205,23 @@ export default function ProgramTemplatesPage() {
           Unsaved Changes
         </DialogTitle>
         <DialogContent>
-          You have unsaved changes on the TEMPLATE tab. If you continue, these changes will be lost.
+          You have unsaved changes on the TEMPLATE tab. If you continue, these
+          changes will be lost.
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleUnsavedWarningCancel} color="primary" sx={{ borderRadius: 0 }}>
+          <Button
+            onClick={handleUnsavedWarningCancel}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleUnsavedWarningConfirm} color="error" variant="contained" sx={{ borderRadius: 0 }}>
+          <Button
+            onClick={handleUnsavedWarningConfirm}
+            color="error"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+          >
             Continue (Lose Changes)
           </Button>
         </DialogActions>

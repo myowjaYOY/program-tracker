@@ -3,8 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -16,7 +19,8 @@ export async function GET(req: NextRequest) {
     // STANDARD: Join to related tables using existing foreign keys (following vendors pattern)
     let query = supabase
       .from('member_programs')
-      .select(`
+      .select(
+        `
         *,
         created_user:users!member_programs_created_by_fkey(id, email, full_name),
         updated_user:users!member_programs_updated_by_fkey(id, email, full_name),
@@ -24,7 +28,8 @@ export async function GET(req: NextRequest) {
         program_status:program_status!fk_member_programs_program_status(program_status_id, status_name),
         program_template:program_template!fk_member_programs_source_template(program_template_id, program_template_name),
         member_program_finances(member_program_finance_id, margin, finance_charges, taxes, discounts, final_total_price)
-      `)
+      `
+      )
       .order('program_template_name');
 
     if (activeOnly) {
@@ -34,23 +39,30 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to fetch member programs' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch member programs' },
+        { status: 500 }
+      );
     }
 
     // Map to flat fields for frontend (following vendors pattern)
     const mapped = (data || []).map(program => {
       // Get the first finance record (there should only be one per program)
-      const financeRecord = program.member_program_finances && program.member_program_finances.length > 0 
-        ? program.member_program_finances[0] 
-        : null;
-      
+      const financeRecord =
+        program.member_program_finances &&
+        program.member_program_finances.length > 0
+          ? program.member_program_finances[0]
+          : null;
+
       return {
         ...program,
         created_by_email: program.created_user?.email || null,
         created_by_full_name: program.created_user?.full_name || null,
         updated_by_email: program.updated_user?.email || null,
         updated_by_full_name: program.updated_user?.full_name || null,
-        lead_name: program.lead ? `${program.lead.first_name} ${program.lead.last_name}`.trim() : null,
+        lead_name: program.lead
+          ? `${program.lead.first_name} ${program.lead.last_name}`.trim()
+          : null,
         lead_email: program.lead?.email || null,
         template_name: program.program_template?.program_template_name || null,
         status_name: program.program_status?.status_name || null,
@@ -59,28 +71,35 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    
-
     return NextResponse.json({ data: mapped });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-    
+
     // Validate required fields for using the database function
     if (!body.lead_id || !body.source_template_id) {
-      return NextResponse.json({ error: 'Lead ID and source template ID are required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Lead ID and source template ID are required' },
+        { status: 400 }
+      );
     }
 
     // Validate that lead exists
@@ -91,7 +110,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (leadError || !leadExists) {
-      return NextResponse.json({ error: `Lead with ID ${body.lead_id} does not exist` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Lead with ID ${body.lead_id} does not exist` },
+        { status: 400 }
+      );
     }
 
     // Validate that template exists
@@ -102,7 +124,12 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (templateError || !templateExists) {
-      return NextResponse.json({ error: `Program template with ID ${body.source_template_id} does not exist` }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: `Program template with ID ${body.source_template_id} does not exist`,
+        },
+        { status: 400 }
+      );
     }
 
     // Use the database function to create member program and copy template items
@@ -111,15 +138,18 @@ export async function POST(req: NextRequest) {
       {
         p_lead_id: body.lead_id,
         p_template_id: body.source_template_id,
-        p_start_date: body.start_date || null
+        p_start_date: body.start_date || null,
       }
     );
 
     if (functionError) {
-      return NextResponse.json({ 
-        error: 'Failed to create member program from template', 
-        details: functionError.message || 'Unknown database error'
-      }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: 'Failed to create member program from template',
+          details: functionError.message || 'Unknown database error',
+        },
+        { status: 500 }
+      );
     }
 
     // Update the created program with custom name and description if provided
@@ -127,11 +157,11 @@ export async function POST(req: NextRequest) {
       const updateData: any = {
         updated_by: session.user.id,
       };
-      
+
       if (body.program_template_name) {
         updateData.program_template_name = body.program_template_name;
       }
-      
+
       if (body.description !== undefined) {
         updateData.description = body.description;
       }
@@ -146,7 +176,10 @@ export async function POST(req: NextRequest) {
         .eq('member_program_id', newProgramId);
 
       if (updateError) {
-        return NextResponse.json({ error: 'Failed to update member program details' }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Failed to update member program details' },
+          { status: 500 }
+        );
       }
     }
 
@@ -158,7 +191,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (fetchError) {
-      return NextResponse.json({ error: 'Failed to fetch created member program' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch created member program' },
+        { status: 500 }
+      );
     }
 
     // Map the response with basic fields (joins will be handled by the GET endpoint)
@@ -176,6 +212,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: mappedProgram }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

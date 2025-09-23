@@ -4,12 +4,20 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel } from '@mui/material';
-import { PaymentStatusFormData, paymentStatusSchema } from '@/lib/validations/payment-status';
-import { useCreatePaymentStatus, useUpdatePaymentStatus } from '@/lib/hooks/use-payment-status';
+import {
+  PaymentStatusFormData,
+  paymentStatusSchema,
+} from '@/lib/validations/payment-status';
+import {
+  useCreatePaymentStatus,
+  useUpdatePaymentStatus,
+} from '@/lib/hooks/use-payment-status';
 import BaseForm from './base-form';
 
 interface PaymentStatusFormProps {
-  initialValues?: Partial<PaymentStatusFormData> & { payment_status_id?: number };
+  initialValues?: Partial<PaymentStatusFormData> & {
+    payment_status_id?: number;
+  };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }

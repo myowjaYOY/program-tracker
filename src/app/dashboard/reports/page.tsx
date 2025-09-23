@@ -40,11 +40,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`reports-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
@@ -78,8 +74,20 @@ export default function ReportsPage() {
     <Box sx={{ p: 3, height: '100%' }}>
       {/* Header Section */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4" component="h1" fontWeight="bold" color="primary.main">
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight="bold"
+            color="primary.main"
+          >
             Reports Dashboard
           </Typography>
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -96,7 +104,8 @@ export default function ReportsPage() {
           </Box>
         </Box>
         <Typography variant="body1" color="text.secondary">
-          Generate and view comprehensive reports for your marketing campaigns, leads, and sales data.
+          Generate and view comprehensive reports for your marketing campaigns,
+          leads, and sales data.
         </Typography>
       </Box>
 
@@ -117,23 +126,23 @@ export default function ReportsPage() {
             },
           }}
         >
-          <Tab 
-            label="Campaign Performance" 
-            icon={<BarChartIcon />} 
+          <Tab
+            label="Campaign Performance"
+            icon={<BarChartIcon />}
             iconPosition="start"
-            {...a11yProps(0)} 
+            {...a11yProps(0)}
           />
-          <Tab 
-            label="Lead Analytics" 
-            icon={<PieChartIcon />} 
+          <Tab
+            label="Lead Analytics"
+            icon={<PieChartIcon />}
             iconPosition="start"
-            {...a11yProps(1)} 
+            {...a11yProps(1)}
           />
-          <Tab 
-            label="Sales Metrics" 
-            icon={<TimelineIcon />} 
+          <Tab
+            label="Sales Metrics"
+            icon={<TimelineIcon />}
             iconPosition="start"
-            {...a11yProps(2)} 
+            {...a11yProps(2)}
           />
         </Tabs>
       </Box>
@@ -144,26 +153,34 @@ export default function ReportsPage() {
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+            gap: 3,
+          }}
+        >
           <Card>
-            <CardHeader 
-              title="Lead Conversion Funnel" 
+            <CardHeader
+              title="Lead Conversion Funnel"
               subheader="Track lead progression through stages"
             />
             <CardContent>
               <Typography variant="body1" color="text.secondary">
-                Visualize how leads move through your sales funnel and identify bottlenecks.
+                Visualize how leads move through your sales funnel and identify
+                bottlenecks.
               </Typography>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader 
-              title="Lead Source Analysis" 
+            <CardHeader
+              title="Lead Source Analysis"
               subheader="Which sources generate the best leads"
             />
             <CardContent>
               <Typography variant="body1" color="text.secondary">
-                Analyze lead quality and conversion rates by source to optimize your marketing efforts.
+                Analyze lead quality and conversion rates by source to optimize
+                your marketing efforts.
               </Typography>
             </CardContent>
           </Card>
@@ -171,26 +188,34 @@ export default function ReportsPage() {
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+            gap: 3,
+          }}
+        >
           <Card>
-            <CardHeader 
-              title="Revenue Trends" 
+            <CardHeader
+              title="Revenue Trends"
               subheader="Monthly and quarterly revenue analysis"
             />
             <CardContent>
               <Typography variant="body1" color="text.secondary">
-                Track revenue growth, seasonal patterns, and forecast future performance.
+                Track revenue growth, seasonal patterns, and forecast future
+                performance.
               </Typography>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader 
-              title="Customer Lifetime Value" 
+            <CardHeader
+              title="Customer Lifetime Value"
               subheader="Long-term customer value analysis"
             />
             <CardContent>
               <Typography variant="body1" color="text.secondary">
-                Understand customer retention and long-term value to inform business strategy.
+                Understand customer retention and long-term value to inform
+                business strategy.
               </Typography>
             </CardContent>
           </Card>

@@ -7,12 +7,16 @@ import BaseDataTable, {
   renderActiveFlag,
 } from '@/components/tables/base-data-table';
 import AddProgramWizard from './add-program-wizard';
-import { useMemberPrograms, useDeleteMemberProgram } from '@/lib/hooks/use-member-programs';
+import {
+  useMemberPrograms,
+  useDeleteMemberProgram,
+} from '@/lib/hooks/use-member-programs';
 import { MemberPrograms } from '@/types/database.types';
 import { MemberProgramFormData } from '@/lib/validations/member-program';
 
 // Extend MemberPrograms to satisfy BaseEntity interface
-interface MemberProgramEntity extends Omit<MemberPrograms, 'created_at' | 'updated_at'> {
+interface MemberProgramEntity
+  extends Omit<MemberPrograms, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -26,7 +30,14 @@ const memberProgramColumns: GridColDef[] = [
     flex: 1,
     minWidth: 240,
     renderCell: (params: any) => (
-      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={params.value}>
+      <span
+        style={{
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+        title={params.value}
+      >
         {params.value}
       </span>
     ),
@@ -151,12 +162,12 @@ interface ProgramsGridProps {
   selectedProgram: MemberPrograms | null;
 }
 
-export default function ProgramsGrid({ onProgramSelect, selectedProgram }: ProgramsGridProps) {
+export default function ProgramsGrid({
+  onProgramSelect,
+  selectedProgram,
+}: ProgramsGridProps) {
   const { data: programs, isLoading, error } = useMemberPrograms();
   const deleteProgram = useDeleteMemberProgram();
-  
-
-  
 
   const handleDelete = (id: string | number) => {
     deleteProgram.mutate(String(id));
@@ -193,17 +204,17 @@ export default function ProgramsGrid({ onProgramSelect, selectedProgram }: Progr
   };
 
   // Transform programs data to include id property and handle null dates
-  const programsWithId: MemberProgramEntity[] = (programs || []).map(program => ({
-    ...program,
-    id: program.member_program_id,
-    created_at: program.created_at || new Date().toISOString(),
-    updated_at: program.updated_at || new Date().toISOString(),
-    // Use the proper user email fields from the API joins (following vendors pattern)
-    created_by: program.created_by_email || '-',
-    updated_by: program.updated_by_email || '-',
-  }));
-
-  
+  const programsWithId: MemberProgramEntity[] = (programs || []).map(
+    program => ({
+      ...program,
+      id: program.member_program_id,
+      created_at: program.created_at || new Date().toISOString(),
+      updated_at: program.updated_at || new Date().toISOString(),
+      // Use the proper user email fields from the API joins (following vendors pattern)
+      created_by: program.created_by_email || '-',
+      updated_by: program.updated_by_email || '-',
+    })
+  );
 
   const handleRowClick = (row: MemberProgramEntity) => {
     // Convert MemberProgramEntity back to MemberPrograms for selection
@@ -235,7 +246,6 @@ export default function ProgramsGrid({ onProgramSelect, selectedProgram }: Progr
     };
     onProgramSelect(program);
   };
-
 
   return (
     <BaseDataTable<MemberProgramEntity>

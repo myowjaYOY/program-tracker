@@ -5,9 +5,15 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
 
-import { TherapyTaskFormData, therapyTaskSchema } from '@/lib/validations/therapy-task';
+import {
+  TherapyTaskFormData,
+  therapyTaskSchema,
+} from '@/lib/validations/therapy-task';
 import BaseForm from './base-form';
-import { useCreateTherapyTask, useUpdateTherapyTask } from '@/lib/hooks/use-therapy-tasks';
+import {
+  useCreateTherapyTask,
+  useUpdateTherapyTask,
+} from '@/lib/hooks/use-therapy-tasks';
 import { useActiveTherapies } from '@/lib/hooks/use-therapies';
 
 interface TherapyTaskFormProps {
@@ -22,7 +28,8 @@ export default function TherapyTaskForm({
   mode = 'create',
 }: TherapyTaskFormProps) {
   const isEdit = mode === 'edit';
-  const { data: therapies = [], isLoading: therapiesLoading } = useActiveTherapies();
+  const { data: therapies = [], isLoading: therapiesLoading } =
+    useActiveTherapies();
 
   const {
     register,
@@ -76,7 +83,9 @@ export default function TherapyTaskForm({
       onSubmit={onSubmit}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
-        isSubmitting || createTherapyTask.isPending || updateTherapyTask.isPending
+        isSubmitting ||
+        createTherapyTask.isPending ||
+        updateTherapyTask.isPending
       }
       submitText={isEdit ? 'Update' : 'Create'}
     >
@@ -112,7 +121,7 @@ export default function TherapyTaskForm({
         error={!!errors.task_name}
         helperText={errors.task_name?.message}
       />
-      
+
       <TextField
         label="Description"
         fullWidth
@@ -130,7 +139,10 @@ export default function TherapyTaskForm({
         type="number"
         {...register('task_delay', { valueAsNumber: true })}
         error={!!errors.task_delay}
-        helperText={errors.task_delay?.message || 'Negative values mean before therapy, positive values mean after therapy'}
+        helperText={
+          errors.task_delay?.message ||
+          'Negative values mean before therapy, positive values mean after therapy'
+        }
         inputProps={{ min: -365, max: 365 }}
       />
 

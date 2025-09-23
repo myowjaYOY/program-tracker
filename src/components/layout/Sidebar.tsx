@@ -54,9 +54,17 @@ interface SidebarProps {
 
 const mainNav = [
   { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-  { label: 'Coordinator', icon: <CoordinatorIcon />, path: '/dashboard/coordinator' },
+  {
+    label: 'Coordinator',
+    icon: <CoordinatorIcon />,
+    path: '/dashboard/coordinator',
+  },
   { label: 'Reports', icon: <ReportsIcon />, path: '/dashboard/reports' },
-  { label: 'Audit Report', icon: <AuditIcon />, path: '/dashboard/audit-report' },
+  {
+    label: 'Audit Report',
+    icon: <AuditIcon />,
+    path: '/dashboard/audit-report',
+  },
 ];
 
 const marketingNav = [
@@ -71,26 +79,62 @@ const salesNav = [
 
 // Admin navigation with nested Lookup submenu
 const adminNav = [
-  { label: 'Program Templates', icon: <DocumentsIcon />, path: '/dashboard/admin/program-templates' },
+  {
+    label: 'Program Templates',
+    icon: <DocumentsIcon />,
+    path: '/dashboard/admin/program-templates',
+  },
   { label: 'Therapies', icon: <TherapiesIcon />, path: '/dashboard/therapies' },
-  { label: 'Therapy Tasks', icon: <TherapyTaskIcon />, path: '/dashboard/therapy-tasks' },
-  { label: 'User Management', icon: <AdminIcon />, path: '/dashboard/admin/users' },
-  { 
-    label: 'Lookup', 
-    icon: <AdminIcon />, 
+  {
+    label: 'Therapy Tasks',
+    icon: <TherapyTaskIcon />,
+    path: '/dashboard/therapy-tasks',
+  },
+  {
+    label: 'User Management',
+    icon: <AdminIcon />,
+    path: '/dashboard/admin/users',
+  },
+  {
+    label: 'Lookup',
+    icon: <AdminIcon />,
     path: null, // No direct path, this is a submenu
     submenu: [
       { label: 'Bodies', icon: <BodiesIcon />, path: '/dashboard/bodies' },
       { label: 'Buckets', icon: <BucketsIcon />, path: '/dashboard/buckets' },
-      { label: 'Financing Types', icon: <FinancingTypesIcon />, path: '/dashboard/financing-types' },
-      { label: 'Lead Status', icon: <MemberStatusIcon />, path: '/dashboard/status' },
-      { label: 'Pay Methods', icon: <PaymentMethodsIcon />, path: '/dashboard/payment-methods' },
-      { label: 'Pay Status', icon: <PaymentStatusIcon />, path: '/dashboard/payment-status' },
+      {
+        label: 'Financing Types',
+        icon: <FinancingTypesIcon />,
+        path: '/dashboard/financing-types',
+      },
+      {
+        label: 'Lead Status',
+        icon: <MemberStatusIcon />,
+        path: '/dashboard/status',
+      },
+      {
+        label: 'Pay Methods',
+        icon: <PaymentMethodsIcon />,
+        path: '/dashboard/payment-methods',
+      },
+      {
+        label: 'Pay Status',
+        icon: <PaymentStatusIcon />,
+        path: '/dashboard/payment-status',
+      },
       { label: 'Pillars', icon: <PillarsIcon />, path: '/dashboard/pillars' },
-      { label: 'Program Status', icon: <ProgramStatusIcon />, path: '/dashboard/program-status' },
-      { label: 'Therapy Types', icon: <TherapiesIcon />, path: '/dashboard/therapy-type' },
+      {
+        label: 'Program Status',
+        icon: <ProgramStatusIcon />,
+        path: '/dashboard/program-status',
+      },
+      {
+        label: 'Therapy Types',
+        icon: <TherapiesIcon />,
+        path: '/dashboard/therapy-type',
+      },
       { label: 'Vendors', icon: <VendorsIcon />, path: '/dashboard/vendors' },
-    ]
+    ],
   },
 ];
 
@@ -101,10 +145,11 @@ export default function Sidebar({ user }: SidebarProps) {
   const open = Boolean(anchorEl);
   const [openSection, setOpenSection] = useState<string | undefined>(undefined);
   const [openSubmenu, setOpenSubmenu] = useState<string | undefined>(undefined);
-  
+
   // Get user permissions
-  const { data: userPermissions, isLoading: permissionsLoading } = useUserPermissions();
-  
+  const { data: userPermissions, isLoading: permissionsLoading } =
+    useUserPermissions();
+
   // Show loading state while permissions are being fetched
   if (permissionsLoading) {
     return (
@@ -125,7 +170,9 @@ export default function Sidebar({ user }: SidebarProps) {
         }}
       >
         {/* Logo */}
-        <Box sx={{ p: 2, pt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box
+          sx={{ p: 2, pt: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+        >
           <Logo />
           <Typography
             variant="h6"
@@ -136,9 +183,16 @@ export default function Sidebar({ user }: SidebarProps) {
             Program Tracker
           </Typography>
         </Box>
-        
+
         {/* Loading State */}
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
           <Typography variant="body2" color="text.secondary">
             Loading permissions...
           </Typography>
@@ -146,39 +200,47 @@ export default function Sidebar({ user }: SidebarProps) {
       </Box>
     );
   }
-  
+
   // Filter navigation based on permissions
   const getFilteredNavigation = () => {
     if (!userPermissions || permissionsLoading) {
       return { main: [], marketing: [], sales: [], admin: [] };
     }
-    
+
     const { isAdmin, permissions } = userPermissions;
-    
+
     // Filter based on user permissions
-    const hasPermission = (path: string) => isAdmin || permissions.includes('*') || permissions.includes(path);
-    
+    const hasPermission = (path: string) =>
+      isAdmin || permissions.includes('*') || permissions.includes(path);
+
     // Filter admin nav including submenu items
-    const filteredAdminNav = adminNav.map(item => {
-      if (item.submenu) {
-        // Filter submenu items based on permissions
-        const filteredSubmenu = item.submenu.filter(subItem => hasPermission(subItem.path));
-        return { ...item, submenu: filteredSubmenu };
-      }
-      return item;
-    }).filter(item => {
-      // Show item if it has a path and user has permission, or if it's a submenu with visible items
-      return (item.path && hasPermission(item.path)) || (item.submenu && item.submenu.length > 0);
-    });
-    
+    const filteredAdminNav = adminNav
+      .map(item => {
+        if (item.submenu) {
+          // Filter submenu items based on permissions
+          const filteredSubmenu = item.submenu.filter(subItem =>
+            hasPermission(subItem.path)
+          );
+          return { ...item, submenu: filteredSubmenu };
+        }
+        return item;
+      })
+      .filter(item => {
+        // Show item if it has a path and user has permission, or if it's a submenu with visible items
+        return (
+          (item.path && hasPermission(item.path)) ||
+          (item.submenu && item.submenu.length > 0)
+        );
+      });
+
     return {
       main: mainNav.filter(item => hasPermission(item.path)),
       marketing: marketingNav.filter(item => hasPermission(item.path)),
       sales: salesNav.filter(item => hasPermission(item.path)),
-      admin: filteredAdminNav
+      admin: filteredAdminNav,
     };
   };
-  
+
   const filteredNav = getFilteredNavigation();
 
   const handleUserMenuClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -455,10 +517,14 @@ export default function Sidebar({ user }: SidebarProps) {
                   // Submenu item (like Lookup)
                   <ListItem disablePadding>
                     <ListItemButton
-                      onClick={(e) => {
+                      onClick={e => {
                         e.preventDefault();
                         e.stopPropagation();
-                        setOpenSubmenu(openSubmenu === item.label.toLowerCase() ? undefined : item.label.toLowerCase());
+                        setOpenSubmenu(
+                          openSubmenu === item.label.toLowerCase()
+                            ? undefined
+                            : item.label.toLowerCase()
+                        );
                       }}
                       sx={{
                         mx: 1,
@@ -481,7 +547,10 @@ export default function Sidebar({ user }: SidebarProps) {
                       </ListItemIcon>
                       <ListItemText
                         primary={item.label}
-                        primaryTypographyProps={{ fontWeight: 500, fontSize: 15 }}
+                        primaryTypographyProps={{
+                          fontWeight: 500,
+                          fontSize: 15,
+                        }}
                       />
                       {openSubmenu === item.label.toLowerCase() ? (
                         <ExpandLess fontSize="small" />
@@ -500,7 +569,9 @@ export default function Sidebar({ user }: SidebarProps) {
                         mx: 1,
                         my: 0.5,
                         color:
-                          pathname === item.path ? 'primary.main' : 'text.primary',
+                          pathname === item.path
+                            ? 'primary.main'
+                            : 'text.primary',
                         backgroundColor:
                           pathname === item.path ? '#f5f2ff' : 'transparent',
                         '&:hover': {
@@ -522,21 +593,28 @@ export default function Sidebar({ user }: SidebarProps) {
                       </ListItemIcon>
                       <ListItemText
                         primary={item.label}
-                        primaryTypographyProps={{ fontWeight: 500, fontSize: 15 }}
+                        primaryTypographyProps={{
+                          fontWeight: 500,
+                          fontSize: 15,
+                        }}
                       />
                     </ListItemButton>
                   </ListItem>
                 )}
-                
+
                 {/* Render submenu items if this is a submenu */}
                 {item.submenu && (
-                  <Collapse in={openSubmenu === item.label.toLowerCase()} timeout="auto" unmountOnExit>
+                  <Collapse
+                    in={openSubmenu === item.label.toLowerCase()}
+                    timeout="auto"
+                    unmountOnExit
+                  >
                     <List sx={{ pl: 4, pt: 0 }}>
                       {item.submenu.map(subItem => (
                         <ListItem disablePadding key={subItem.label}>
                           <ListItemButton
                             selected={pathname === subItem.path}
-                            onClick={(e) => {
+                            onClick={e => {
                               e.preventDefault();
                               e.stopPropagation();
                               router.push(subItem.path);
@@ -545,9 +623,13 @@ export default function Sidebar({ user }: SidebarProps) {
                               mx: 1,
                               my: 0.5,
                               color:
-                                pathname === subItem.path ? 'primary.main' : 'text.primary',
+                                pathname === subItem.path
+                                  ? 'primary.main'
+                                  : 'text.primary',
                               backgroundColor:
-                                pathname === subItem.path ? '#f5f2ff' : 'transparent',
+                                pathname === subItem.path
+                                  ? '#f5f2ff'
+                                  : 'transparent',
                               '&:hover': {
                                 backgroundColor: '#f5f2ff',
                               },
@@ -567,7 +649,10 @@ export default function Sidebar({ user }: SidebarProps) {
                             </ListItemIcon>
                             <ListItemText
                               primary={subItem.label}
-                              primaryTypographyProps={{ fontWeight: 500, fontSize: 14 }}
+                              primaryTypographyProps={{
+                                fontWeight: 500,
+                                fontSize: 14,
+                              }}
                             />
                           </ListItemButton>
                         </ListItem>

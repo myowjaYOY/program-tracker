@@ -6,14 +6,19 @@ export async function PUT(
   context: { params: Promise<{ id: string; taskScheduleId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { taskScheduleId } = await context.params;
   let body: { completed_flag?: boolean } = {};
-  try { body = await req.json(); } catch {}
+  try {
+    body = await req.json();
+  } catch {}
 
   try {
     const { data, error } = await supabase
@@ -23,12 +28,16 @@ export async function PUT(
       .select()
       .single();
     if (error) {
-      return NextResponse.json({ error: 'Failed to update task schedule' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to update task schedule' },
+        { status: 500 }
+      );
     }
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
-
-

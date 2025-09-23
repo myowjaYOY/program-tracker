@@ -39,12 +39,13 @@ interface ProgramTaskWithDetails extends MemberProgramItemTasks {
 
 export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState<ProgramTaskWithDetails | null>(null);
+  const [editingTask, setEditingTask] = useState<ProgramTaskWithDetails | null>(
+    null
+  );
 
-  const {
-    data: programTasks = [],
-    isLoading,
-  } = useMemberProgramItemTasks(program.member_program_id);
+  const { data: programTasks = [], isLoading } = useMemberProgramItemTasks(
+    program.member_program_id
+  );
 
   const updateTask = useUpdateMemberProgramItemTask();
   const deleteTask = useDeleteMemberProgramItemTask();
@@ -55,7 +56,11 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
     reset,
     setValue,
     formState: { errors },
-  } = useForm<{ task_delay: number; description: string; completed_flag: boolean }>({
+  } = useForm<{
+    task_delay: number;
+    description: string;
+    completed_flag: boolean;
+  }>({
     defaultValues: {
       task_delay: 0,
       description: '',
@@ -63,10 +68,11 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
     },
   });
 
-
-  const handleUpdateTask = async (updates: Partial<MemberProgramItemTaskFormData>) => {
+  const handleUpdateTask = async (
+    updates: Partial<MemberProgramItemTaskFormData>
+  ) => {
     if (!editingTask) return;
-    
+
     return updateTask.mutateAsync({
       programId: program.member_program_id,
       taskId: editingTask.member_program_item_task_id,
@@ -93,16 +99,20 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
     setIsEditModalOpen(true);
   };
 
-  const handleEditSubmit = async (data: { task_delay: number; description: string; completed_flag: boolean }) => {
+  const handleEditSubmit = async (data: {
+    task_delay: number;
+    description: string;
+    completed_flag: boolean;
+  }) => {
     if (!editingTask) return;
-    
+
     try {
       await handleUpdateTask({
         task_delay: data.task_delay,
         description: data.description,
         completed_flag: data.completed_flag,
       });
-      
+
       // Only close modal after successful update
       setIsEditModalOpen(false);
       setEditingTask(null);
@@ -118,7 +128,8 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
     ...task,
     id: task.member_program_item_task_id,
     therapy_name: task.therapy_tasks?.therapies?.therapy_name || '',
-    therapy_type_name: task.therapy_tasks?.therapies?.therapytype?.therapy_type_name || '',
+    therapy_type_name:
+      task.therapy_tasks?.therapies?.therapytype?.therapy_type_name || '',
   }));
 
   const columns: GridColDef[] = [
@@ -152,7 +163,7 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
       renderCell: (params: any) => {
         const value = params.value || 0;
         return (
-          <Chip 
+          <Chip
             label={`${value > 0 ? '+' : ''}${value} days`}
             color={value > 0 ? 'primary' : value < 0 ? 'error' : 'default'}
             size="small"
@@ -211,7 +222,9 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
             </IconButton>
             <IconButton
               size="small"
-              onClick={() => handleDeleteTask(params.row.member_program_item_task_id)}
+              onClick={() =>
+                handleDeleteTask(params.row.member_program_item_task_id)
+              }
               color="error"
             >
               <DeleteIcon fontSize="small" />
@@ -306,8 +319,11 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
                       disabled={updateTask.isPending}
                       error={!!errors.task_delay}
                       helperText={errors.task_delay?.message}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                      onChange={e => {
+                        const value =
+                          e.target.value === ''
+                            ? 0
+                            : parseInt(e.target.value, 10);
                         field.onChange(value);
                       }}
                     />

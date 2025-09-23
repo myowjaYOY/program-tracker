@@ -18,13 +18,17 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 
-const resetPasswordSchema = z.object({
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(6, 'Password must be at least 6 characters'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+const resetPasswordSchema = z
+  .object({
+    password: z.string().min(6, 'Password must be at least 6 characters'),
+    confirmPassword: z
+      .string()
+      .min(6, 'Password must be at least 6 characters'),
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  });
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
@@ -46,7 +50,7 @@ export default function ResetPasswordForm() {
     // Check if this is an email confirmation redirect by looking at the URL
     const urlParams = new URLSearchParams(window.location.search);
     const type = urlParams.get('type');
-    
+
     if (type === 'signup') {
       toast.success('Email confirmed successfully! You can now sign in.');
       router.push('/login');

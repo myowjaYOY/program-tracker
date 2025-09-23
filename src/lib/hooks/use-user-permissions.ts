@@ -6,31 +6,35 @@ import { useAuth } from './useAuth';
 export function useUserPermissions() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  
+
   // Clear user permissions cache when user changes
   useEffect(() => {
     if (user) {
       queryClient.invalidateQueries({ queryKey: ['user-permissions'] });
     }
   }, [user?.id, queryClient]);
-  
+
   return useQuery({
     queryKey: ['user-permissions', user?.id], // Include user ID in query key
-    queryFn: async (): Promise<{ isAdmin: boolean; permissions: string[]; isActive: boolean }> => {
+    queryFn: async (): Promise<{
+      isAdmin: boolean;
+      permissions: string[];
+      isActive: boolean;
+    }> => {
       const response = await fetch('/api/user/permissions');
-      
+
       if (!response.ok) {
         if (response.status === 401) {
           return { isAdmin: false, permissions: [], isActive: false };
         }
         throw new Error('Failed to fetch user permissions');
       }
-      
+
       const data = await response.json();
       return {
         isAdmin: data.isAdmin,
         permissions: data.permissions || [],
-        isActive: data.isActive
+        isActive: data.isActive,
       };
     },
     staleTime: 0, // Always refetch when user changes

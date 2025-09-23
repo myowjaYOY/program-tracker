@@ -6,7 +6,8 @@ export default function useFinancialsLock(
   program: Partial<MemberPrograms> | null | undefined,
   payments: Partial<MemberProgramPayments>[] | null | undefined
 ): ProgramLockInfo {
-  return React.useMemo(() => isProgramLocked(program, payments), [program, payments]);
+  return React.useMemo(
+    () => isProgramLocked(program, payments),
+    [program, payments]
+  );
 }
-
-

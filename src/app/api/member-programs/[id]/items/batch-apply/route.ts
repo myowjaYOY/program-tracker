@@ -3,9 +3,24 @@ import { createClient } from '@/lib/supabase/server';
 import { toCents } from '@/lib/utils/money';
 
 type Change =
-  | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string }
+  | {
+      type: 'add';
+      therapy_id: number;
+      quantity: number;
+      days_from_start?: number;
+      days_between?: number;
+      instructions?: string;
+    }
   | { type: 'remove'; itemId: number }
-  | { type: 'update'; itemId: number; therapy_id?: number; quantity?: number; days_from_start?: number; days_between?: number; instructions?: string };
+  | {
+      type: 'update';
+      itemId: number;
+      therapy_id?: number;
+      quantity?: number;
+      days_from_start?: number;
+      days_between?: number;
+      instructions?: string;
+    };
 
 interface ApplyBody {
   changes: Change[];
@@ -18,7 +33,10 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -30,7 +48,10 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const priceCentsTol = Math.max(0, Math.round((body.tolerance?.priceCents ?? 1)));
+  const priceCentsTol = Math.max(
+    0,
+    Math.round(body.tolerance?.priceCents ?? 1)
+  );
   const marginTol = body.tolerance?.marginPct ?? 0.1;
 
   // Load locked finances for authoritative values
@@ -40,7 +61,10 @@ export async function POST(
     .eq('member_program_id', id)
     .single();
   if (finErr || !finances) {
-    return NextResponse.json({ error: 'Program finances not found' }, { status: 404 });
+    return NextResponse.json(
+      { error: 'Program finances not found' },
+      { status: 404 }
+    );
   }
   const lockedPrice = Number(finances.final_total_price || 0);
   const lockedMargin = Number(finances.margin || 0);
@@ -49,8 +73,14 @@ export async function POST(
 
   // Staleness check
   const exp = body.expectedLocked || { price: NaN, margin: NaN };
-  if (Math.abs(Math.round((exp.price - lockedPrice) * 100)) > 0 || Math.abs(exp.margin - lockedMargin) > 0.0001) {
-    return NextResponse.json({ error: 'Locked values changed; refresh and preview again.' }, { status: 409 });
+  if (
+    Math.abs(Math.round((exp.price - lockedPrice) * 100)) > 0 ||
+    Math.abs(exp.margin - lockedMargin) > 0.0001
+  ) {
+    return NextResponse.json(
+      { error: 'Locked values changed; refresh and preview again.' },
+      { status: 409 }
+    );
   }
 
   // Apply all changes sequentially
@@ -63,21 +93,32 @@ export async function POST(
         .eq('member_program_id', id);
       if (error) {
         console.error('batch-apply remove error:', error);
-        return NextResponse.json({ error: 'Failed to remove item', details: error.message }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Failed to remove item', details: error.message },
+          { status: 500 }
+        );
       }
     } else if (ch.type === 'update') {
       const upd: any = {};
-      if (typeof ch.quantity === 'number') upd.quantity = Math.max(0, ch.quantity);
-      if (typeof ch.days_from_start === 'number') upd.days_from_start = ch.days_from_start;
-      if (typeof ch.days_between === 'number') upd.days_between = ch.days_between;
-      if (typeof ch.instructions === 'string') upd.instructions = ch.instructions ?? '';
+      if (typeof ch.quantity === 'number')
+        upd.quantity = Math.max(0, ch.quantity);
+      if (typeof ch.days_from_start === 'number')
+        upd.days_from_start = ch.days_from_start;
+      if (typeof ch.days_between === 'number')
+        upd.days_between = ch.days_between;
+      if (typeof ch.instructions === 'string')
+        upd.instructions = ch.instructions ?? '';
       if (typeof ch.therapy_id === 'number') {
         const { data: t, error: thErr } = await supabase
           .from('therapies')
           .select('cost, charge')
           .eq('therapy_id', ch.therapy_id)
           .single();
-        if (thErr || !t) return NextResponse.json({ error: 'Therapy not found' }, { status: 400 });
+        if (thErr || !t)
+          return NextResponse.json(
+            { error: 'Therapy not found' },
+            { status: 400 }
+          );
         upd.therapy_id = ch.therapy_id;
         upd.item_cost = Number(t.cost || 0);
         upd.item_charge = Number(t.charge || 0);
@@ -90,7 +131,10 @@ export async function POST(
         .eq('member_program_id', id);
       if (error) {
         console.error('batch-apply update error:', error, 'payload:', upd);
-        return NextResponse.json({ error: 'Failed to update item', details: error.message }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Failed to update item', details: error.message },
+          { status: 500 }
+        );
       }
     } else if (ch.type === 'add') {
       const { data: t, error: thErr } = await supabase
@@ -98,7 +142,11 @@ export async function POST(
         .select('therapy_id, cost, charge')
         .eq('therapy_id', ch.therapy_id)
         .single();
-      if (thErr || !t) return NextResponse.json({ error: 'Therapy not found' }, { status: 400 });
+      if (thErr || !t)
+        return NextResponse.json(
+          { error: 'Therapy not found' },
+          { status: 400 }
+        );
       const ins: any = {
         member_program_id: Number(id),
         therapy_id: t.therapy_id,
@@ -119,7 +167,10 @@ export async function POST(
         .single();
       if (error) {
         console.error('batch-apply add error:', error, 'payload:', ins);
-        return NextResponse.json({ error: 'Failed to add item', details: error.message }, { status: 500 });
+        return NextResponse.json(
+          { error: 'Failed to add item', details: error.message },
+          { status: 500 }
+        );
       }
 
       // Copy default tasks for the therapy into member_program_item_tasks (insert missing)
@@ -135,7 +186,9 @@ export async function POST(
             .from('member_program_item_tasks')
             .select('task_id')
             .eq('member_program_item_id', newItemId);
-          const existingSet = new Set((existing || []).map((r: any) => r.task_id));
+          const existingSet = new Set(
+            (existing || []).map((r: any) => r.task_id)
+          );
           const toInsert = tasks
             .filter((t: any) => !existingSet.has(t.task_id))
             .map((t: any) => ({
@@ -148,9 +201,7 @@ export async function POST(
               updated_by: session.user.id,
             }));
           if (toInsert.length > 0) {
-            await supabase
-              .from('member_program_item_tasks')
-              .insert(toInsert);
+            await supabase.from('member_program_item_tasks').insert(toInsert);
           }
         }
       } catch (e) {
@@ -166,24 +217,34 @@ export async function POST(
     .eq('member_program_id', id);
   if (postErr) {
     console.error('batch-apply post load items error:', postErr);
-    return NextResponse.json({ error: 'Failed to load updated items', details: postErr.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to load updated items', details: postErr.message },
+      { status: 500 }
+    );
   }
-  let charge = 0; let cost = 0;
+  let charge = 0;
+  let cost = 0;
   for (const r of postItems || []) {
     charge += Number(r.item_charge || 0) * Number(r.quantity || 0);
     cost += Number(r.item_cost || 0) * Number(r.quantity || 0);
   }
   const projectedPrice = charge + financeCharges + discounts;
-  const projectedMargin = lockedPrice > 0 ? ((lockedPrice - cost) / lockedPrice) * 100 : 0;
+  const projectedMargin =
+    lockedPrice > 0 ? ((lockedPrice - cost) / lockedPrice) * 100 : 0;
   const priceDeltaCents = toCents(projectedPrice) - toCents(lockedPrice);
   const marginDelta = projectedMargin - lockedMargin;
-  const ok = Math.abs(priceDeltaCents) <= priceCentsTol && Math.abs(marginDelta) <= marginTol;
+  const ok =
+    Math.abs(priceDeltaCents) <= priceCentsTol &&
+    Math.abs(marginDelta) <= marginTol;
 
   if (!ok) {
-    return NextResponse.json({
-      error: 'Locked values would change. No changes committed.',
-      deltas: { price: projectedPrice - lockedPrice, margin: marginDelta },
-    }, { status: 409 });
+    return NextResponse.json(
+      {
+        error: 'Locked values would change. No changes committed.',
+        deltas: { price: projectedPrice - lockedPrice, margin: marginDelta },
+      },
+      { status: 409 }
+    );
   }
 
   return NextResponse.json({
@@ -191,4 +252,3 @@ export async function POST(
     projected: { price: projectedPrice, margin: projectedMargin, charge, cost },
   });
 }
-

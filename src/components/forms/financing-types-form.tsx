@@ -4,12 +4,20 @@ import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
-import { FinancingTypesFormData, financingTypesSchema } from '@/lib/validations/financing-types';
-import { useCreateFinancingTypes, useUpdateFinancingTypes } from '@/lib/hooks/use-financing-types';
+import {
+  FinancingTypesFormData,
+  financingTypesSchema,
+} from '@/lib/validations/financing-types';
+import {
+  useCreateFinancingTypes,
+  useUpdateFinancingTypes,
+} from '@/lib/hooks/use-financing-types';
 import BaseForm from './base-form';
 
 interface FinancingTypesFormProps {
-  initialValues?: Partial<FinancingTypesFormData> & { financing_type_id?: number };
+  initialValues?: Partial<FinancingTypesFormData> & {
+    financing_type_id?: number;
+  };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }

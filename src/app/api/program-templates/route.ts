@@ -3,8 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -16,10 +19,12 @@ export async function GET(req: NextRequest) {
     // Use foreign key joins like other working APIs (vendors, leads)
     let query = supabase
       .from('program_template')
-      .select(`*,
+      .select(
+        `*,
         created_user:users!program_template_created_by_fkey(id,email,full_name),
         updated_user:users!program_template_updated_by_fkey(id,email,full_name)
-      `)
+      `
+      )
       .order('program_template_name');
 
     if (activeOnly) {
@@ -30,7 +35,10 @@ export async function GET(req: NextRequest) {
 
     if (error) {
       console.error('Error fetching program templates:', error);
-      return NextResponse.json({ error: 'Failed to fetch program templates' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch program templates' },
+        { status: 500 }
+      );
     }
 
     console.log('Raw program template data from database:', data);
@@ -49,24 +57,33 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: mapped });
   } catch (error) {
     console.error('Error in program templates GET:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const body = await req.json();
-    
+
     // Validate required fields
     if (!body.program_template_name) {
-      return NextResponse.json({ error: 'Template name is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Template name is required' },
+        { status: 400 }
+      );
     }
 
     const templateData = {
@@ -88,12 +105,18 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       console.error('Error creating program template:', error);
-      return NextResponse.json({ error: 'Failed to create program template' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to create program template' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error('Error in program templates POST:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

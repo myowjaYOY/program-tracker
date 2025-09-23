@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Card, 
-  CardContent, 
-  CardHeader, 
+import {
+  Box,
+  Card,
+  CardContent,
+  CardHeader,
   Typography,
   Tabs,
   Tab,
@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button
+  Button,
 } from '@mui/material';
 import {
   Description as DescriptionIcon,
@@ -21,7 +21,7 @@ import {
   Inventory as InventoryIcon,
   Assignment as AssignmentIcon,
   Payment as PaymentIcon,
-  AssignmentTurnedIn as AssignmentTurnedInIcon
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
 } from '@mui/icons-material';
 import ProgramsGrid from '@/components/programs/programs-grid';
 import ProgramInfoTab from '@/components/programs/program-info-tab';
@@ -51,17 +51,15 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`program-tab-${index}`}
       {...other}
     >
-      {value === index && (
-        <Box sx={{ p: 3 }}>
-          {children}
-        </Box>
-      )}
+      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
     </div>
   );
 }
 
 export default function ProgramsPage() {
-  const [selectedProgram, setSelectedProgram] = useState<MemberPrograms | null>(null);
+  const [selectedProgram, setSelectedProgram] = useState<MemberPrograms | null>(
+    null
+  );
   const [tabValue, setTabValue] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedWarning, setShowUnsavedWarning] = useState(false);
@@ -72,8 +70,6 @@ export default function ProgramsPage() {
     setSelectedProgram(program);
     setTabValue(0); // Reset to first tab when selecting new program
   };
-
-  
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     // If there are unsaved changes on any editable tab, show warning instead of changing tabs
@@ -97,9 +93,9 @@ export default function ProgramsPage() {
           start_date: updatedProgram.start_date,
           program_status_id: updatedProgram.program_status_id,
           active_flag: updatedProgram.active_flag,
-        }
+        },
       });
-      
+
       // Update local state after successful API call
       setSelectedProgram(updatedProgram);
       setHasUnsavedChanges(false);
@@ -126,10 +122,18 @@ export default function ProgramsPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, height: '100vh', width: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      sx={{
+        p: { xs: 2, md: 3 },
+        height: '100vh',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
       {/* Programs Grid - matches Program Templates page exactly */}
       <Box sx={{ mb: 2 }}>
-        <ProgramsGrid 
+        <ProgramsGrid
           onProgramSelect={handleProgramSelect}
           selectedProgram={selectedProgram}
         />
@@ -141,78 +145,88 @@ export default function ProgramsPage() {
           <Card sx={{ height: '100%' }}>
             <CardContent sx={{ height: '100%', overflow: 'auto' }}>
               <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                <Tabs 
-                  value={tabValue} 
-                  onChange={handleTabChange} 
+                <Tabs
+                  value={tabValue}
+                  onChange={handleTabChange}
                   aria-label="program tabs"
                   sx={{
                     '& .MuiTab-root': {
                       minHeight: 44,
                       paddingX: 4,
                       marginX: 1,
-                    }
+                    },
                   }}
                 >
-                  <Tab 
-                    icon={<DescriptionIcon />} 
-                    label="PROGRAM" 
+                  <Tab
+                    icon={<DescriptionIcon />}
+                    label="PROGRAM"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<AttachMoneyIcon />} 
-                    label="Financials" 
+                  <Tab
+                    icon={<AttachMoneyIcon />}
+                    label="Financials"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<PaymentIcon />} 
-                    label="Payments" 
+                  <Tab
+                    icon={<PaymentIcon />}
+                    label="Payments"
                     iconPosition="start"
                   />
-                  <Tab 
-                    icon={<InventoryIcon />} 
-                    label="Items" 
+                  <Tab
+                    icon={<InventoryIcon />}
+                    label="Items"
                     iconPosition="start"
                   />
-                  <Tab icon={<AssignmentIcon />} label="Tasks" iconPosition="start" />
-                  <Tab 
-                    icon={<AssignmentTurnedInIcon />} 
-                    label="Script" 
+                  <Tab
+                    icon={<AssignmentIcon />}
+                    label="Tasks"
                     iconPosition="start"
                   />
-                  <Tab icon={<AssignmentIcon />} label="To Do" iconPosition="start" />
+                  <Tab
+                    icon={<AssignmentTurnedInIcon />}
+                    label="Script"
+                    iconPosition="start"
+                  />
+                  <Tab
+                    icon={<AssignmentIcon />}
+                    label="To Do"
+                    iconPosition="start"
+                  />
                 </Tabs>
               </Box>
-              
+
               <TabPanel value={tabValue} index={0}>
-                <ProgramInfoTab 
+                <ProgramInfoTab
                   program={selectedProgram}
                   onProgramUpdate={handleProgramUpdate}
                   onUnsavedChangesChange={setHasUnsavedChanges}
                 />
               </TabPanel>
-              
+
               <TabPanel value={tabValue} index={1}>
-                <ProgramFinancialsTab 
+                <ProgramFinancialsTab
                   program={selectedProgram}
                   onFinancesUpdate={() => {}}
-                  onUnsavedChangesChange={(hasChanges) => setHasUnsavedChanges(hasChanges)}
-                />
-              </TabPanel>
-              
-              <TabPanel value={tabValue} index={2}>
-                <ProgramPaymentsTab 
-                  program={selectedProgram}
+                  onUnsavedChangesChange={hasChanges =>
+                    setHasUnsavedChanges(hasChanges)
+                  }
                 />
               </TabPanel>
 
+              <TabPanel value={tabValue} index={2}>
+                <ProgramPaymentsTab program={selectedProgram} />
+              </TabPanel>
+
               <TabPanel value={tabValue} index={3}>
-                <ProgramItemsTab 
+                <ProgramItemsTab
                   program={selectedProgram}
-                  onProgramUpdate={(updatedProgram) => setSelectedProgram(updatedProgram)}
+                  onProgramUpdate={updatedProgram =>
+                    setSelectedProgram(updatedProgram)
+                  }
                   onUnsavedChangesChange={setHasUnsavedChanges}
                 />
               </TabPanel>
-              
+
               <TabPanel value={tabValue} index={4}>
                 <ProgramTasksTab program={selectedProgram} />
               </TabPanel>
@@ -240,10 +254,19 @@ export default function ProgramsPage() {
           You have unsaved changes. If you continue, these changes will be lost.
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleUnsavedWarningCancel} color="primary" sx={{ borderRadius: 0 }}>
+          <Button
+            onClick={handleUnsavedWarningCancel}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
             Cancel
           </Button>
-          <Button onClick={handleUnsavedWarningConfirm} color="error" variant="contained" sx={{ borderRadius: 0 }}>
+          <Button
+            onClick={handleUnsavedWarningConfirm}
+            color="error"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+          >
             Continue (Lose Changes)
           </Button>
         </DialogActions>

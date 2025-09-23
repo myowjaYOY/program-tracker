@@ -8,9 +8,12 @@ export async function GET(
   try {
     const { table, recordId } = await params;
     const supabase = await createClient();
-    
+
     // Check authentication
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession();
     if (authError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -25,12 +28,17 @@ export async function GET(
 
     if (error) {
       console.error('Error fetching audit logs:', error);
-      return NextResponse.json({ error: 'Failed to fetch audit logs' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch audit logs' },
+        { status: 500 }
+      );
     }
 
     // Get unique user IDs from audit logs
-    const userIds = [...new Set(auditLogs?.map(log => log.changed_by).filter(Boolean) || [])];
-    
+    const userIds = [
+      ...new Set(auditLogs?.map(log => log.changed_by).filter(Boolean) || []),
+    ];
+
     // Fetch user information for all unique user IDs
     let users: any[] = [];
     if (userIds.length > 0) {
@@ -38,7 +46,7 @@ export async function GET(
         .from('users')
         .select('id, email, full_name')
         .in('id', userIds);
-      
+
       if (usersError) {
         console.error('Error fetching users:', usersError);
       } else {
@@ -50,19 +58,22 @@ export async function GET(
     const userMap = new Map(users.map(user => [user.id, user]));
 
     // Transform the data to include user information
-    const transformedLogs = auditLogs?.map(log => {
-      const user = userMap.get(log.changed_by);
-      return {
-        ...log,
-        changed_by_email: user?.email || null,
-        changed_by_name: user?.full_name || null,
-      };
-    }) || [];
+    const transformedLogs =
+      auditLogs?.map(log => {
+        const user = userMap.get(log.changed_by);
+        return {
+          ...log,
+          changed_by_email: user?.email || null,
+          changed_by_name: user?.full_name || null,
+        };
+      }) || [];
 
     return NextResponse.json({ data: transformedLogs });
-
   } catch (error) {
     console.error('Audit logs API error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

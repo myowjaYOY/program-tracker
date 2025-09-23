@@ -2,14 +2,20 @@
 
 import React from 'react';
 import { GridColDef } from '@mui/x-data-grid';
-import BaseDataTable, { commonColumns } from '@/components/tables/base-data-table';
+import BaseDataTable, {
+  commonColumns,
+} from '@/components/tables/base-data-table';
 import { PaymentStatus } from '@/types/database.types';
 import { PaymentStatusFormData } from '@/lib/validations/payment-status';
-import { usePaymentStatus, useDeletePaymentStatus } from '@/lib/hooks/use-payment-status';
+import {
+  usePaymentStatus,
+  useDeletePaymentStatus,
+} from '@/lib/hooks/use-payment-status';
 import PaymentStatusForm from '@/components/forms/payment-status-form';
 
 // Extended interface for table display
-interface PaymentStatusEntity extends Omit<PaymentStatus, 'created_at' | 'updated_at'> {
+interface PaymentStatusEntity
+  extends Omit<PaymentStatus, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -65,32 +71,40 @@ export default function PaymentStatusTable() {
     if (!open) return null;
 
     // Convert PaymentStatusEntity to PaymentStatusFormData for the form
-    const formData: Partial<PaymentStatusFormData> & { payment_status_id?: number } =
-      initialValues
-        ? {
-            payment_status_name: initialValues.payment_status_name || '',
-            payment_status_description: initialValues.payment_status_description || '',
-            active_flag: initialValues.active_flag,
-            ...(initialValues.payment_status_id && {
-              payment_status_id: initialValues.payment_status_id,
-            }),
-          }
-        : {};
+    const formData: Partial<PaymentStatusFormData> & {
+      payment_status_id?: number;
+    } = initialValues
+      ? {
+          payment_status_name: initialValues.payment_status_name || '',
+          payment_status_description:
+            initialValues.payment_status_description || '',
+          active_flag: initialValues.active_flag,
+          ...(initialValues.payment_status_id && {
+            payment_status_id: initialValues.payment_status_id,
+          }),
+        }
+      : {};
 
     return (
-      <PaymentStatusForm initialValues={formData} onSuccess={onClose} mode={mode} />
+      <PaymentStatusForm
+        initialValues={formData}
+        onSuccess={onClose}
+        mode={mode}
+      />
     );
   };
 
   // Transform payment status data to include id property and handle null dates
-  const paymentStatusWithId: PaymentStatusEntity[] = (paymentStatus || []).map(status => ({
-    ...status,
-    id: status.payment_status_id,
-    created_at: status.created_at || new Date().toISOString(),
-    updated_at: status.updated_at || new Date().toISOString(),
-    created_by: status.created_by_email || '-',
-    updated_by: status.updated_by_email || '-',
-  }));
+  const paymentStatusWithId: PaymentStatusEntity[] = (paymentStatus || []).map(
+    status => ({
+      ...status,
+      id: status.payment_status_id,
+      created_at: status.created_at || new Date().toISOString(),
+      updated_at: status.updated_at || new Date().toISOString(),
+      created_by: status.created_by_email || '-',
+      updated_by: status.updated_by_email || '-',
+    })
+  );
 
   return (
     <BaseDataTable<PaymentStatusEntity>

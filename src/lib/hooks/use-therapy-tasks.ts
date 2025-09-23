@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { TherapyTasks } from '@/types/database.types';
-import { TherapyTaskFormData, TherapyTaskUpdateData } from '@/lib/validations/therapy-task';
+import {
+  TherapyTaskFormData,
+  TherapyTaskUpdateData,
+} from '@/lib/validations/therapy-task';
 
 const therapyTaskKeys = {
   all: ['therapy-tasks'] as const,
@@ -16,7 +19,8 @@ export function useTherapyTasks() {
     queryFn: async () => {
       const res = await fetch('/api/therapy-tasks');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch therapy tasks');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch therapy tasks');
       return json.data as TherapyTasks[];
     },
   });
@@ -28,7 +32,8 @@ export function useActiveTherapyTasks() {
     queryFn: async () => {
       const res = await fetch('/api/therapy-tasks');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch therapy tasks');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch therapy tasks');
       return (json.data as TherapyTasks[]).filter(t => t.active_flag);
     },
   });
@@ -40,9 +45,12 @@ export function useTherapyTasksByTherapy(therapyId?: number) {
     queryFn: async () => {
       const res = await fetch('/api/therapy-tasks');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch therapy tasks');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch therapy tasks');
       const allTasks = json.data as TherapyTasks[];
-      return therapyId ? allTasks.filter(t => t.therapy_id === therapyId && t.active_flag) : allTasks;
+      return therapyId
+        ? allTasks.filter(t => t.therapy_id === therapyId && t.active_flag)
+        : allTasks;
     },
     enabled: !!therapyId,
   });
@@ -58,7 +66,8 @@ export function useCreateTherapyTask() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create therapy task');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create therapy task');
       return json.data as TherapyTasks;
     },
     onSuccess: () => {
@@ -81,7 +90,8 @@ export function useUpdateTherapyTask() {
         body: JSON.stringify(input),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update therapy task');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update therapy task');
       return json.data as TherapyTasks;
     },
     onSuccess: () => {
@@ -102,12 +112,15 @@ export function useDeleteTherapyTask() {
         method: 'DELETE',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to delete therapy task');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to delete therapy task');
       return id;
     },
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: therapyTaskKeys.all });
-      const prev = queryClient.getQueryData<TherapyTasks[]>(therapyTaskKeys.list());
+      const prev = queryClient.getQueryData<TherapyTasks[]>(
+        therapyTaskKeys.list()
+      );
       if (prev) {
         queryClient.setQueryData(
           therapyTaskKeys.list(),

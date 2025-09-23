@@ -52,23 +52,35 @@ interface AddProgramWizardProps {
 
 const steps = ['Select Lead', 'Select Program Template', 'Program Details'];
 
-export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgramWizardProps) {
+export default function AddProgramWizard({
+  open,
+  onClose,
+  onSuccess,
+}: AddProgramWizardProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
-  
+
   const { data: allLeads = [] } = useLeads();
   const { data: allProgramTemplates = [] } = useProgramTemplates();
   const { data: programStatuses = [] } = useActiveProgramStatus();
 
   // Filter leads: exclude Lost, UNK, or No PME status and sort by first name
   const leads = allLeads
-    .filter(lead => (lead as any).status_name && !['Lost', 'UNK', 'No PME'].includes((lead as any).status_name))
+    .filter(
+      lead =>
+        (lead as any).status_name &&
+        !['Lost', 'UNK', 'No PME'].includes((lead as any).status_name)
+    )
     .sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
 
   // Filter program templates: only active ones and sort by name
   const programTemplates = allProgramTemplates
     .filter(template => template.active_flag)
-    .sort((a, b) => (a.program_template_name || '').localeCompare(b.program_template_name || ''));
+    .sort((a, b) =>
+      (a.program_template_name || '').localeCompare(
+        b.program_template_name || ''
+      )
+    );
   const createProgram = useCreateMemberProgram();
 
   const {
@@ -89,7 +101,6 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
     },
   });
 
-
   // Reset form when dialog opens
   React.useEffect(() => {
     if (open) {
@@ -105,9 +116,8 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
   }, [open, reset]);
 
   const handleNext = async () => {
-    
     let isValidStep = false;
-    
+
     if (activeStep === 0) {
       isValidStep = await trigger(['lead_id']);
     } else if (activeStep === 1) {
@@ -135,10 +145,10 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
   const onSubmit = async (data: WizardFormData) => {
     try {
       // Find the "Quote" status ID
-      const quoteStatus = programStatuses.find(status => 
-        status.status_name.toLowerCase() === 'quote'
+      const quoteStatus = programStatuses.find(
+        status => status.status_name.toLowerCase() === 'quote'
       );
-      
+
       await createProgram.mutateAsync({
         program_template_name: data.program_template_name,
         description: data.description || '',
@@ -169,36 +179,40 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Choose the lead for whom you're creating this program.
             </Typography>
-            
+
             <Controller
               key={`lead_id_${activeStep}`}
               name="lead_id"
               control={control}
               render={({ field }) => {
                 return (
-                <FormControl fullWidth error={!!errors.lead_id}>
-                  <InputLabel>Lead</InputLabel>
-                  <Select
-                    label="Lead"
-                    value={field.value || ''}
-                    onChange={(e) => {
-                      field.onChange(Number(e.target.value));
-                    }}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                  >
-                    {leads.map((lead) => (
-                      <MenuItem key={lead.lead_id} value={lead.lead_id}>
-                        {lead.first_name} {lead.last_name} ({lead.email})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.lead_id && (
-                    <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-                      {errors.lead_id.message}
-                    </Typography>
-                  )}
-                </FormControl>
+                  <FormControl fullWidth error={!!errors.lead_id}>
+                    <InputLabel>Lead</InputLabel>
+                    <Select
+                      label="Lead"
+                      value={field.value || ''}
+                      onChange={e => {
+                        field.onChange(Number(e.target.value));
+                      }}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    >
+                      {leads.map(lead => (
+                        <MenuItem key={lead.lead_id} value={lead.lead_id}>
+                          {lead.first_name} {lead.last_name} ({lead.email})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.lead_id && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ mt: 1, display: 'block' }}
+                      >
+                        {errors.lead_id.message}
+                      </Typography>
+                    )}
+                  </FormControl>
                 );
               }}
             />
@@ -212,55 +226,75 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
               Select Program Template
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose the program template that will be used as the basis for this program.
+              Choose the program template that will be used as the basis for
+              this program.
             </Typography>
-            
+
             <Controller
               key={`source_template_id_${activeStep}`}
               name="source_template_id"
               control={control}
               render={({ field }) => {
                 return (
-                <FormControl fullWidth error={!!errors.source_template_id}>
-                  <InputLabel>Program Template</InputLabel>
-                  <Select
-                    label="Program Template"
-                    value={field.value ? String(field.value) : ''}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      field.onChange(value === '' ? 0 : Number(value));
-                      // Auto-populate program name and description from template
-                      if (value !== '') {
-                        const selectedTemplate = programTemplates.find(t => t.program_template_id === Number(value));
-                        if (selectedTemplate) {
-                          setValue('program_template_name', selectedTemplate.program_template_name || '');
-                          setValue('description', selectedTemplate.description || '');
+                  <FormControl fullWidth error={!!errors.source_template_id}>
+                    <InputLabel>Program Template</InputLabel>
+                    <Select
+                      label="Program Template"
+                      value={field.value ? String(field.value) : ''}
+                      onChange={e => {
+                        const value = e.target.value;
+                        field.onChange(value === '' ? 0 : Number(value));
+                        // Auto-populate program name and description from template
+                        if (value !== '') {
+                          const selectedTemplate = programTemplates.find(
+                            t => t.program_template_id === Number(value)
+                          );
+                          if (selectedTemplate) {
+                            setValue(
+                              'program_template_name',
+                              selectedTemplate.program_template_name || ''
+                            );
+                            setValue(
+                              'description',
+                              selectedTemplate.description || ''
+                            );
+                          }
                         }
-                      }
-                    }}
-                    onBlur={field.onBlur}
-                    name={field.name}
-                  >
-                    <MenuItem value="">
-                      <em>Select a program template</em>
-                    </MenuItem>
-                    {programTemplates.map((template) => (
-                      <MenuItem key={template.program_template_id} value={template.program_template_id}>
-                        {template.program_template_name}
-                        {template.description && (
-                          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                            - {template.description}
-                          </Typography>
-                        )}
+                      }}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    >
+                      <MenuItem value="">
+                        <em>Select a program template</em>
                       </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.source_template_id && (
-                    <Typography variant="caption" color="error" sx={{ mt: 1, display: 'block' }}>
-                      {errors.source_template_id.message}
-                    </Typography>
-                  )}
-                </FormControl>
+                      {programTemplates.map(template => (
+                        <MenuItem
+                          key={template.program_template_id}
+                          value={template.program_template_id}
+                        >
+                          {template.program_template_name}
+                          {template.description && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ ml: 1 }}
+                            >
+                              - {template.description}
+                            </Typography>
+                          )}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.source_template_id && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ mt: 1, display: 'block' }}
+                      >
+                        {errors.source_template_id.message}
+                      </Typography>
+                    )}
+                  </FormControl>
                 );
               }}
             />
@@ -276,7 +310,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               Provide the final details for the program.
             </Typography>
-            
+
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <Controller
                 name="program_template_name"
@@ -292,7 +326,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                   />
                 )}
               />
-              
+
               <Controller
                 name="description"
                 control={control}
@@ -308,7 +342,6 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
                   />
                 )}
               />
-              
             </Box>
           </Box>
         );
@@ -325,7 +358,7 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
       maxWidth="sm"
       fullWidth
       PaperProps={{
-        sx: { borderRadius: 0 }
+        sx: { borderRadius: 0 },
       }}
     >
       <DialogTitle>
@@ -348,22 +381,16 @@ export default function AddProgramWizard({ open, onClose, onSuccess }: AddProgra
       </DialogContent>
 
       <DialogActions sx={{ p: 3, gap: 1 }}>
-        <Button
-          onClick={handleClose}
-          sx={{ borderRadius: 0 }}
-        >
+        <Button onClick={handleClose} sx={{ borderRadius: 0 }}>
           Cancel
         </Button>
-        
+
         {activeStep > 0 && (
-          <Button
-            onClick={handleBack}
-            sx={{ borderRadius: 0 }}
-          >
+          <Button onClick={handleBack} sx={{ borderRadius: 0 }}>
             Back
           </Button>
         )}
-        
+
         {activeStep < steps.length - 1 ? (
           <Button
             onClick={handleNext}

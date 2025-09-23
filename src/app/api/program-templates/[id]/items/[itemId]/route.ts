@@ -7,8 +7,11 @@ export async function PUT(
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -16,10 +19,17 @@ export async function PUT(
   try {
     const { id, itemId } = await context.params;
     const body = await req.json();
-    
+
     // Validate required fields
-    if (!body.therapy_id || !body.quantity || body.days_from_start === undefined) {
-      return NextResponse.json({ error: 'Therapy ID, quantity, and days from start are required' }, { status: 400 });
+    if (
+      !body.therapy_id ||
+      !body.quantity ||
+      body.days_from_start === undefined
+    ) {
+      return NextResponse.json(
+        { error: 'Therapy ID, quantity, and days from start are required' },
+        { status: 400 }
+      );
     }
 
     const updateData = {
@@ -42,7 +52,10 @@ export async function PUT(
 
     if (error) {
       console.error('Error updating program template item:', error);
-      return NextResponse.json({ error: 'Failed to update program template item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to update program template item' },
+        { status: 500 }
+      );
     }
 
     // Update the program template's calculated fields
@@ -51,7 +64,10 @@ export async function PUT(
     return NextResponse.json({ data });
   } catch (error) {
     console.error('Error in program template item PUT:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -60,8 +76,11 @@ export async function DELETE(
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -72,40 +91,53 @@ export async function DELETE(
 
     const { error } = await supabase
       .from('program_template_items')
-      .update({ 
+      .update({
         active_flag: false,
-        updated_by: session.user.id 
+        updated_by: session.user.id,
       })
       .eq('program_template_items_id', parseInt(itemId))
       .eq('program_template_id', parseInt(id));
 
     if (error) {
       console.error('Error deleting program template item:', error);
-      return NextResponse.json({ error: 'Failed to delete program template item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to delete program template item' },
+        { status: 500 }
+      );
     }
 
-    console.log(`Successfully deleted item ${itemId}, now updating template ${id} calculated fields`);
+    console.log(
+      `Successfully deleted item ${itemId}, now updating template ${id} calculated fields`
+    );
     // Update the program template's calculated fields
     await updateTemplateCalculatedFields(supabase, parseInt(id));
 
     return NextResponse.json({ data: { success: true } });
   } catch (error) {
     console.error('Error in program template item DELETE:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-async function updateTemplateCalculatedFields(supabase: any, templateId: number) {
+async function updateTemplateCalculatedFields(
+  supabase: any,
+  templateId: number
+) {
   try {
     console.log(`Updating calculated fields for template ${templateId}`);
-    
+
     // Get all items for this template with therapy data
     const { data: items, error: itemsError } = await supabase
       .from('program_template_items')
-      .select(`
+      .select(
+        `
         quantity,
         therapies(cost, charge)
-      `)
+      `
+      )
       .eq('program_template_id', templateId)
       .eq('active_flag', true);
 
@@ -114,7 +146,10 @@ async function updateTemplateCalculatedFields(supabase: any, templateId: number)
       return;
     }
 
-    console.log(`Found ${items?.length || 0} active items for template ${templateId}:`, items);
+    console.log(
+      `Found ${items?.length || 0} active items for template ${templateId}:`,
+      items
+    );
 
     // Transform items to match the expected format for calculation
     const transformedItems = (items || []).map(item => ({
@@ -144,10 +179,13 @@ async function updateTemplateCalculatedFields(supabase: any, templateId: number)
       console.error('Update query details:', {
         templateId,
         totals,
-        updateData
+        updateData,
       });
     } else {
-      console.log(`Successfully updated template ${templateId} calculated fields:`, updateData);
+      console.log(
+        `Successfully updated template ${templateId} calculated fields:`,
+        updateData
+      );
     }
   } catch (error) {
     console.error('Error in updateTemplateCalculatedFields:', error);

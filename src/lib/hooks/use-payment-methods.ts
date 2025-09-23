@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PaymentMethods } from '@/types/database.types';
-import { PaymentMethodsFormData, PaymentMethodsUpdateData } from '@/lib/validations/payment-methods';
+import {
+  PaymentMethodsFormData,
+  PaymentMethodsUpdateData,
+} from '@/lib/validations/payment-methods';
 
 const paymentMethodsKeys = {
   all: ['payment-methods'] as const,
@@ -16,7 +19,8 @@ export function usePaymentMethods() {
     queryFn: async () => {
       const res = await fetch('/api/payment-methods');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch payment methods');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch payment methods');
       return json.data as PaymentMethods[];
     },
   });
@@ -28,31 +32,35 @@ export function useActivePaymentMethods() {
     queryFn: async () => {
       const res = await fetch('/api/payment-methods');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch payment methods');
-      return (json.data as PaymentMethods[]).filter(method => method.active_flag);
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch payment methods');
+      return (json.data as PaymentMethods[]).filter(
+        method => method.active_flag
+      );
     },
   });
 }
 
 export function useCreatePaymentMethods() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<PaymentMethods, Error, PaymentMethodsFormData>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const res = await fetch('/api/payment-methods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create payment method');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create payment method');
       return json.data as PaymentMethods;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: paymentMethodsKeys.all });
       toast.success('Payment method created successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to create payment method');
     },
   });
@@ -60,8 +68,12 @@ export function useCreatePaymentMethods() {
 
 export function useUpdatePaymentMethods() {
   const queryClient = useQueryClient();
-  
-  return useMutation<PaymentMethods, Error, { id: string; data: PaymentMethodsUpdateData }>({
+
+  return useMutation<
+    PaymentMethods,
+    Error,
+    { id: string; data: PaymentMethodsUpdateData }
+  >({
     mutationFn: async ({ id, data }) => {
       const res = await fetch(`/api/payment-methods/${id}`, {
         method: 'PUT',
@@ -69,15 +81,18 @@ export function useUpdatePaymentMethods() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update payment method');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update payment method');
       return json.data as PaymentMethods;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: paymentMethodsKeys.all });
-      queryClient.invalidateQueries({ queryKey: paymentMethodsKeys.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: paymentMethodsKeys.detail(variables.id),
+      });
       toast.success('Payment method updated successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to update payment method');
     },
   });
@@ -85,9 +100,9 @@ export function useUpdatePaymentMethods() {
 
 export function useDeletePaymentMethods() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<void, Error, string>({
-    mutationFn: async (id) => {
+    mutationFn: async id => {
       const res = await fetch(`/api/payment-methods/${id}`, {
         method: 'DELETE',
       });
@@ -100,9 +115,8 @@ export function useDeletePaymentMethods() {
       queryClient.invalidateQueries({ queryKey: paymentMethodsKeys.all });
       toast.success('Payment method deleted successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to delete payment method');
     },
   });
 }
-

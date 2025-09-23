@@ -11,9 +11,12 @@ export const memberProgramPaymentsSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-export const memberProgramPaymentsUpdateSchema = memberProgramPaymentsSchema.partial();
+export const memberProgramPaymentsUpdateSchema =
+  memberProgramPaymentsSchema.partial();
 
-export type MemberProgramPaymentsFormData = z.infer<typeof memberProgramPaymentsSchema>;
-export type MemberProgramPaymentsUpdateData = z.infer<typeof memberProgramPaymentsUpdateSchema>;
-
-
+export type MemberProgramPaymentsFormData = z.infer<
+  typeof memberProgramPaymentsSchema
+>;
+export type MemberProgramPaymentsUpdateData = z.infer<
+  typeof memberProgramPaymentsUpdateSchema
+>;

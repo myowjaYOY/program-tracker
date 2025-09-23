@@ -4,7 +4,8 @@ import { memberProgramKeys } from './use-member-programs';
 
 export const memberProgramFinancesKeys = {
   all: ['member-program-finances'] as const,
-  byProgram: (programId: number) => [...memberProgramFinancesKeys.all, 'program', programId] as const,
+  byProgram: (programId: number) =>
+    [...memberProgramFinancesKeys.all, 'program', programId] as const,
 };
 
 export function useMemberProgramFinances(programId: number) {
@@ -29,8 +30,12 @@ export function useMemberProgramFinances(programId: number) {
 
 export function useCreateMemberProgramFinances() {
   const queryClient = useQueryClient();
-  
-  return useMutation<any, Error, { programId: number; data: MemberProgramFinancesFormData }>({
+
+  return useMutation<
+    any,
+    Error,
+    { programId: number; data: MemberProgramFinancesFormData }
+  >({
     mutationFn: async ({ programId, data }) => {
       const res = await fetch(`/api/member-programs/${programId}/finances`, {
         method: 'POST',
@@ -39,12 +44,17 @@ export function useCreateMemberProgramFinances() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create program finances');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create program finances');
       return json.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramFinancesKeys.byProgram(variables.programId) });
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramFinancesKeys.byProgram(variables.programId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(variables.programId),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
@@ -52,8 +62,12 @@ export function useCreateMemberProgramFinances() {
 
 export function useUpdateMemberProgramFinances() {
   const queryClient = useQueryClient();
-  
-  return useMutation<any, Error, { programId: number; data: Partial<MemberProgramFinancesFormData> }>({
+
+  return useMutation<
+    any,
+    Error,
+    { programId: number; data: Partial<MemberProgramFinancesFormData> }
+  >({
     mutationFn: async ({ programId, data }) => {
       const res = await fetch(`/api/member-programs/${programId}/finances`, {
         method: 'PUT',
@@ -72,13 +86,16 @@ export function useUpdateMemberProgramFinances() {
       return json.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramFinancesKeys.byProgram(variables.programId) });
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramFinancesKeys.byProgram(variables.programId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(variables.programId),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
-    onError: (_err) => {
+    onError: _err => {
       // Do not crash the app; caller shows toast and UI stays responsive
-    }
+    },
   });
 }
-

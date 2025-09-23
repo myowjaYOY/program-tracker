@@ -24,7 +24,9 @@ export class GHLService {
   /**
    * Create a lead from GHL contact data
    */
-  async createLeadFromGHL(contact: GHLContact): Promise<{ success: boolean; leadId?: number; error?: string }> {
+  async createLeadFromGHL(
+    contact: GHLContact
+  ): Promise<{ success: boolean; leadId?: number; error?: string }> {
     try {
       // Check if lead already exists
       const { data: existingLead } = await this.supabase
@@ -34,9 +36,9 @@ export class GHLService {
         .single();
 
       if (existingLead) {
-        return { 
-          success: false, 
-          error: `Lead with email ${contact.email} already exists` 
+        return {
+          success: false,
+          error: `Lead with email ${contact.email} already exists`,
         };
       }
 
@@ -79,22 +81,21 @@ export class GHLService {
 
       if (error) {
         console.error('Error creating lead:', error);
-        return { 
-          success: false, 
-          error: `Failed to create lead: ${error.message}` 
+        return {
+          success: false,
+          error: `Failed to create lead: ${error.message}`,
         };
       }
 
-      return { 
-        success: true, 
-        leadId: newLead.lead_id 
+      return {
+        success: true,
+        leadId: newLead.lead_id,
       };
-
     } catch (error) {
       console.error('GHL service error:', error);
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }
@@ -176,6 +177,3 @@ export class GHLService {
     return newStatus.status_id;
   }
 }
-
-
-

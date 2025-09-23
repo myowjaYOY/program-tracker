@@ -99,8 +99,10 @@ export default function TherapyTypeTable() {
       id: therapyType.therapy_type_id,
       created_at: therapyType.created_at || new Date().toISOString(),
       updated_at: therapyType.updated_at || new Date().toISOString(),
-      created_by: (therapyType as { created_by_email?: string }).created_by_email || '-',
-      updated_by: (therapyType as { updated_by_email?: string }).updated_by_email || '-',
+      created_by:
+        (therapyType as { created_by_email?: string }).created_by_email || '-',
+      updated_by:
+        (therapyType as { updated_by_email?: string }).updated_by_email || '-',
     })
   );
 

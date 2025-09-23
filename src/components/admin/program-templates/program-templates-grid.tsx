@@ -6,12 +6,16 @@ import BaseDataTable, {
   commonColumns,
 } from '@/components/tables/base-data-table';
 import ProgramTemplateForm from './program-template-form';
-import { useProgramTemplates, useDeleteProgramTemplate } from '@/lib/hooks/use-program-templates';
+import {
+  useProgramTemplates,
+  useDeleteProgramTemplate,
+} from '@/lib/hooks/use-program-templates';
 import { ProgramTemplate } from '@/types/database.types';
 import { ProgramTemplateFormData } from '@/lib/validations/program-template';
 
 // Extend ProgramTemplate to satisfy BaseEntity interface
-interface ProgramTemplateEntity extends Omit<ProgramTemplate, 'created_at' | 'updated_at'> {
+interface ProgramTemplateEntity
+  extends Omit<ProgramTemplate, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -92,16 +96,18 @@ interface ProgramTemplatesGridProps {
   selectedTemplate: ProgramTemplate | null;
 }
 
-export default function ProgramTemplatesGrid({ onTemplateSelect, selectedTemplate }: ProgramTemplatesGridProps) {
+export default function ProgramTemplatesGrid({
+  onTemplateSelect,
+  selectedTemplate,
+}: ProgramTemplatesGridProps) {
   const { data: templates, isLoading, error } = useProgramTemplates();
   const deleteTemplate = useDeleteProgramTemplate();
-  
 
   // Debug logging
   console.log('ProgramTemplatesGrid render:', {
     templates,
     isLoading,
-    error
+    error,
   });
 
   const handleDelete = (id: string | number) => {
@@ -128,7 +134,9 @@ export default function ProgramTemplatesGrid({ onTemplateSelect, selectedTemplat
 
     // For create mode, don't pass any initialValues
     // For edit mode, pass the initialValues with program_template_id
-    const formData: Partial<ProgramTemplateFormData> & { program_template_id?: number } =
+    const formData: Partial<ProgramTemplateFormData> & {
+      program_template_id?: number;
+    } =
       mode === 'edit' && initialValues
         ? {
             program_template_name: initialValues.program_template_name || '',
@@ -137,21 +145,27 @@ export default function ProgramTemplatesGrid({ onTemplateSelect, selectedTemplat
             program_template_id: initialValues.program_template_id,
           }
         : {};
-    
+
     return (
-      <ProgramTemplateForm initialValues={formData} onSuccess={onClose} mode={mode} />
+      <ProgramTemplateForm
+        initialValues={formData}
+        onSuccess={onClose}
+        mode={mode}
+      />
     );
   };
 
   // Transform templates data to include id property and handle null dates
-  const templatesWithId: ProgramTemplateEntity[] = (templates || []).map(template => ({
-    ...template,
-    id: template.program_template_id,
-    created_at: template.created_at || new Date().toISOString(),
-    updated_at: template.updated_at || new Date().toISOString(),
-    created_by: template.created_by_email || '-',
-    updated_by: template.updated_by_email || '-',
-  }));
+  const templatesWithId: ProgramTemplateEntity[] = (templates || []).map(
+    template => ({
+      ...template,
+      id: template.program_template_id,
+      created_at: template.created_at || new Date().toISOString(),
+      updated_at: template.updated_at || new Date().toISOString(),
+      created_by: template.created_by_email || '-',
+      updated_by: template.updated_by_email || '-',
+    })
+  );
 
   // Debug: Check the first template's calculated fields
   if (templatesWithId.length > 0) {
@@ -185,7 +199,6 @@ export default function ProgramTemplatesGrid({ onTemplateSelect, selectedTemplat
     };
     onTemplateSelect(template);
   };
-
 
   return (
     <BaseDataTable<ProgramTemplateEntity>

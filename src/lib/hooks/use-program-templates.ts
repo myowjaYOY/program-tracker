@@ -16,7 +16,8 @@ export function useProgramTemplates() {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch program templates');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch program templates');
       return json.data as ProgramTemplate[];
     },
   });
@@ -30,7 +31,10 @@ export function useActiveProgramTemplates() {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch active program templates');
+      if (!res.ok)
+        throw new Error(
+          json.error || 'Failed to fetch active program templates'
+        );
       return json.data as ProgramTemplate[];
     },
   });
@@ -44,7 +48,8 @@ export function useProgramTemplate(id: number) {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch program template');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch program template');
       return json.data as ProgramTemplate;
     },
     enabled: !!id,
@@ -53,9 +58,9 @@ export function useProgramTemplate(id: number) {
 
 export function useCreateProgramTemplate() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<ProgramTemplate, Error, Partial<ProgramTemplate>>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const res = await fetch('/api/program-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,7 +68,8 @@ export function useCreateProgramTemplate() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create program template');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create program template');
       return json.data as ProgramTemplate;
     },
     onSuccess: () => {
@@ -74,8 +80,12 @@ export function useCreateProgramTemplate() {
 
 export function useUpdateProgramTemplate() {
   const queryClient = useQueryClient();
-  
-  return useMutation<ProgramTemplate, Error, { id: number; data: Partial<ProgramTemplate> }>({
+
+  return useMutation<
+    ProgramTemplate,
+    Error,
+    { id: number; data: Partial<ProgramTemplate> }
+  >({
     mutationFn: async ({ id, data }) => {
       const res = await fetch(`/api/program-templates/${id}`, {
         method: 'PUT',
@@ -84,21 +94,24 @@ export function useUpdateProgramTemplate() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update program template');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update program template');
       return json.data as ProgramTemplate;
     },
-    onSuccess: (data) => {
+    onSuccess: data => {
       queryClient.invalidateQueries({ queryKey: programTemplateKeys.all });
-      queryClient.invalidateQueries({ queryKey: programTemplateKeys.detail(data.program_template_id) });
+      queryClient.invalidateQueries({
+        queryKey: programTemplateKeys.detail(data.program_template_id),
+      });
     },
   });
 }
 
 export function useDeleteProgramTemplate() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<void, Error, number>({
-    mutationFn: async (id) => {
+    mutationFn: async id => {
       const res = await fetch(`/api/program-templates/${id}`, {
         method: 'DELETE',
         credentials: 'include',

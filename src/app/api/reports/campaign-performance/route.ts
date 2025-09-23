@@ -7,16 +7,14 @@ export async function GET(_req: NextRequest) {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  
+
   if (userError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     // Get campaign performance data with all calculations done in the query
-    const { data, error } = await supabase
-      .from('campaigns')
-      .select(`
+    const { data, error } = await supabase.from('campaigns').select(`
         campaign_id,
         campaign_name,
         campaign_date,
@@ -36,66 +34,75 @@ export async function GET(_req: NextRequest) {
     }
 
     // Process the data to calculate metrics
-    const campaignPerformance = data?.map(campaign => {
-      const leads = campaign.leads || [];
-      
-      // Count leads by status
-      const totalLeads = leads.length;
-      const wonLeads = leads.filter(lead => lead.status?.status_name === 'Won').length;
-      const lostLeads = leads.filter(lead => lead.status?.status_name === 'Lost').length;
-      const noPmeLeads = leads.filter(lead => lead.status?.status_name === 'No PME').length;
-      const activeLeads = totalLeads - wonLeads - lostLeads - noPmeLeads;
+    const campaignPerformance =
+      data?.map(campaign => {
+        const leads = campaign.leads || [];
 
-      // Calculate conversion rate
-      const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
+        // Count leads by status
+        const totalLeads = leads.length;
+        const wonLeads = leads.filter(
+          lead => lead.status?.status_name === 'Won'
+        ).length;
+        const lostLeads = leads.filter(
+          lead => lead.status?.status_name === 'Lost'
+        ).length;
+        const noPmeLeads = leads.filter(
+          lead => lead.status?.status_name === 'No PME'
+        ).length;
+        const activeLeads = totalLeads - wonLeads - lostLeads - noPmeLeads;
 
-      // Determine campaign status
-      let campaignStatus: 'Active' | 'Closed' | 'Mixed';
-      if (activeLeads > 0) {
-        campaignStatus = 'Active';
-      } else if (totalLeads === (wonLeads + lostLeads + noPmeLeads)) {
-        campaignStatus = 'Closed';
-      } else {
-        campaignStatus = 'Mixed';
-      }
+        // Calculate conversion rate
+        const conversionRate =
+          totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
 
-      // Calculate costs and ROI
-      const totalCost = (campaign.ad_spend || 0) + (campaign.food_cost || 0);
-      const costPerLead = totalLeads > 0 ? totalCost / totalLeads : 0;
-      
-      // Simple ROI calculation (assuming each won lead has a value)
-      const estimatedLeadValue = 100; // Placeholder value
-      const totalRevenue = wonLeads * estimatedLeadValue;
-      const roiPercentage = totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0;
+        // Determine campaign status
+        let campaignStatus: 'Active' | 'Closed' | 'Mixed';
+        if (activeLeads > 0) {
+          campaignStatus = 'Active';
+        } else if (totalLeads === wonLeads + lostLeads + noPmeLeads) {
+          campaignStatus = 'Closed';
+        } else {
+          campaignStatus = 'Mixed';
+        }
 
-      // Debug logging
-      console.log(`Campaign ${campaign.campaign_name}:`, {
-        totalLeads,
-        wonLeads,
-        conversionRate,
-        roiPercentage,
-        leads: leads.map(l => ({ status: l.status?.status_name }))
-      });
+        // Calculate costs and ROI
+        const totalCost = (campaign.ad_spend || 0) + (campaign.food_cost || 0);
+        const costPerLead = totalLeads > 0 ? totalCost / totalLeads : 0;
 
-      return {
-        id: `campaign-${campaign.campaign_id}`,
-        campaign_id: campaign.campaign_id,
-        campaign_name: campaign.campaign_name,
-        campaign_date: campaign.campaign_date,
-        vendor_name: campaign.vendor?.vendor_name || 'Unknown',
-        total_leads: totalLeads,
-        active_leads: activeLeads,
-        won_leads: wonLeads,
-        lost_leads: lostLeads,
-        no_pme_leads: noPmeLeads,
-        conversion_rate: conversionRate,
-        campaign_status: campaignStatus,
-        ad_spend: campaign.ad_spend,
-        food_cost: campaign.food_cost,
-        cost_per_lead: costPerLead,
-        roi_percentage: roiPercentage,
-      };
-    }) || [];
+        // Simple ROI calculation (assuming each won lead has a value)
+        const estimatedLeadValue = 100; // Placeholder value
+        const totalRevenue = wonLeads * estimatedLeadValue;
+        const roiPercentage =
+          totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0;
+
+        // Debug logging
+        console.log(`Campaign ${campaign.campaign_name}:`, {
+          totalLeads,
+          wonLeads,
+          conversionRate,
+          roiPercentage,
+          leads: leads.map(l => ({ status: l.status?.status_name })),
+        });
+
+        return {
+          id: `campaign-${campaign.campaign_id}`,
+          campaign_id: campaign.campaign_id,
+          campaign_name: campaign.campaign_name,
+          campaign_date: campaign.campaign_date,
+          vendor_name: campaign.vendor?.vendor_name || 'Unknown',
+          total_leads: totalLeads,
+          active_leads: activeLeads,
+          won_leads: wonLeads,
+          lost_leads: lostLeads,
+          no_pme_leads: noPmeLeads,
+          conversion_rate: conversionRate,
+          campaign_status: campaignStatus,
+          ad_spend: campaign.ad_spend,
+          food_cost: campaign.food_cost,
+          cost_per_lead: costPerLead,
+          roi_percentage: roiPercentage,
+        };
+      }) || [];
 
     // Debug logging
     console.log('Raw data from database:', data);
@@ -104,6 +111,9 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ data: campaignPerformance }, { status: 200 });
   } catch (error) {
     console.error('Campaign performance calculation error:', error);
-    return NextResponse.json({ error: 'Failed to calculate campaign performance' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to calculate campaign performance' },
+      { status: 500 }
+    );
   }
 }

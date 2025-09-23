@@ -1,10 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Leads } from '@/types/database.types';
-import {
-  LeadFormData,
-  LeadUpdateData,
-} from '@/lib/validations/lead';
+import { LeadFormData, LeadUpdateData } from '@/lib/validations/lead';
 
 const leadKeys = {
   all: ['leads'] as const,
@@ -126,4 +123,4 @@ export function useDeleteLead() {
       queryClient.invalidateQueries({ queryKey: leadKeys.active() });
     },
   });
-} 
+}

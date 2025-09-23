@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { memberProgramItemTaskSchema, MemberProgramItemTaskFormData } from '@/lib/validations/member-program-item-task';
+import {
+  memberProgramItemTaskSchema,
+  MemberProgramItemTaskFormData,
+} from '@/lib/validations/member-program-item-task';
 
 export async function GET(
   _req: NextRequest,
@@ -8,7 +11,7 @@ export async function GET(
 ) {
   const { id } = await context.params;
   const supabase = await createClient();
-  
+
   const {
     data: { user },
     error: userError,
@@ -20,7 +23,8 @@ export async function GET(
   // Get all tasks for all items in this member program
   const { data, error } = await supabase
     .from('member_program_item_tasks')
-    .select(`
+    .select(
+      `
       *,
       member_program_items!inner(member_program_id),
       created_user:users!fk_member_program_item_tasks_created_by(id,email,full_name),
@@ -33,7 +37,8 @@ export async function GET(
           therapytype!fk_therapy_type(therapy_type_name)
         )
       )
-    `)
+    `
+    )
     .eq('member_program_items.member_program_id', id);
 
   if (error) {
@@ -50,7 +55,8 @@ export async function GET(
     completed_by_email: task.completed_user?.email || null,
     completed_by_full_name: task.completed_user?.full_name || null,
     therapy_name: task.therapy_tasks?.therapies?.therapy_name || null,
-    therapy_type_name: task.therapy_tasks?.therapies?.therapytype?.therapy_type_name || null,
+    therapy_type_name:
+      task.therapy_tasks?.therapies?.therapytype?.therapy_type_name || null,
   }));
 
   return NextResponse.json({ data: mapped }, { status: 200 });
@@ -62,7 +68,7 @@ export async function POST(
 ) {
   const { id } = await context.params;
   const supabase = await createClient();
-  
+
   const {
     data: { user },
     error: userError,

@@ -36,8 +36,18 @@ import {
 } from '@mui/icons-material';
 import { GridColDef } from '@mui/x-data-grid';
 import BaseDataTable from '@/components/tables/base-data-table';
-import { useAuditLogs, useAuditTables, useAuditOperations, useAuditUsers, AuditLogsFilters, AuditLog } from '@/lib/hooks/use-audit-logs';
-import { renderDate, renderDateTime } from '@/components/tables/base-data-table';
+import {
+  useAuditLogs,
+  useAuditTables,
+  useAuditOperations,
+  useAuditUsers,
+  AuditLogsFilters,
+  AuditLog,
+} from '@/lib/hooks/use-audit-logs';
+import {
+  renderDate,
+  renderDateTime,
+} from '@/components/tables/base-data-table';
 
 export default function AuditReportTable() {
   const [filters, setFilters] = useState<AuditLogsFilters>({});
@@ -56,7 +66,6 @@ export default function AuditReportTable() {
       [key]: value,
     }));
   };
-
 
   const handleViewDetails = (log: AuditLog) => {
     setSelectedLog(log);
@@ -96,10 +105,10 @@ export default function AuditReportTable() {
       field: 'table_name',
       headerName: 'Table',
       width: 150,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value} 
-          size="small" 
+      renderCell: params => (
+        <Chip
+          label={params.value}
+          size="small"
           variant="outlined"
           color="primary"
         />
@@ -115,10 +124,10 @@ export default function AuditReportTable() {
       field: 'operation',
       headerName: 'Operation',
       width: 100,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value} 
-          size="small" 
+      renderCell: params => (
+        <Chip
+          label={params.value}
+          size="small"
           color={getOperationColor(params.value) as any}
         />
       ),
@@ -127,13 +136,13 @@ export default function AuditReportTable() {
       field: 'column_name',
       headerName: 'Column',
       width: 150,
-      renderCell: (params) => params.value || '-',
+      renderCell: params => params.value || '-',
     },
     {
       field: 'changed_by_name',
       headerName: 'Changed By',
       width: 150,
-      renderCell: (params) => params.value || params.row.changed_by_email || '-',
+      renderCell: params => params.value || params.row.changed_by_email || '-',
     },
     {
       field: 'changed_at',
@@ -145,7 +154,7 @@ export default function AuditReportTable() {
       field: 'actions',
       headerName: 'Actions',
       width: 100,
-      renderCell: (params) => (
+      renderCell: params => (
         <Tooltip title="View Details">
           <IconButton
             size="small"
@@ -158,10 +167,11 @@ export default function AuditReportTable() {
     },
   ];
 
-  const mappedAuditLogs = auditData?.data?.map(log => ({
-    ...log,
-    id: log.id,
-  })) || [];
+  const mappedAuditLogs =
+    auditData?.data?.map(log => ({
+      ...log,
+      id: log.id,
+    })) || [];
 
   return (
     <Box>
@@ -205,10 +215,15 @@ export default function AuditReportTable() {
                 <Select
                   value={filters.table_name || ''}
                   label="Table"
-                  onChange={(e) => handleFilterChange('table_name', e.target.value || undefined)}
+                  onChange={e =>
+                    handleFilterChange(
+                      'table_name',
+                      e.target.value || undefined
+                    )
+                  }
                 >
                   <MenuItem value="">All Tables</MenuItem>
-                  {availableTables?.map((table) => (
+                  {availableTables?.map(table => (
                     <MenuItem key={table} value={table}>
                       {table}
                     </MenuItem>
@@ -216,17 +231,19 @@ export default function AuditReportTable() {
                 </Select>
               </FormControl>
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Operation</InputLabel>
                 <Select
                   value={filters.operation || ''}
                   label="Operation"
-                  onChange={(e) => handleFilterChange('operation', e.target.value || undefined)}
+                  onChange={e =>
+                    handleFilterChange('operation', e.target.value || undefined)
+                  }
                 >
                   <MenuItem value="">All Operations</MenuItem>
-                  {availableOperations?.map((operation) => (
+                  {availableOperations?.map(operation => (
                     <MenuItem key={operation} value={operation}>
                       {operation}
                     </MenuItem>
@@ -234,28 +251,35 @@ export default function AuditReportTable() {
                 </Select>
               </FormControl>
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
                 size="small"
                 label="Record ID"
                 value={filters.record_id || ''}
-                onChange={(e) => handleFilterChange('record_id', e.target.value || undefined)}
+                onChange={e =>
+                  handleFilterChange('record_id', e.target.value || undefined)
+                }
                 type="number"
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <FormControl fullWidth size="small">
                 <InputLabel>Changed By</InputLabel>
                 <Select
                   value={filters.changed_by || ''}
                   label="Changed By"
-                  onChange={(e) => handleFilterChange('changed_by', e.target.value || undefined)}
+                  onChange={e =>
+                    handleFilterChange(
+                      'changed_by',
+                      e.target.value || undefined
+                    )
+                  }
                 >
                   <MenuItem value="">All Users</MenuItem>
-                  {availableUsers?.map((user) => (
+                  {availableUsers?.map(user => (
                     <MenuItem key={user.id} value={user.id}>
                       {user.full_name || user.email}
                     </MenuItem>
@@ -263,7 +287,7 @@ export default function AuditReportTable() {
                 </Select>
               </FormControl>
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
@@ -271,11 +295,13 @@ export default function AuditReportTable() {
                 label="Start Date"
                 type="date"
                 value={filters.start_date || ''}
-                onChange={(e) => handleFilterChange('start_date', e.target.value || undefined)}
+                onChange={e =>
+                  handleFilterChange('start_date', e.target.value || undefined)
+                }
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <TextField
                 fullWidth
@@ -283,18 +309,16 @@ export default function AuditReportTable() {
                 label="End Date"
                 type="date"
                 value={filters.end_date || ''}
-                onChange={(e) => handleFilterChange('end_date', e.target.value || undefined)}
+                onChange={e =>
+                  handleFilterChange('end_date', e.target.value || undefined)
+                }
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            
+
             <Grid item xs={12} sm={6} md={2}>
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={clearFilters}
-                >
+                <Button variant="outlined" size="small" onClick={clearFilters}>
                   Clear
                 </Button>
               </Box>
@@ -314,9 +338,10 @@ export default function AuditReportTable() {
       {auditData?.data && auditData.data.length > 100 && (
         <Box sx={{ mb: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
           <Typography variant="caption" color="text.secondary">
-            💡 <strong>Performance Tip:</strong> With {auditData.data.length} records loaded, 
-            use filters to narrow down results for faster loading. 
-            Consider using date ranges or specific tables to improve performance.
+            💡 <strong>Performance Tip:</strong> With {auditData.data.length}{' '}
+            records loaded, use filters to narrow down results for faster
+            loading. Consider using date ranges or specific tables to improve
+            performance.
           </Typography>
         </Box>
       )}
@@ -341,7 +366,6 @@ export default function AuditReportTable() {
         disableColumnFilter={false}
         disableColumnSelector={false}
       />
-
 
       {/* Detail Dialog */}
       <Dialog
@@ -386,8 +410,8 @@ export default function AuditReportTable() {
                   <Typography variant="subtitle2" color="text.secondary">
                     Operation
                   </Typography>
-                  <Chip 
-                    label={selectedLog.operation} 
+                  <Chip
+                    label={selectedLog.operation}
                     color={getOperationColor(selectedLog.operation) as any}
                     size="small"
                   />
@@ -397,7 +421,9 @@ export default function AuditReportTable() {
                     Changed By
                   </Typography>
                   <Typography variant="body1">
-                    {selectedLog.changed_by_name || selectedLog.changed_by_email || '-'}
+                    {selectedLog.changed_by_name ||
+                      selectedLog.changed_by_email ||
+                      '-'}
                   </Typography>
                 </Grid>
                 <Grid item xs={6}>
@@ -423,7 +449,11 @@ export default function AuditReportTable() {
               {/* Old Value */}
               {selectedLog.old_value && (
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="subtitle2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     Old Value
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
@@ -437,7 +467,11 @@ export default function AuditReportTable() {
               {/* New Value */}
               {selectedLog.new_value && (
                 <Box>
-                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                  <Typography
+                    variant="subtitle2"
+                    color="text.secondary"
+                    gutterBottom
+                  >
                     New Value
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
@@ -451,7 +485,9 @@ export default function AuditReportTable() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDetails} sx={{ borderRadius: 0 }}>Close</Button>
+          <Button onClick={handleCloseDetails} sx={{ borderRadius: 0 }}>
+            Close
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

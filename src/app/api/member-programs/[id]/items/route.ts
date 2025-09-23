@@ -7,8 +7,11 @@ export async function GET(
 ) {
   try {
     const supabase = await createClient();
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+      error: authError,
+    } = await supabase.auth.getSession();
+
     if (authError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -16,7 +19,8 @@ export async function GET(
     const { id } = await context.params;
     const { data, error } = await supabase
       .from('member_program_items')
-      .select(`
+      .select(
+        `
         *,
         therapies(
           therapy_name,
@@ -27,17 +31,21 @@ export async function GET(
           therapytype(therapy_type_name),
           buckets(bucket_name)
         )
-      `)
+      `
+      )
       .eq('member_program_id', id)
       .order('days_from_start');
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to fetch member program items' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch member program items' },
+        { status: 500 }
+      );
     }
 
     // Compute used_count per item (completed schedule rows)
     const itemIds = (data || []).map((it: any) => it.member_program_item_id);
-    let idToUsed: Record<string, number> = {};
+    const idToUsed: Record<string, number> = {};
     if (itemIds.length > 0) {
       const { data: schedRows, error: schedErr } = await supabase
         .from('member_program_item_schedule')
@@ -60,7 +68,10 @@ export async function GET(
 
     return NextResponse.json({ data: withUsed });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -69,8 +80,11 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -78,10 +92,17 @@ export async function POST(
   try {
     const { id } = await context.params;
     const body = await req.json();
-    
+
     // Validate required fields
-    if (!body.therapy_id || !body.quantity || body.days_from_start === undefined) {
-      return NextResponse.json({ error: 'Therapy ID, quantity, and days from start are required' }, { status: 400 });
+    if (
+      !body.therapy_id ||
+      !body.quantity ||
+      body.days_from_start === undefined
+    ) {
+      return NextResponse.json(
+        { error: 'Therapy ID, quantity, and days from start are required' },
+        { status: 400 }
+      );
     }
 
     // Get therapy cost and charge for calculations
@@ -116,7 +137,10 @@ export async function POST(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to create member program item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to create member program item' },
+        { status: 500 }
+      );
     }
 
     // Copy default tasks from therapy_tasks into member_program_item_tasks for this item
@@ -133,7 +157,9 @@ export async function POST(
           .from('member_program_item_tasks')
           .select('task_id')
           .eq('member_program_item_id', newItemId);
-        const existingSet = new Set((existing || []).map((r: any) => r.task_id));
+        const existingSet = new Set(
+          (existing || []).map((r: any) => r.task_id)
+        );
         const toInsert = tasks
           .filter((t: any) => !existingSet.has(t.task_id))
           .map((t: any) => ({
@@ -146,9 +172,7 @@ export async function POST(
             updated_by: session.user.id,
           }));
         if (toInsert.length > 0) {
-          await supabase
-            .from('member_program_item_tasks')
-            .insert(toInsert);
+          await supabase.from('member_program_item_tasks').insert(toInsert);
         }
       }
     } catch (_) {
@@ -160,20 +184,28 @@ export async function POST(
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-async function updateMemberProgramCalculatedFields(supabase: any, memberProgramId: number) {
+async function updateMemberProgramCalculatedFields(
+  supabase: any,
+  memberProgramId: number
+) {
   try {
     // Get all items for this member program
     const { data: items, error: itemsError } = await supabase
       .from('member_program_items')
-      .select(`
+      .select(
+        `
         quantity,
         item_cost,
         item_charge
-      `)
+      `
+      )
       .eq('member_program_id', memberProgramId)
       .eq('active_flag', true);
 
@@ -189,7 +221,7 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       const quantity = item.quantity || 1;
       const cost = item.item_cost || 0;
       const charge = item.item_charge || 0;
-      
+
       totalCost += cost * quantity;
       totalCharge += charge * quantity;
     });
@@ -204,8 +236,6 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       })
       .eq('member_program_id', memberProgramId)
       .select();
-
-    
 
     // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
     // Program Price = totalCharge + max(0, finance_charges) + discounts
@@ -224,8 +254,11 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
     const positiveFinance = Math.max(0, financeCharges);
     const negativeFinanceFee = Math.max(0, -financeCharges);
     const finalTotal = totalCharge + positiveFinance + discounts;
-    const margin = finalTotal > 0 ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100 : 0;
-    
+    const margin =
+      finalTotal > 0
+        ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100
+        : 0;
+
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
       .from('member_program_finances')
@@ -234,7 +267,6 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .single();
 
     if (financesFetchError && financesFetchError.code !== 'PGRST116') {
-      
     } else if (!existingFinances) {
       // Create default finances record
       const { data: newFinances, error: createFinancesError } = await supabase
@@ -246,24 +278,18 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
           updated_by: (await supabase.auth.getUser()).data.user?.id,
         })
         .select();
-
-      
     } else {
       // Update existing finances record
-      const { data: updatedFinances, error: updateFinancesError } = await supabase
-        .from('member_program_finances')
-        .update({
-          final_total_price: finalTotal,
-          margin: margin,
-          updated_by: (await supabase.auth.getUser()).data.user?.id,
-        })
-        .eq('member_program_id', memberProgramId)
-        .select();
-
-      
+      const { data: updatedFinances, error: updateFinancesError } =
+        await supabase
+          .from('member_program_finances')
+          .update({
+            final_total_price: finalTotal,
+            margin: margin,
+            updated_by: (await supabase.auth.getUser()).data.user?.id,
+          })
+          .eq('member_program_id', memberProgramId)
+          .select();
     }
-  } catch (error) {
-  }
+  } catch (error) {}
 }
-
-

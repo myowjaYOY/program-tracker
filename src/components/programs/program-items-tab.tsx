@@ -1,25 +1,34 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Button, 
+import {
+  Box,
+  Button,
   Dialog,
   DialogTitle,
   DialogContent,
   IconButton,
   Chip,
   Typography,
-  CircularProgress
+  CircularProgress,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+} from '@mui/icons-material';
 import FormStatus from '@/components/ui/FormStatus';
 import BaseDataTable from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms, MemberProgramItems } from '@/types/database.types';
 import { MemberProgramItemFormData } from '@/lib/validations/member-program-item';
-import { useMemberProgramItems, useCreateMemberProgramItem, useUpdateMemberProgramItem, useDeleteMemberProgramItem } from '@/lib/hooks/use-member-program-items';
+import {
+  useMemberProgramItems,
+  useCreateMemberProgramItem,
+  useUpdateMemberProgramItem,
+  useDeleteMemberProgramItem,
+} from '@/lib/hooks/use-member-program-items';
 import { useTherapies } from '@/lib/hooks/use-therapies';
 import { useQueryClient } from '@tanstack/react-query';
 import { memberProgramItemKeys } from '@/lib/hooks/use-member-program-items';
@@ -57,16 +66,37 @@ interface ProgramItemWithTherapy extends MemberProgramItems {
   };
 }
 
-export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedChangesChange }: ProgramItemsTabProps) {
+export default function ProgramItemsTab({
+  program,
+  onProgramUpdate,
+  onUnsavedChangesChange,
+}: ProgramItemsTabProps) {
   const queryClient = useQueryClient();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<MemberProgramItems | null>(null);
+  const [editingItem, setEditingItem] = useState<MemberProgramItems | null>(
+    null
+  );
   const [isEditing, setIsEditing] = useState(false);
   type StagedChange =
-    | { type: 'add'; therapy_id: number; quantity: number; days_from_start?: number; days_between?: number; instructions?: string | undefined }
+    | {
+        type: 'add';
+        therapy_id: number;
+        quantity: number;
+        days_from_start?: number;
+        days_between?: number;
+        instructions?: string | undefined;
+      }
     | { type: 'remove'; itemId: number }
-    | { type: 'update'; itemId: number; therapy_id?: number; quantity?: number; days_from_start?: number; days_between?: number; instructions?: string | undefined };
+    | {
+        type: 'update';
+        itemId: number;
+        therapy_id?: number;
+        quantity?: number;
+        days_from_start?: number;
+        days_between?: number;
+        instructions?: string | undefined;
+      };
   interface PreviewState {
     ok: boolean;
     locked?: { price: number; margin: number };
@@ -76,16 +106,28 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     error?: string | null;
   }
   const [stagedChanges, setStagedChanges] = useState<StagedChange[]>([]);
-  const [preview, setPreview] = useState<PreviewState>({ ok: true, loading: false, error: null });
-  
-  const { data: programItems = [], isLoading } = useMemberProgramItems(program.member_program_id);
+  const [preview, setPreview] = useState<PreviewState>({
+    ok: true,
+    loading: false,
+    error: null,
+  });
+
+  const { data: programItems = [], isLoading } = useMemberProgramItems(
+    program.member_program_id
+  );
   const { data: therapies = [] } = useTherapies();
-  const { data: updatedProgram, refetch: refetchProgram } = useMemberProgram(program.member_program_id);
+  const { data: updatedProgram, refetch: refetchProgram } = useMemberProgram(
+    program.member_program_id
+  );
   const createItem = useCreateMemberProgramItem();
   const updateItem = useUpdateMemberProgramItem();
   const deleteItem = useDeleteMemberProgramItem();
-  const { data: finances } = useMemberProgramFinances(program.member_program_id);
-  const [inline, setInline] = useState<{ ok: boolean; message: string } | null>(null);
+  const { data: finances } = useMemberProgramFinances(
+    program.member_program_id
+  );
+  const [inline, setInline] = useState<{ ok: boolean; message: string } | null>(
+    null
+  );
   // Warn parent (Programs page) if there are unsaved staged edits (edit mode)
   React.useEffect(() => {
     onUnsavedChangesChange?.(isEditing && stagedChanges.length > 0);
@@ -106,11 +148,22 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
   }, [isEditing, stagedChanges.length]);
   const { data: freshProgram } = useMemberProgram(program.member_program_id);
   const { data: statuses = [] } = useProgramStatus();
-  const { data: payments = [] } = useMemberProgramPayments(program.member_program_id);
+  const { data: payments = [] } = useMemberProgramPayments(
+    program.member_program_id
+  );
   const lock = useFinancialsLock(freshProgram || program, payments as any);
   const isLocked = lock.locked;
-  const statusName = (statuses.find(s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id))?.status_name || '').toLowerCase();
-  const readOnlyAll = statusName === 'paused' || statusName === 'completed' || statusName === 'cancelled';
+  const statusName = (
+    statuses.find(
+      s =>
+        s.program_status_id ===
+        (freshProgram?.program_status_id ?? program.program_status_id)
+    )?.status_name || ''
+  ).toLowerCase();
+  const readOnlyAll =
+    statusName === 'paused' ||
+    statusName === 'completed' ||
+    statusName === 'cancelled';
   const [applying, setApplying] = useState(false);
 
   // Update parent component when program data changes
@@ -126,17 +179,34 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     const run = async () => {
       setPreview(p => ({ ...p, loading: true, error: null }));
       try {
-        const res = await fetch(`/api/member-programs/${program.member_program_id}/items/preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ changes: stagedChanges, tolerance: { priceCents: 1, marginPct: 0.1 } })
-        });
+        const res = await fetch(
+          `/api/member-programs/${program.member_program_id}/items/preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              changes: stagedChanges,
+              tolerance: { priceCents: 1, marginPct: 0.1 },
+            }),
+          }
+        );
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || 'Preview failed');
-        setPreview({ ok: !!json.ok, locked: json.locked, projected: json.projected, deltas: json.deltas, loading: false, error: null });
+        setPreview({
+          ok: !!json.ok,
+          locked: json.locked,
+          projected: json.projected,
+          deltas: json.deltas,
+          loading: false,
+          error: null,
+        });
       } catch (e: any) {
-        setPreview({ ok: false, loading: false, error: e?.message || 'Preview failed' });
+        setPreview({
+          ok: false,
+          loading: false,
+          error: e?.message || 'Preview failed',
+        });
       }
     };
     run();
@@ -151,8 +221,6 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     setIsEditModalOpen(false);
   };
 
-  
-
   // Map program items to include id field for DataGrid and cast to extended type
   const mappedProgramItems = programItems.map(item => ({
     ...item,
@@ -164,7 +232,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     therapy_cost: item.therapies?.cost || 0,
     therapy_charge: item.therapies?.charge || 0,
     total_cost: (item.item_cost || 0) * (item.quantity || 1),
-    total_charge: (item.item_charge || 0) * (item.quantity || 1)
+    total_charge: (item.item_charge || 0) * (item.quantity || 1),
   })) as ProgramItemWithTherapy[];
 
   // Apply stagedChanges locally to what the grid displays while in edit mode
@@ -173,7 +241,9 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
 
     // Start from a map of current rows for easy mutation by id
     const rowsById = new Map<number, any>();
-    mappedProgramItems.forEach(row => rowsById.set(row.member_program_item_id as number, { ...row }));
+    mappedProgramItems.forEach(row =>
+      rowsById.set(row.member_program_item_id as number, { ...row })
+    );
 
     let tempId = -1; // negative ids for staged additions
 
@@ -185,9 +255,12 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         if (!existing) continue;
         const next = { ...existing };
         if (typeof ch.quantity === 'number') next.quantity = ch.quantity;
-        if (typeof ch.days_from_start === 'number') next.days_from_start = ch.days_from_start;
-        if (typeof ch.days_between === 'number') next.days_between = ch.days_between;
-        if (typeof ch.instructions === 'string') next.instructions = ch.instructions || '';
+        if (typeof ch.days_from_start === 'number')
+          next.days_from_start = ch.days_from_start;
+        if (typeof ch.days_between === 'number')
+          next.days_between = ch.days_between;
+        if (typeof ch.instructions === 'string')
+          next.instructions = ch.instructions || '';
         if (typeof ch.therapy_id === 'number') {
           const t = therapies.find(t => t.therapy_id === ch.therapy_id);
           if (t) {
@@ -201,7 +274,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
               active_flag: !!t.active_flag,
               therapy_type_id: t.therapy_type_id || 0,
               therapytype: { therapy_type_name: t.therapy_type_name || 'N/A' },
-              buckets: { bucket_name: t.bucket_name || 'N/A' }
+              buckets: { bucket_name: t.bucket_name || 'N/A' },
             };
             next.therapy_type_name = t.therapy_type_name || 'N/A';
             next.therapy_name = t.therapy_name;
@@ -210,8 +283,10 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
             next.therapy_charge = Number(t.charge || 0);
           }
         }
-        next.total_cost = Number(next.item_cost || 0) * Number(next.quantity || 1);
-        next.total_charge = Number(next.item_charge || 0) * Number(next.quantity || 1);
+        next.total_cost =
+          Number(next.item_cost || 0) * Number(next.quantity || 1);
+        next.total_charge =
+          Number(next.item_charge || 0) * Number(next.quantity || 1);
         rowsById.set(ch.itemId, next);
       } else if (ch.type === 'add') {
         const t = therapies.find(t => t.therapy_id === ch.therapy_id);
@@ -240,7 +315,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
             active_flag: !!t.active_flag,
             therapy_type_id: t.therapy_type_id || 0,
             therapytype: { therapy_type_name: t.therapy_type_name || 'N/A' },
-            buckets: { bucket_name: t.bucket_name || 'N/A' }
+            buckets: { bucket_name: t.bucket_name || 'N/A' },
           },
           therapy_type_name: t.therapy_type_name || 'N/A',
           therapy_name: t.therapy_name,
@@ -256,11 +331,24 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     }
 
     return Array.from(rowsById.values());
-  }, [isEditing, stagedChanges, mappedProgramItems, therapies, program.member_program_id]);
+  }, [
+    isEditing,
+    stagedChanges,
+    mappedProgramItems,
+    therapies,
+    program.member_program_id,
+  ]);
 
   const handleAddItem = async (formData: MemberProgramItemFormData) => {
     if (isEditing) {
-      const ch: StagedChange = { type: 'add', therapy_id: formData.therapy_id, quantity: formData.quantity, days_from_start: formData.days_from_start, days_between: formData.days_between, instructions: formData.instructions };
+      const ch: StagedChange = {
+        type: 'add',
+        therapy_id: formData.therapy_id,
+        quantity: formData.quantity,
+        days_from_start: formData.days_from_start,
+        days_between: formData.days_between,
+        instructions: formData.instructions,
+      };
       setStagedChanges(prev => [...prev, ch]);
       setIsAddModalOpen(false);
       return;
@@ -281,19 +369,28 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
   };
 
   const handleDeleteItem = async (item: MemberProgramItems) => {
-    if (window.confirm('Are you sure you want to remove this item from the program?')) {
+    if (
+      window.confirm(
+        'Are you sure you want to remove this item from the program?'
+      )
+    ) {
       if (isEditing) {
-        const ch: StagedChange = { type: 'remove', itemId: item.member_program_item_id };
+        const ch: StagedChange = {
+          type: 'remove',
+          itemId: item.member_program_item_id,
+        };
         setStagedChanges(prev => [...prev, ch]);
         return;
       }
       try {
-        await deleteItem.mutateAsync({ programId: program.member_program_id, itemId: item.member_program_item_id });
+        await deleteItem.mutateAsync({
+          programId: program.member_program_id,
+          itemId: item.member_program_item_id,
+        });
       } catch (error) {
         console.error('Error deleting program item:', error);
       }
     } else {
-      
     }
   };
 
@@ -304,9 +401,17 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
 
   const handleUpdateItem = async (formData: MemberProgramItemFormData) => {
     if (!editingItem) return;
-    
+
     if (isEditing) {
-      const ch: StagedChange = { type: 'update', itemId: editingItem.member_program_item_id, therapy_id: formData.therapy_id, quantity: formData.quantity, days_from_start: formData.days_from_start, days_between: formData.days_between, instructions: formData.instructions };
+      const ch: StagedChange = {
+        type: 'update',
+        itemId: editingItem.member_program_item_id,
+        therapy_id: formData.therapy_id,
+        quantity: formData.quantity,
+        days_from_start: formData.days_from_start,
+        days_between: formData.days_between,
+        instructions: formData.instructions,
+      };
       setStagedChanges(prev => [...prev, ch]);
       setIsEditModalOpen(false);
       setEditingItem(null);
@@ -331,7 +436,15 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
     }
   };
 
-  type ProgramItemRow = ProgramItemWithTherapy & { therapy_type_name: string; therapy_name: string; bucket_name: string; therapy_cost: number; therapy_charge: number; total_cost: number; total_charge: number };
+  type ProgramItemRow = ProgramItemWithTherapy & {
+    therapy_type_name: string;
+    therapy_name: string;
+    bucket_name: string;
+    therapy_cost: number;
+    therapy_charge: number;
+    total_cost: number;
+    total_charge: number;
+  };
 
   const columns: GridColDef<ProgramItemRow>[] = [
     {
@@ -358,7 +471,8 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         const total = Number(params.value || 0);
         const used = Number(params.row.used_count || 0);
         const label = `${total}`;
-        const color = used === 0 ? 'default' : (used < total ? 'success' : 'error');
+        const color =
+          used === 0 ? 'default' : used < total ? 'success' : 'error';
         const title = used === 0 ? 'No items used' : `${used} of ${total} used`;
         return (
           <Chip
@@ -369,7 +483,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
             title={title}
           />
         );
-      }
+      },
     },
     {
       field: 'days_from_start',
@@ -393,21 +507,21 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       headerName: 'Cost',
       width: 100,
       type: 'number',
-      renderCell: (params) => formatCurrency(Number(params.value || 0)),
+      renderCell: params => formatCurrency(Number(params.value || 0)),
     },
     {
       field: 'total_charge',
       headerName: 'Charge',
       width: 100,
       type: 'number',
-      renderCell: (params) => formatCurrency(Number(params.value || 0)),
+      renderCell: params => formatCurrency(Number(params.value || 0)),
     },
     {
       field: 'actions',
       headerName: 'Actions',
       width: 120,
       sortable: false,
-      renderCell: (params) => {
+      renderCell: params => {
         if (!params?.row) return null;
         const actionsDisabled = (isLocked && !isEditing) || readOnlyAll;
         const usedCount = Number((params as any).row?.used_count || 0);
@@ -415,7 +529,9 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         return (
           <Box sx={{ display: 'flex', gap: 1 }}>
             <IconButton
-              onClick={() => { if (!actionsDisabled) handleEditItem(params.row); }}
+              onClick={() => {
+                if (!actionsDisabled) handleEditItem(params.row);
+              }}
               color="primary"
               size="small"
               disabled={actionsDisabled}
@@ -423,11 +539,17 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
               <EditIcon />
             </IconButton>
             <IconButton
-              onClick={() => { if (!deleteDisabled) handleDeleteItem(params.row); }}
+              onClick={() => {
+                if (!deleteDisabled) handleDeleteItem(params.row);
+              }}
               color="error"
               size="small"
               disabled={deleteDisabled}
-              title={deleteDisabled && usedCount > 0 ? `${usedCount} of ${params.row.quantity || 0} used – cannot delete` : undefined}
+              title={
+                deleteDisabled && usedCount > 0
+                  ? `${usedCount} of ${params.row.quantity || 0} used – cannot delete`
+                  : undefined
+              }
             >
               <DeleteIcon />
             </IconButton>
@@ -439,74 +561,171 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
         {/* Left side: tokens stacked above helper line with actions */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, flex: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: 1,
+            flex: 1,
+          }}
+        >
           {isEditing && (
             <>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                <Chip size="small" label={`Changes: ${stagedChanges.length}`} color={stagedChanges.length > 0 ? 'primary' : 'default'} />
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Chip
+                  size="small"
+                  label={`Changes: ${stagedChanges.length}`}
+                  color={stagedChanges.length > 0 ? 'primary' : 'default'}
+                />
                 {preview.loading ? (
                   <Chip size="small" label="Previewing..." />
                 ) : preview.error ? (
                   <Chip size="small" label={preview.error} color="error" />
                 ) : preview.locked ? (
                   <>
-                    <Chip size="small" label={`Locked Price $${preview.locked.price?.toFixed(2)}`} />
-                    <Chip size="small" label={`Locked Margin ${preview.locked.margin?.toFixed(1)}%`} />
+                    <Chip
+                      size="small"
+                      label={`Locked Price $${preview.locked.price?.toFixed(2)}`}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Locked Margin ${preview.locked.margin?.toFixed(1)}%`}
+                    />
                     {preview.projected && (
                       <>
-                        <Chip size="small" label={`Projected Price $${preview.projected.price?.toFixed(2)}`} color={preview.ok ? 'success' : 'error'} />
-                        <Chip size="small" label={`Projected Margin ${preview.projected.margin?.toFixed(1)}%`} color={preview.ok ? 'success' : 'error'} />
+                        <Chip
+                          size="small"
+                          label={`Projected Price $${preview.projected.price?.toFixed(2)}`}
+                          color={preview.ok ? 'success' : 'error'}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Projected Margin ${preview.projected.margin?.toFixed(1)}%`}
+                          color={preview.ok ? 'success' : 'error'}
+                        />
                       </>
                     )}
                   </>
                 ) : null}
               </Box>
               {/* helper text row with actions aligned to the end */}
-              <Box sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Box
+                sx={{
+                  mt: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  flexWrap: 'wrap',
+                }}
+              >
                 <Typography variant="caption">
-                  Apply is enabled when projected Program Price and Margin match the locked values (within tolerance).
+                  Apply is enabled when projected Program Price and Margin match
+                  the locked values (within tolerance).
                 </Typography>
                 <Button
                   variant="contained"
                   color="primary"
-                  disabled={applying || stagedChanges.length === 0 || !preview.ok || !!preview.loading}
+                  disabled={
+                    applying ||
+                    stagedChanges.length === 0 ||
+                    !preview.ok ||
+                    !!preview.loading
+                  }
                   onClick={async () => {
                     setApplying(true);
                     try {
-                      const res = await fetch(`/api/member-programs/${program.member_program_id}/items/batch-apply`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ changes: stagedChanges, expectedLocked: { price: finances?.final_total_price ?? preview.locked?.price ?? 0, margin: finances?.margin ?? preview.locked?.margin ?? 0 }, tolerance: { priceCents: 1, marginPct: 0.1 } })
-                      });
+                      const res = await fetch(
+                        `/api/member-programs/${program.member_program_id}/items/batch-apply`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({
+                            changes: stagedChanges,
+                            expectedLocked: {
+                              price:
+                                finances?.final_total_price ??
+                                preview.locked?.price ??
+                                0,
+                              margin:
+                                finances?.margin ?? preview.locked?.margin ?? 0,
+                            },
+                            tolerance: { priceCents: 1, marginPct: 0.1 },
+                          }),
+                        }
+                      );
                       const json = await res.json();
-                      if (!res.ok) throw new Error(json.error || 'Apply failed');
+                      if (!res.ok)
+                        throw new Error(json.error || 'Apply failed');
                       await refetchProgram();
                       resetEditing();
-                      setInline({ ok: true, message: 'Changes applied successfully' });
-                      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.byProgram(program.member_program_id) });
+                      setInline({
+                        ok: true,
+                        message: 'Changes applied successfully',
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: memberProgramItemKeys.byProgram(
+                          program.member_program_id
+                        ),
+                      });
                       // Also regenerate schedule so Script reflects item changes
                       try {
-                        await fetch(`/api/member-programs/${program.member_program_id}/schedule/generate`, {
-                          method: 'POST',
-                          credentials: 'include',
-                        });
+                        await fetch(
+                          `/api/member-programs/${program.member_program_id}/schedule/generate`,
+                          {
+                            method: 'POST',
+                            credentials: 'include',
+                          }
+                        );
                       } catch {}
                       // Refresh Tasks and Script/ToDo tabs derived data
-                      queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
-                      queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
+                      queryClient.invalidateQueries({
+                        queryKey: memberProgramItemTaskKeys.byProgram(
+                          program.member_program_id
+                        ),
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: todoKeys.lists(program.member_program_id),
+                      });
                     } catch (e: any) {
-                      setInline({ ok: false, message: e?.message || 'Failed to apply changes' });
+                      setInline({
+                        ok: false,
+                        message: e?.message || 'Failed to apply changes',
+                      });
                     } finally {
                       setApplying(false);
                     }
                   }}
                   startIcon={applying ? <CircularProgress size={16} /> : null}
                   sx={{ borderRadius: 0, fontWeight: 600 }}
-                >{applying ? 'Saving...' : 'Apply Changes'}</Button>
-                <Button variant="text" onClick={resetEditing} disabled={applying} sx={{ borderRadius: 0 }}>Cancel</Button>
+                >
+                  {applying ? 'Saving...' : 'Apply Changes'}
+                </Button>
+                <Button
+                  variant="text"
+                  onClick={resetEditing}
+                  disabled={applying}
+                  sx={{ borderRadius: 0 }}
+                >
+                  Cancel
+                </Button>
               </Box>
             </>
           )}
@@ -517,9 +736,17 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
           {isLocked && !readOnlyAll && (
             <Button
               variant="outlined"
-              onClick={() => { if (isEditing) { resetEditing(); } else { setIsEditing(true); } }}
+              onClick={() => {
+                if (isEditing) {
+                  resetEditing();
+                } else {
+                  setIsEditing(true);
+                }
+              }}
               sx={{ borderRadius: 0, fontWeight: 600 }}
-            >{isEditing ? 'Exit Edit Mode' : 'Enter Edit Mode'}</Button>
+            >
+              {isEditing ? 'Exit Edit Mode' : 'Enter Edit Mode'}
+            </Button>
           )}
           <Button
             variant="contained"
@@ -534,7 +761,9 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
             Add Item
           </Button>
         </Box>
-        {isEditing && <FormStatus status={inline} onClose={() => setInline(null)} />}
+        {isEditing && (
+          <FormStatus status={inline} onClose={() => setInline(null)} />
+        )}
       </Box>
 
       <BaseDataTable<any>
@@ -542,7 +771,7 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         data={visibleItems}
         columns={columns}
         loading={isLoading}
-        getRowId={(row) => row.member_program_item_id}
+        getRowId={row => row.member_program_item_id}
         showCreateButton={false}
         showActionsColumn={false}
         pageSize={5}
@@ -551,16 +780,16 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       />
 
       {/* Add Item Modal */}
-      <Dialog 
-        open={isAddModalOpen} 
+      <Dialog
+        open={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         maxWidth="md"
         fullWidth={false}
         PaperProps={{
           sx: {
             width: '675px',
-            maxWidth: '90vw'
-          }
+            maxWidth: '90vw',
+          },
         }}
       >
         <DialogTitle
@@ -586,8 +815,8 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
       </Dialog>
 
       {/* Edit Item Modal */}
-      <Dialog 
-        open={isEditModalOpen} 
+      <Dialog
+        open={isEditModalOpen}
         onClose={() => {
           setIsEditModalOpen(false);
           setEditingItem(null);
@@ -597,8 +826,8 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
         PaperProps={{
           sx: {
             width: '675px',
-            maxWidth: '90vw'
-          }
+            maxWidth: '90vw',
+          },
         }}
       >
         <DialogTitle
@@ -609,11 +838,11 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
           }}
         >
           Edit Program Item
-          <IconButton 
+          <IconButton
             onClick={() => {
               setIsEditModalOpen(false);
               setEditingItem(null);
-            }} 
+            }}
             size="small"
           >
             <CloseIcon />
@@ -628,16 +857,18 @@ export default function ProgramItemsTab({ program, onProgramUpdate, onUnsavedCha
                 setIsEditModalOpen(false);
                 setEditingItem(null);
               }}
-              initialValues={{
-                therapy_type_id: editingItem.therapies?.therapy_type_id || 0,
-                therapy_id: editingItem.therapy_id || 0,
-                quantity: editingItem.quantity || 1,
-                days_from_start: editingItem.days_from_start || 0,
-                days_between: editingItem.days_between || 0,
-                instructions: editingItem.instructions || '',
-                // surfaced for edit modal min guards & helper text
-                used_count: (editingItem as any)?.used_count || 0,
-              } as any}
+              initialValues={
+                {
+                  therapy_type_id: editingItem.therapies?.therapy_type_id || 0,
+                  therapy_id: editingItem.therapy_id || 0,
+                  quantity: editingItem.quantity || 1,
+                  days_from_start: editingItem.days_from_start || 0,
+                  days_between: editingItem.days_between || 0,
+                  instructions: editingItem.instructions || '',
+                  // surfaced for edit modal min guards & helper text
+                  used_count: (editingItem as any)?.used_count || 0,
+                } as any
+              }
               mode="edit"
             />
           )}

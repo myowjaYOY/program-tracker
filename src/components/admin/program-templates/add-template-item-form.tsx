@@ -1,19 +1,22 @@
 'use client';
 
 import React from 'react';
-import { 
-  TextField, 
+import {
+  TextField,
   MenuItem,
   Typography,
   Paper,
   Grid,
   Box,
   FormControlLabel,
-  Switch
+  Switch,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { programTemplateItemSchema, ProgramTemplateItemFormData } from '@/lib/validations/program-template-item';
+import {
+  programTemplateItemSchema,
+  ProgramTemplateItemFormData,
+} from '@/lib/validations/program-template-item';
 import { Therapies, TherapyType } from '@/types/database.types';
 import { useTherapyTypes } from '@/lib/hooks/use-therapy-types';
 import { BaseForm } from '@/components/forms/base-form';
@@ -26,16 +29,22 @@ interface AddTemplateItemFormProps {
   mode?: 'create' | 'edit';
 }
 
-export default function AddTemplateItemForm({ therapies, onSave, onCancel, initialValues, mode = 'create' }: AddTemplateItemFormProps) {
+export default function AddTemplateItemForm({
+  therapies,
+  onSave,
+  onCancel,
+  initialValues,
+  mode = 'create',
+}: AddTemplateItemFormProps) {
   const { data: therapyTypes = [] } = useTherapyTypes();
-  
+
   const {
     control,
     handleSubmit,
     watch,
     setValue,
     reset,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<ProgramTemplateItemFormData>({
     resolver: zodResolver(programTemplateItemSchema),
     defaultValues: {
@@ -46,7 +55,7 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
       days_between: initialValues?.days_between || 0,
       active_flag: initialValues?.active_flag ?? true,
       instructions: initialValues?.instructions || '',
-    }
+    },
   });
 
   const selectedTherapyTypeId = watch('therapy_type_id');
@@ -68,13 +77,17 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
       });
     }
   }, [initialValues, mode, reset]);
-  
+
   // Filter therapies based on selected therapy type
-  const filteredTherapies = selectedTherapyTypeId 
-    ? therapies.filter(t => t.therapy_type_id === selectedTherapyTypeId && t.active_flag)
+  const filteredTherapies = selectedTherapyTypeId
+    ? therapies.filter(
+        t => t.therapy_type_id === selectedTherapyTypeId && t.active_flag
+      )
     : [];
-  
-  const selectedTherapy = therapies.find(t => t.therapy_id === selectedTherapyId);
+
+  const selectedTherapy = therapies.find(
+    t => t.therapy_id === selectedTherapyId
+  );
 
   // Reset therapy selection when therapy type changes
   const handleTherapyTypeChange = (therapyTypeId: number) => {
@@ -89,7 +102,15 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
     <BaseForm
       onSubmit={onSubmit}
       isSubmitting={isSubmitting}
-      submitText={isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Adding...') : (mode === 'edit' ? 'Update' : 'Create')}
+      submitText={
+        isSubmitting
+          ? mode === 'edit'
+            ? 'Updating...'
+            : 'Adding...'
+          : mode === 'edit'
+            ? 'Update'
+            : 'Create'
+      }
       submitHandler={handleSubmit(onSubmit)}
       buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
     >
@@ -108,7 +129,7 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
               helperText={errors.therapy_type_id?.message}
               sx={{ minWidth: 300, maxWidth: 300 }}
               disabled={mode === 'edit'}
-              onChange={(e) => {
+              onChange={e => {
                 const value = Number(e.target.value);
                 field.onChange(value);
                 handleTherapyTypeChange(value);
@@ -117,9 +138,14 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
               <MenuItem value={0}>Select a therapy type...</MenuItem>
               {therapyTypes
                 .filter(t => t.active_flag)
-                .sort((a, b) => a.therapy_type_name.localeCompare(b.therapy_type_name))
-                .map((therapyType) => (
-                  <MenuItem key={therapyType.therapy_type_id} value={therapyType.therapy_type_id}>
+                .sort((a, b) =>
+                  a.therapy_type_name.localeCompare(b.therapy_type_name)
+                )
+                .map(therapyType => (
+                  <MenuItem
+                    key={therapyType.therapy_type_id}
+                    value={therapyType.therapy_type_id}
+                  >
                     {therapyType.therapy_type_name}
                   </MenuItem>
                 ))}
@@ -147,7 +173,7 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
               <MenuItem value={0}>Select a therapy...</MenuItem>
               {filteredTherapies
                 .sort((a, b) => a.therapy_name.localeCompare(b.therapy_name))
-                .map((therapy) => (
+                .map(therapy => (
                   <MenuItem key={therapy.therapy_id} value={therapy.therapy_id}>
                     {therapy.therapy_name}
                   </MenuItem>
@@ -174,7 +200,7 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
                   inputProps={{ min: 1 }}
                   error={!!errors.quantity}
                   helperText={errors.quantity?.message}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -194,7 +220,7 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
                   inputProps={{ min: 0 }}
                   error={!!errors.days_from_start}
                   helperText={errors.days_from_start?.message}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -212,8 +238,11 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
                   disabled={mode === 'create' && !selectedTherapyId}
                   inputProps={{ min: 0 }}
                   error={!!errors.days_between}
-                  helperText={errors.days_between?.message || "Leave as 0 for single occurrence"}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  helperText={
+                    errors.days_between?.message ||
+                    'Leave as 0 for single occurrence'
+                  }
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -278,17 +307,28 @@ export default function AddTemplateItemForm({ therapies, onSave, onCancel, initi
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Tot Cost: ${((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
+                Tot Cost: $
+                {((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Tot Chg: ${((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
+                Tot Chg: $
+                {((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Margin %: {(selectedTherapy?.charge || 0) > 0 ? ((((selectedTherapy?.charge || 0) - (selectedTherapy?.cost || 0)) / (selectedTherapy?.charge || 0)) * 100).toFixed(1) : 0}%
+                Margin %:{' '}
+                {(selectedTherapy?.charge || 0) > 0
+                  ? (
+                      (((selectedTherapy?.charge || 0) -
+                        (selectedTherapy?.cost || 0)) /
+                        (selectedTherapy?.charge || 0)) *
+                      100
+                    ).toFixed(1)
+                  : 0}
+                %
               </Typography>
             </Grid>
           </Grid>

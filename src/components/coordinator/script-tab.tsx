@@ -6,7 +6,10 @@ import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import { useCoordinatorScript, coordinatorKeys } from '@/lib/hooks/use-coordinator';
+import {
+  useCoordinatorScript,
+  coordinatorKeys,
+} from '@/lib/hooks/use-coordinator';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface CoordinatorScriptTabProps {
@@ -34,8 +37,22 @@ type Row = {
   updated_at?: string | null;
 };
 
-export default function CoordinatorScriptTab({ memberId = null, range = 'all', start, end }: CoordinatorScriptTabProps) {
-  const { data = [], isLoading, error } = useCoordinatorScript({ memberId: memberId ?? undefined, range, start, end });
+export default function CoordinatorScriptTab({
+  memberId = null,
+  range = 'all',
+  start,
+  end,
+}: CoordinatorScriptTabProps) {
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useCoordinatorScript({
+    memberId: memberId ?? undefined,
+    range,
+    start,
+    end,
+  });
   const qc = useQueryClient();
 
   async function toggleComplete(row: Row): Promise<void> {
@@ -48,7 +65,13 @@ export default function CoordinatorScriptTab({ memberId = null, range = 'all', s
         body: JSON.stringify({ completed_flag: !row.completed_flag }),
       });
       if (!res.ok) return;
-      qc.invalidateQueries({ queryKey: coordinatorKeys.script(new URLSearchParams(memberId ? { memberId: String(memberId), range } : { range }).toString()) });
+      qc.invalidateQueries({
+        queryKey: coordinatorKeys.script(
+          new URLSearchParams(
+            memberId ? { memberId: String(memberId), range } : { range }
+          ).toString()
+        ),
+      });
     } catch {}
   }
 
@@ -63,49 +86,84 @@ export default function CoordinatorScriptTab({ memberId = null, range = 'all', s
 
   const cols: GridColDef<Row>[] = [
     { field: 'member_name', headerName: 'Member', width: 200 },
-    { field: 'scheduled_date', headerName: 'Scheduled', width: 140, renderCell: renderDate as any },
+    {
+      field: 'scheduled_date',
+      headerName: 'Scheduled',
+      width: 140,
+      renderCell: renderDate as any,
+    },
     { field: 'therapy_type', headerName: 'Therapy Type', width: 180 },
     { field: 'therapy_name', headerName: 'Therapy', width: 240 },
-    { field: 'instance_number', headerName: 'Instance', width: 110, type: 'number' },
     {
-      field: 'completed_flag', headerName: 'Completed', width: 130,
-      renderCell: (params) => {
+      field: 'instance_number',
+      headerName: 'Instance',
+      width: 110,
+      type: 'number',
+    },
+    {
+      field: 'completed_flag',
+      headerName: 'Completed',
+      width: 130,
+      renderCell: params => {
         const row = params.row as any as Row;
         const isCompleted = !!row.completed_flag;
-        const readOnly = (row.program_status_name || '').toLowerCase() !== 'active';
+        const readOnly =
+          (row.program_status_name || '').toLowerCase() !== 'active';
         return (
           <Chip
             label={isCompleted ? 'Yes' : 'No'}
             color={isCompleted ? 'success' : 'default'}
             size="small"
-            onClick={() => { if (!readOnly) void toggleComplete(row); }}
+            onClick={() => {
+              if (!readOnly) void toggleComplete(row);
+            }}
             sx={{ cursor: readOnly ? 'default' : 'pointer' }}
           />
         );
-      }
+      },
     },
     {
-      field: 'actions', headerName: 'Actions', width: 120, sortable: false,
-      renderCell: (params) => {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      sortable: false,
+      renderCell: params => {
         const row = params.row as Row;
-        const readOnly = (row.program_status_name || '').toLowerCase() !== 'active';
+        const readOnly =
+          (row.program_status_name || '').toLowerCase() !== 'active';
         return (
           <Box>
             <IconButton
               size="small"
               color={row.completed_flag ? 'success' : 'primary'}
               disabled={readOnly}
-              onClick={() => { if (!readOnly) void toggleComplete(row); }}
+              onClick={() => {
+                if (!readOnly) void toggleComplete(row);
+              }}
             >
-              {row.completed_flag ? <CheckCircleOutlineIcon /> : <RadioButtonUncheckedIcon />}
+              {row.completed_flag ? (
+                <CheckCircleOutlineIcon />
+              ) : (
+                <RadioButtonUncheckedIcon />
+              )}
             </IconButton>
           </Box>
         );
-      }
+      },
     },
-    { field: 'created_at', headerName: 'Created Date', width: 140, renderCell: renderDate as any } as any,
+    {
+      field: 'created_at',
+      headerName: 'Created Date',
+      width: 140,
+      renderCell: renderDate as any,
+    } as any,
     { field: 'created_by', headerName: 'Created By', width: 180 } as any,
-    { field: 'updated_at', headerName: 'Updated Date', width: 140, renderCell: renderDate as any } as any,
+    {
+      field: 'updated_at',
+      headerName: 'Updated Date',
+      width: 140,
+      renderCell: renderDate as any,
+    } as any,
     { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
   ];
 
@@ -117,17 +175,19 @@ export default function CoordinatorScriptTab({ memberId = null, range = 'all', s
         columns={cols as any}
         loading={isLoading}
         error={error ? (error as any).message : null}
-        getRowId={(row) => row.member_program_item_schedule_id}
-        rowClassName={(row) => {
+        getRowId={row => row.member_program_item_schedule_id}
+        rowClassName={row => {
           const isCompleted = !!(row as any).completed_flag;
           if (isCompleted) return '';
           const dateStr = (row as any).scheduled_date as string | undefined;
           if (!dateStr) return '';
           const today = new Date();
           const date = new Date(dateStr);
-          date.setHours(0,0,0,0);
-          today.setHours(0,0,0,0);
-          const diffDays = Math.floor((date.getTime() - today.getTime()) / (1000*60*60*24));
+          date.setHours(0, 0, 0, 0);
+          today.setHours(0, 0, 0, 0);
+          const diffDays = Math.floor(
+            (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+          );
           if (diffDays < 0) return 'row-late';
           if (diffDays >= 5) return '';
           return `row-due-${diffDays}`;
@@ -144,5 +204,3 @@ export default function CoordinatorScriptTab({ memberId = null, range = 'all', s
     </Box>
   );
 }
-
-

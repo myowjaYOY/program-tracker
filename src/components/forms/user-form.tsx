@@ -51,7 +51,11 @@ export default function UserForm({
 
   // Create combined schema for edit mode that includes optional password
   const editSchema = userUpdateSchema.extend({
-    password: z.string().min(8, 'Password must be at least 8 characters').optional().or(z.literal('')),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .optional()
+      .or(z.literal('')),
   });
 
   const {
@@ -77,7 +81,8 @@ export default function UserForm({
   const updatePermissions = useUpdateUserPermissions();
 
   // For edit mode, fetch user permissions and menu items
-  const { data: userPermissions, isLoading: userPermissionsLoading } = useUserPermissions(initialValues?.id || '');
+  const { data: userPermissions, isLoading: userPermissionsLoading } =
+    useUserPermissions(initialValues?.id || '');
   const { data: menuItems, isLoading: menuItemsLoading } = useMenuItems();
 
   // Update selected menu paths when user permissions are loaded
@@ -112,15 +117,42 @@ export default function UserForm({
   const getSectionItems = (section: string) => {
     if (section === 'admin') {
       // Return only the main admin items (not lookup items)
-      return menuItems?.filter(item => 
-        item.section === 'admin' && 
-        !['/dashboard/bodies', '/dashboard/buckets', '/dashboard/financing-types', '/dashboard/status', '/dashboard/payment-methods', '/dashboard/payment-status', '/dashboard/pillars', '/dashboard/program-status', '/dashboard/therapy-type', '/dashboard/vendors'].includes(item.path)
-      ) || [];
+      return (
+        menuItems?.filter(
+          item =>
+            item.section === 'admin' &&
+            ![
+              '/dashboard/bodies',
+              '/dashboard/buckets',
+              '/dashboard/financing-types',
+              '/dashboard/status',
+              '/dashboard/payment-methods',
+              '/dashboard/payment-status',
+              '/dashboard/pillars',
+              '/dashboard/program-status',
+              '/dashboard/therapy-type',
+              '/dashboard/vendors',
+            ].includes(item.path)
+        ) || []
+      );
     } else if (section === 'lookup') {
       // Return the lookup items
-      return menuItems?.filter(item => 
-        ['/dashboard/bodies', '/dashboard/buckets', '/dashboard/financing-types', '/dashboard/status', '/dashboard/payment-methods', '/dashboard/payment-status', '/dashboard/pillars', '/dashboard/program-status', '/dashboard/therapy-type', '/dashboard/vendors'].includes(item.path)
-      ) || [];
+      return (
+        menuItems?.filter(item =>
+          [
+            '/dashboard/bodies',
+            '/dashboard/buckets',
+            '/dashboard/financing-types',
+            '/dashboard/status',
+            '/dashboard/payment-methods',
+            '/dashboard/payment-status',
+            '/dashboard/pillars',
+            '/dashboard/program-status',
+            '/dashboard/therapy-type',
+            '/dashboard/vendors',
+          ].includes(item.path)
+        ) || []
+      );
     } else {
       return menuItems?.filter(item => item.section === section) || [];
     }
@@ -151,7 +183,14 @@ export default function UserForm({
         isSubmitting={true}
         submitText="Loading..."
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 4,
+          }}
+        >
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body1" sx={{ mb: 2 }}>
               Loading user data and menu permissions...
@@ -221,7 +260,6 @@ export default function UserForm({
         disabled={isEdit}
       />
 
-
       <TextField
         label="Full Name"
         fullWidth
@@ -262,7 +300,10 @@ export default function UserForm({
           fullWidth
           {...register('password')}
           error={!!errors.password}
-          helperText={errors.password?.message || 'Enter a new password to reset, or leave blank to keep current password'}
+          helperText={
+            errors.password?.message ||
+            'Enter a new password to reset, or leave blank to keep current password'
+          }
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
@@ -314,7 +355,14 @@ export default function UserForm({
             </Typography>
 
             {userPermissionsLoading || menuItemsLoading ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  py: 2,
+                }}
+              >
                 <CircularProgress size={20} sx={{ mr: 1 }} />
                 <Typography variant="body2" color="text.secondary">
                   Loading menu permissions...
@@ -340,7 +388,10 @@ export default function UserForm({
                         label={
                           <Typography
                             variant="subtitle1"
-                            sx={{ textTransform: 'capitalize', fontWeight: 600 }}
+                            sx={{
+                              textTransform: 'capitalize',
+                              fontWeight: 600,
+                            }}
                           >
                             {section} ({sectionItems.length} items)
                           </Typography>

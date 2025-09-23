@@ -16,12 +16,11 @@ export function useFinancialsDerived(options: {
   return React.useMemo(() => {
     const positiveFinance = Math.max(0, Number(financeCharges || 0));
     const negativeFinanceFee = Math.max(0, -Number(financeCharges || 0));
-    const programPrice = Number(totalCharge || 0) + positiveFinance + Number(discounts || 0);
+    const programPrice =
+      Number(totalCharge || 0) + positiveFinance + Number(discounts || 0);
     const revenue = programPrice;
     const costs = Number(totalCost || 0) + negativeFinanceFee;
     const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
     return { programPrice, margin };
   }, [totalCharge, totalCost, financeCharges, discounts]);
 }
-
-

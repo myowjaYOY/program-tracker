@@ -55,11 +55,11 @@ function UserManagementContent() {
       const response = await fetch('/api/admin/clear-menu-items', {
         method: 'POST',
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to clear menu items');
       }
-      
+
       const data = await response.json();
       console.log('Menu items cleared:', data.message);
       alert('Menu items table cleared successfully!');
@@ -74,14 +74,14 @@ function UserManagementContent() {
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, height: '100%', width: '100%' }}>
       <Suspense fallback={<UserTableSkeleton />}>
-        <UserTable 
+        <UserTable
           syncMenuItemsProps={{
             onSync: handleSyncMenuItems,
-            isPending: syncMenuItemsMutation.isPending
+            isPending: syncMenuItemsMutation.isPending,
           }}
           clearMenuItemsProps={{
             onClear: handleClearMenuItems,
-            isPending: isClearing
+            isPending: isClearing,
           }}
         />
       </Suspense>

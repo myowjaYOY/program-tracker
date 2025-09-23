@@ -9,4 +9,6 @@ export const programTemplateSchema = z.object({
 export const programTemplateUpdateSchema = programTemplateSchema.partial();
 
 export type ProgramTemplateFormData = z.infer<typeof programTemplateSchema>;
-export type ProgramTemplateUpdateData = z.infer<typeof programTemplateUpdateSchema>;
+export type ProgramTemplateUpdateData = z.infer<
+  typeof programTemplateUpdateSchema
+>;

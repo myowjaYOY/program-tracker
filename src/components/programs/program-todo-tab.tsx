@@ -15,15 +15,30 @@ interface ProgramToDoTabProps {
 }
 
 export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
-  const { data = [], isLoading, error } = useProgramToDo(program.member_program_id);
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useProgramToDo(program.member_program_id);
   const update = useUpdateToDo(program.member_program_id);
   const { data: statuses = [] } = useProgramStatus();
-  const statusName = (statuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
-  const readOnly = statusName === 'quote' || statusName === 'paused' || statusName === 'completed' || statusName === 'cancelled';
+  const statusName = (
+    statuses.find(s => s.program_status_id === program.program_status_id)
+      ?.status_name || ''
+  ).toLowerCase();
+  const readOnly =
+    statusName === 'quote' ||
+    statusName === 'paused' ||
+    statusName === 'completed' ||
+    statusName === 'cancelled';
 
-  const rows = (data as any[]).map((r) => {
-    const tt = r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapytype?.therapy_type_name || '—';
-    const tn = r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapy_name || '—';
+  const rows = (data as any[]).map(r => {
+    const tt =
+      r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapytype
+        ?.therapy_type_name || '—';
+    const tn =
+      r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapy_name ||
+      '—';
     const task = r?.member_program_item_tasks?.task_name || '—';
     const desc = r?.member_program_item_tasks?.description || '';
     return {
@@ -37,38 +52,65 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
   });
 
   const cols: GridColDef[] = [
-    { field: 'due_date', headerName: 'Due', width: 140, renderCell: renderDate as any },
+    {
+      field: 'due_date',
+      headerName: 'Due',
+      width: 140,
+      renderCell: renderDate as any,
+    },
     { field: 'therapy_type', headerName: 'Therapy Type', width: 160 },
     { field: 'therapy_name', headerName: 'Therapy', width: 220 },
     { field: 'task_name', headerName: 'Task', width: 220 },
     { field: 'description', headerName: 'Description', width: 300 },
     {
-      field: 'completed_flag', headerName: 'Completed', width: 130,
-      renderCell: (params) => (
+      field: 'completed_flag',
+      headerName: 'Completed',
+      width: 130,
+      renderCell: params => (
         <Chip
           label={params.value ? 'Yes' : 'No'}
           color={params.value ? 'success' : 'default'}
           size="small"
-          onClick={() => { if (!readOnly) update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.value }); }}
+          onClick={() => {
+            if (!readOnly)
+              update.mutate({
+                taskScheduleId: params.row.member_program_item_task_schedule_id,
+                completed_flag: !params.value,
+              });
+          }}
           sx={{ cursor: 'pointer' }}
         />
-      )
+      ),
     },
     {
-      field: 'actions', headerName: 'Actions', width: 120, sortable: false,
-      renderCell: (params) => (
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      sortable: false,
+      renderCell: params => (
         <Box>
           <IconButton
             size="small"
             color={params.row.completed_flag ? 'success' : 'primary'}
             disabled={update.isPending || readOnly}
-            onClick={() => { if (!readOnly) update.mutate({ taskScheduleId: params.row.member_program_item_task_schedule_id, completed_flag: !params.row.completed_flag }); }}
+            onClick={() => {
+              if (!readOnly)
+                update.mutate({
+                  taskScheduleId:
+                    params.row.member_program_item_task_schedule_id,
+                  completed_flag: !params.row.completed_flag,
+                });
+            }}
           >
-            {params.row.completed_flag ? <CheckCircleOutlineIcon /> : <RadioButtonUncheckedIcon />}
+            {params.row.completed_flag ? (
+              <CheckCircleOutlineIcon />
+            ) : (
+              <RadioButtonUncheckedIcon />
+            )}
           </IconButton>
         </Box>
-      )
-    }
+      ),
+    },
   ];
 
   return (
@@ -79,7 +121,7 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
         columns={cols}
         loading={isLoading}
         error={error ? (error as any).message : null}
-        getRowId={(row) => row.member_program_item_task_schedule_id}
+        getRowId={row => row.member_program_item_task_schedule_id}
         showCreateButton={false}
         showEditButton={false}
         showDeleteButton={false}
@@ -92,5 +134,3 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
     </Box>
   );
 }
-
-

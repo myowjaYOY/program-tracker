@@ -11,7 +11,10 @@ export const userSchema = z.object({
 export const userUpdateSchema = userSchema.partial().omit({ password: true });
 
 export const userPasswordUpdateSchema = z.object({
-  password: z.string().min(8, 'Password must be at least 8 characters').optional(),
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters')
+    .optional(),
 });
 
 export const userPermissionsSchema = z.object({

@@ -1,19 +1,30 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Box, 
-  Button, 
+import {
+  Box,
+  Button,
   Dialog,
   DialogTitle,
   DialogContent,
-  IconButton
+  IconButton,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
-import BaseDataTable, { renderActiveFlag } from '@/components/tables/base-data-table';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+} from '@mui/icons-material';
+import BaseDataTable, {
+  renderActiveFlag,
+} from '@/components/tables/base-data-table';
 import { ProgramTemplate, ProgramTemplateItems } from '@/types/database.types';
-import { useProgramTemplateItems, useCreateProgramTemplateItem, useUpdateProgramTemplateItem, useDeleteProgramTemplateItem } from '@/lib/hooks/use-program-template-items';
+import {
+  useProgramTemplateItems,
+  useCreateProgramTemplateItem,
+  useUpdateProgramTemplateItem,
+  useDeleteProgramTemplateItem,
+} from '@/lib/hooks/use-program-template-items';
 import { useTherapies } from '@/lib/hooks/use-therapies';
 import { useProgramTemplate } from '@/lib/hooks/use-program-templates';
 import AddTemplateItemForm from './add-template-item-form';
@@ -23,15 +34,25 @@ interface TemplateItemsTabProps {
   onTemplateUpdate: (template: ProgramTemplate) => void;
 }
 
-
-export default function TemplateItemsTab({ template, onTemplateUpdate }: TemplateItemsTabProps) {
+export default function TemplateItemsTab({
+  template,
+  onTemplateUpdate,
+}: TemplateItemsTabProps) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<ProgramTemplateItems | null>(null);
-  
-  const { data: templateItems = [], isLoading, error } = useProgramTemplateItems(template.program_template_id);
+  const [editingItem, setEditingItem] = useState<ProgramTemplateItems | null>(
+    null
+  );
+
+  const {
+    data: templateItems = [],
+    isLoading,
+    error,
+  } = useProgramTemplateItems(template.program_template_id);
   const { data: therapies = [] } = useTherapies();
-  const { data: updatedTemplate } = useProgramTemplate(template.program_template_id);
+  const { data: updatedTemplate } = useProgramTemplate(
+    template.program_template_id
+  );
   const createItem = useCreateProgramTemplateItem();
   const updateItem = useUpdateProgramTemplateItem();
   const deleteItem = useDeleteProgramTemplateItem();
@@ -49,7 +70,7 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
     templateItems,
     isLoading,
     error,
-    updatedTemplate
+    updatedTemplate,
   });
 
   // Map template items to include id field for DataGrid
@@ -57,16 +78,15 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
     ...item,
     id: item.program_template_items_id,
     // Flatten nested data for sorting
-    therapy_type_name: (item as any).therapies?.therapytype?.therapy_type_name || 'N/A',
+    therapy_type_name:
+      (item as any).therapies?.therapytype?.therapy_type_name || 'N/A',
     therapy_name: (item as any).therapies?.therapy_name || 'Unknown Therapy',
     bucket_name: (item as any).therapies?.buckets?.bucket_name || 'N/A',
     therapy_cost: (item as any).therapies?.cost || 0,
     therapy_charge: (item as any).therapies?.charge || 0,
     total_cost: ((item as any).therapies?.cost || 0) * (item.quantity || 1),
-    total_charge: ((item as any).therapies?.charge || 0) * (item.quantity || 1)
+    total_charge: ((item as any).therapies?.charge || 0) * (item.quantity || 1),
   }));
-
-
 
   const handleAddItem = async (formData: {
     therapy_type_id?: number;
@@ -80,7 +100,7 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
     try {
       await createItem.mutateAsync({
         program_template_id: template.program_template_id,
-        ...formData
+        ...formData,
       });
       setIsAddModalOpen(false);
     } catch (error) {
@@ -92,13 +112,17 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
     console.log('Delete button clicked for item:', item);
     console.log('Template ID:', template.program_template_id);
     console.log('Item ID:', item.program_template_items_id);
-    
-    if (window.confirm('Are you sure you want to remove this item from the template?')) {
+
+    if (
+      window.confirm(
+        'Are you sure you want to remove this item from the template?'
+      )
+    ) {
       console.log('User confirmed deletion, calling API...');
       try {
         await deleteItem.mutateAsync({
           templateId: template.program_template_id,
-          itemId: item.program_template_items_id
+          itemId: item.program_template_items_id,
         });
         console.log('Delete API call completed successfully');
       } catch (error) {
@@ -124,12 +148,12 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
     instructions?: string | undefined;
   }) => {
     if (!editingItem) return;
-    
+
     try {
       await updateItem.mutateAsync({
         templateId: template.program_template_id,
         itemId: editingItem.program_template_items_id,
-        data: formData
+        data: formData,
       });
       setIsEditModalOpen(false);
       setEditingItem(null);
@@ -234,7 +258,14 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -253,7 +284,7 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
         data={mappedTemplateItems}
         columns={columns}
         loading={isLoading}
-        getRowId={(row) => row.program_template_items_id}
+        getRowId={row => row.program_template_items_id}
         showCreateButton={false}
         showActionsColumn={false}
         pageSize={5}
@@ -262,16 +293,16 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
       />
 
       {/* Add Item Modal */}
-      <Dialog 
-        open={isAddModalOpen} 
+      <Dialog
+        open={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         maxWidth="md"
         fullWidth={false}
         PaperProps={{
           sx: {
             width: '675px',
-            maxWidth: '90vw'
-          }
+            maxWidth: '90vw',
+          },
         }}
       >
         <DialogTitle
@@ -297,8 +328,8 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
       </Dialog>
 
       {/* Edit Item Modal */}
-      <Dialog 
-        open={isEditModalOpen} 
+      <Dialog
+        open={isEditModalOpen}
         onClose={() => {
           setIsEditModalOpen(false);
           setEditingItem(null);
@@ -308,8 +339,8 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
         PaperProps={{
           sx: {
             width: '675px',
-            maxWidth: '90vw'
-          }
+            maxWidth: '90vw',
+          },
         }}
       >
         <DialogTitle
@@ -320,11 +351,11 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
           }}
         >
           Edit Template Item
-          <IconButton 
+          <IconButton
             onClick={() => {
               setIsEditModalOpen(false);
               setEditingItem(null);
-            }} 
+            }}
             size="small"
           >
             <CloseIcon />
@@ -340,13 +371,14 @@ export default function TemplateItemsTab({ template, onTemplateUpdate }: Templat
                 setEditingItem(null);
               }}
               initialValues={{
-                therapy_type_id: (editingItem as any).therapies?.therapy_type_id || 0,
+                therapy_type_id:
+                  (editingItem as any).therapies?.therapy_type_id || 0,
                 therapy_id: editingItem.therapy_id || 0,
                 quantity: editingItem.quantity || 1,
                 days_from_start: editingItem.days_from_start || 0,
                 days_between: editingItem.days_between || 0,
                 active_flag: editingItem.active_flag ?? true,
-                instructions: (editingItem as any).instructions || ''
+                instructions: (editingItem as any).instructions || '',
               }}
               mode="edit"
             />

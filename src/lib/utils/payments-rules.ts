@@ -21,15 +21,21 @@ export function shouldRegeneratePayments(options: {
     nextDiscounts,
   } = options;
 
-  const finTypeChanged = (originalFinancingTypeId ?? null) !== (nextFinancingTypeId ?? null);
-  const financeChargesChanged = roundToCents(originalFinanceCharges) !== roundToCents(nextFinanceCharges);
-  const discountsChanged = roundToCents(originalDiscounts) !== roundToCents(nextDiscounts);
+  const finTypeChanged =
+    (originalFinancingTypeId ?? null) !== (nextFinancingTypeId ?? null);
+  const financeChargesChanged =
+    roundToCents(originalFinanceCharges) !== roundToCents(nextFinanceCharges);
+  const discountsChanged =
+    roundToCents(originalDiscounts) !== roundToCents(nextDiscounts);
 
-  return !paymentsExist || finTypeChanged || financeChargesChanged || discountsChanged;
+  return (
+    !paymentsExist ||
+    finTypeChanged ||
+    financeChargesChanged ||
+    discountsChanged
+  );
 }
 
 function roundToCents(n: number): number {
-  return Math.round((Number(n || 0)) * 100);
+  return Math.round(Number(n || 0) * 100);
 }
-
-

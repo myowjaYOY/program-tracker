@@ -46,7 +46,7 @@ const userColumns: GridColDef[] = [
     headerName: 'Email',
     width: 250,
     flex: 1,
-    renderCell: (params) => (
+    renderCell: params => (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <PersonIcon fontSize="small" color="action" />
         {params.value}
@@ -57,13 +57,13 @@ const userColumns: GridColDef[] = [
     field: 'full_name',
     headerName: 'Full Name',
     width: 200,
-    renderCell: (params) => params.value || '-',
+    renderCell: params => params.value || '-',
   },
   {
     field: 'is_admin',
     headerName: 'Admin',
     width: 100,
-    renderCell: (params) => (
+    renderCell: params => (
       <Chip
         label={params.value ? 'Admin' : 'User'}
         color={params.value ? 'primary' : 'default'}
@@ -76,7 +76,7 @@ const userColumns: GridColDef[] = [
     field: 'is_active',
     headerName: 'Status',
     width: 100,
-    renderCell: (params) => (
+    renderCell: params => (
       <Chip
         label={params.value ? 'Active' : 'Inactive'}
         color={params.value ? 'success' : 'default'}
@@ -87,7 +87,10 @@ const userColumns: GridColDef[] = [
   commonColumns.createdAt,
 ];
 
-export default function UserTable({ syncMenuItemsProps, clearMenuItemsProps }: UserTableProps = {}) {
+export default function UserTable({
+  syncMenuItemsProps,
+  clearMenuItemsProps,
+}: UserTableProps = {}) {
   const { data: users, isLoading, error } = useUsers();
   const deleteUser = useDeleteUser();
 

@@ -8,13 +8,30 @@ function mdToDocxParagraphs(md: string): Paragraph[] {
 
   for (const line of lines) {
     if (line.startsWith('### ')) {
-      paras.push(new Paragraph({ text: line.replace(/^###\s+/, ''), heading: HeadingLevel.HEADING_3 }));
+      paras.push(
+        new Paragraph({
+          text: line.replace(/^###\s+/, ''),
+          heading: HeadingLevel.HEADING_3,
+        })
+      );
     } else if (line.startsWith('## ')) {
-      paras.push(new Paragraph({ text: line.replace(/^##\s+/, ''), heading: HeadingLevel.HEADING_2 }));
+      paras.push(
+        new Paragraph({
+          text: line.replace(/^##\s+/, ''),
+          heading: HeadingLevel.HEADING_2,
+        })
+      );
     } else if (line.startsWith('# ')) {
-      paras.push(new Paragraph({ text: line.replace(/^#\s+/, ''), heading: HeadingLevel.HEADING_1 }));
+      paras.push(
+        new Paragraph({
+          text: line.replace(/^#\s+/, ''),
+          heading: HeadingLevel.HEADING_1,
+        })
+      );
     } else if (line.startsWith('- ')) {
-      paras.push(new Paragraph({ text: line.replace(/^-\s+/, ''), bullet: { level: 0 } }));
+      paras.push(
+        new Paragraph({ text: line.replace(/^-\s+/, ''), bullet: { level: 0 } })
+      );
     } else if (line.trim() === '---') {
       paras.push(new Paragraph({}));
     } else if (line.trim() === '') {
@@ -31,7 +48,9 @@ async function main() {
   const input = process.argv[2];
   const output = process.argv[3];
   if (!input || !output) {
-    console.error('Usage: ts-node scripts/export-docx.ts <input.md> <output.docx>');
+    console.error(
+      'Usage: ts-node scripts/export-docx.ts <input.md> <output.docx>'
+    );
     process.exit(1);
   }
   const mdPath = path.resolve(input);
@@ -53,13 +72,7 @@ async function main() {
   console.log(`Wrote ${outPath}`);
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error(e);
   process.exit(1);
 });
-
-
-
-
-
-

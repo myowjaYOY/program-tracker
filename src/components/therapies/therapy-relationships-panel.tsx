@@ -164,7 +164,12 @@ export default function TherapyRelationshipsPanel({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsAddDialogOpen(false)} sx={{ borderRadius: 0 }}>Cancel</Button>
+          <Button
+            onClick={() => setIsAddDialogOpen(false)}
+            sx={{ borderRadius: 0 }}
+          >
+            Cancel
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

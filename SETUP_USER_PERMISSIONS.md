@@ -3,6 +3,7 @@
 ## **📋 Overview**
 
 This system provides simple menu-based user permissions where:
+
 - **Admin users**: See all menu items (full access)
 - **Regular users**: Only see assigned menu items
 - **New menu items**: Automatically available for assignment after sync
@@ -19,6 +20,7 @@ Execute the SQL file to create the required tables:
 ```
 
 This will create:
+
 - `menu_items` table (registry of all menu items)
 - `user_menu_permissions` table (user-specific permissions)
 - Add `is_admin` and `is_active` columns to `users` table
@@ -50,12 +52,14 @@ UPDATE users SET is_admin = true WHERE email = 'another-admin@email.com';
 ### **3. Manage Users**
 
 **Add New User:**
+
 - Click **"Add User"** button
 - Fill in email, full name, password
 - Set admin status and active status
 - User will be created in Supabase Auth
 
 **Edit User Permissions:**
+
 - Click on any user row to edit
 - For non-admin users: Select which menu items they can access
 - For admin users: They automatically have access to all items
@@ -69,7 +73,12 @@ Add new menu items to `src/lib/config/menu-items.ts`:
 ```typescript
 export const MENU_ITEMS: MenuItem[] = [
   // ... existing items
-  { path: '/dashboard/new-feature', label: 'New Feature', section: 'admin', icon: 'NewIcon' },
+  {
+    path: '/dashboard/new-feature',
+    label: 'New Feature',
+    section: 'admin',
+    icon: 'NewIcon',
+  },
 ];
 ```
 
@@ -109,11 +118,13 @@ const adminNav = [
 ## **📱 User Experience**
 
 ### **For Admin Users:**
+
 - See all menu items in sidebar
 - Access to User Management page
 - Can create/edit users and assign permissions
 
 ### **For Regular Users:**
+
 - Only see assigned menu items in sidebar
 - Cannot access User Management page
 - Full access to pages they can see
@@ -131,13 +142,16 @@ const adminNav = [
 ### **Common Issues:**
 
 **"Admin access required" error:**
+
 - Make sure your user has `is_admin = true` in the database
 
 **Menu items not showing:**
+
 - Run "Sync Menu Items" to update the registry
 - Check that menu items are properly defined in the config
 
 **Users can't see assigned menu items:**
+
 - Check that the user has the correct permissions in the database
 - Verify the user is not marked as inactive
 - Check browser console for any API errors
@@ -146,6 +160,7 @@ const adminNav = [
 ## **📞 Support**
 
 If you encounter any issues:
+
 1. Check the browser console for errors
 2. Verify database schema is properly set up
 3. Ensure admin users are correctly configured

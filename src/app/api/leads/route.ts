@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!parse.success) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
-  
+
   // Convert empty pmedate string to null for database
   const leadData = {
     ...parse.data,
@@ -58,9 +58,9 @@ export async function POST(req: NextRequest) {
     created_by: user.id,
     updated_by: user.id,
   };
-  
+
   console.log('Inserting lead data:', leadData);
-  
+
   const { data, error } = await supabase
     .from('leads')
     .insert([leadData])

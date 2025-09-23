@@ -540,7 +540,9 @@ export interface Database {
         Insert: Omit<MemberProgramItemTasks, 'member_program_item_task_id'> & {
           member_program_item_task_id?: number;
         };
-        Update: Partial<Omit<MemberProgramItemTasks, 'member_program_item_task_id'>>;
+        Update: Partial<
+          Omit<MemberProgramItemTasks, 'member_program_item_task_id'>
+        >;
       };
       member_program_schedule: {
         Row: MemberProgramSchedule;
@@ -561,14 +563,18 @@ export interface Database {
         Insert: Omit<MemberProgramFinances, 'member_program_finance_id'> & {
           member_program_finance_id?: number;
         };
-        Update: Partial<Omit<MemberProgramFinances, 'member_program_finance_id'>>;
+        Update: Partial<
+          Omit<MemberProgramFinances, 'member_program_finance_id'>
+        >;
       };
       member_program_payments: {
         Row: MemberProgramPayments;
         Insert: Omit<MemberProgramPayments, 'member_program_payment_id'> & {
           member_program_payment_id?: number;
         };
-        Update: Partial<Omit<MemberProgramPayments, 'member_program_payment_id'>>;
+        Update: Partial<
+          Omit<MemberProgramPayments, 'member_program_payment_id'>
+        >;
       };
       payment_status: {
         Row: PaymentStatus;
@@ -615,7 +621,9 @@ export interface Database {
         Insert: Omit<ProgramTemplateItems, 'program_template_items_id'> & {
           program_template_items_id?: number;
         };
-        Update: Partial<Omit<ProgramTemplateItems, 'program_template_items_id'>>;
+        Update: Partial<
+          Omit<ProgramTemplateItems, 'program_template_items_id'>
+        >;
       };
       status: {
         Row: Status;

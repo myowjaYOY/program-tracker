@@ -15,7 +15,8 @@ export function useMemberPrograms() {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch member programs');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch member programs');
       return json.data as MemberPrograms[];
     },
   });
@@ -29,7 +30,8 @@ export function useActiveMemberPrograms() {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch active member programs');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch active member programs');
       return json.data as MemberPrograms[];
     },
   });
@@ -43,7 +45,8 @@ export function useMemberProgram(id: number) {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch member program');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch member program');
       return json.data as MemberPrograms;
     },
     enabled: !!id,
@@ -52,9 +55,9 @@ export function useMemberProgram(id: number) {
 
 export function useCreateMemberProgram() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<MemberPrograms, Error, Partial<MemberPrograms>>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const res = await fetch('/api/member-programs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -62,7 +65,10 @@ export function useCreateMemberProgram() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create member program from template');
+      if (!res.ok)
+        throw new Error(
+          json.error || 'Failed to create member program from template'
+        );
       return json.data as MemberPrograms;
     },
     onSuccess: () => {
@@ -73,8 +79,12 @@ export function useCreateMemberProgram() {
 
 export function useUpdateMemberProgram() {
   const queryClient = useQueryClient();
-  
-  return useMutation<MemberPrograms, Error, { id: string; data: Partial<MemberPrograms> }>({
+
+  return useMutation<
+    MemberPrograms,
+    Error,
+    { id: string; data: Partial<MemberPrograms> }
+  >({
     mutationFn: async ({ id, data }) => {
       const res = await fetch(`/api/member-programs/${id}`, {
         method: 'PUT',
@@ -83,11 +93,14 @@ export function useUpdateMemberProgram() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update member program');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update member program');
       return json.data as MemberPrograms;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(data.member_program_id) });
+    onSuccess: data => {
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(data.member_program_id),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
@@ -95,9 +108,9 @@ export function useUpdateMemberProgram() {
 
 export function useDeleteMemberProgram() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<void, Error, number>({
-    mutationFn: async (id) => {
+    mutationFn: async id => {
       const res = await fetch(`/api/member-programs/${id}`, {
         method: 'DELETE',
         credentials: 'include',

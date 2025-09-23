@@ -5,7 +5,8 @@ import { memberProgramKeys } from './use-member-programs';
 export const memberProgramItemKeys = {
   all: ['member-program-items'] as const,
   list: () => [...memberProgramItemKeys.all, 'list'] as const,
-  byProgram: (programId: number) => [...memberProgramItemKeys.all, 'by-program', programId] as const,
+  byProgram: (programId: number) =>
+    [...memberProgramItemKeys.all, 'by-program', programId] as const,
   detail: (id: number) => [...memberProgramItemKeys.all, 'detail', id] as const,
 };
 
@@ -17,7 +18,8 @@ export function useMemberProgramItems(programId: number) {
         credentials: 'include',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch member program items');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch member program items');
       return json.data as MemberProgramItems[];
     },
     enabled: !!programId,
@@ -26,23 +28,35 @@ export function useMemberProgramItems(programId: number) {
 
 export function useCreateMemberProgramItem() {
   const queryClient = useQueryClient();
-  
-  return useMutation<MemberProgramItems, Error, Partial<MemberProgramItems> & { member_program_id: number }>({
-    mutationFn: async (data) => {
-      const res = await fetch(`/api/member-programs/${data.member_program_id}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+
+  return useMutation<
+    MemberProgramItems,
+    Error,
+    Partial<MemberProgramItems> & { member_program_id: number }
+  >({
+    mutationFn: async data => {
+      const res = await fetch(
+        `/api/member-programs/${data.member_program_id}/items`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(data),
+        }
+      );
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create member program item');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create member program item');
       return json.data as MemberProgramItems;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.byProgram(data.member_program_id) });
+    onSuccess: data => {
+      queryClient.invalidateQueries({
+        queryKey: memberProgramItemKeys.byProgram(data.member_program_id),
+      });
       // Also invalidate the member program to update calculated fields
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(data.member_program_id) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(data.member_program_id),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
@@ -50,24 +64,38 @@ export function useCreateMemberProgramItem() {
 
 export function useUpdateMemberProgramItem() {
   const queryClient = useQueryClient();
-  
-  return useMutation<MemberProgramItems, Error, { programId: number; itemId: number; data: Partial<MemberProgramItems> }>({
+
+  return useMutation<
+    MemberProgramItems,
+    Error,
+    { programId: number; itemId: number; data: Partial<MemberProgramItems> }
+  >({
     mutationFn: async ({ programId, itemId, data }) => {
-      const res = await fetch(`/api/member-programs/${programId}/items/${itemId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
+      const res = await fetch(
+        `/api/member-programs/${programId}/items/${itemId}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(data),
+        }
+      );
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update member program item');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update member program item');
       return json.data as MemberProgramItems;
     },
     onSuccess: (data, variables) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.byProgram(variables.programId) });
-      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.detail(variables.itemId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramItemKeys.byProgram(variables.programId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramItemKeys.detail(variables.itemId),
+      });
       // Also invalidate the member program to update calculated fields
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(variables.programId),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
@@ -75,26 +103,33 @@ export function useUpdateMemberProgramItem() {
 
 export function useDeleteMemberProgramItem() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<void, Error, { programId: number; itemId: number }>({
     mutationFn: async ({ programId, itemId }) => {
-      const res = await fetch(`/api/member-programs/${programId}/items/${itemId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
+      const res = await fetch(
+        `/api/member-programs/${programId}/items/${itemId}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        }
+      );
       if (!res.ok) {
         const json = await res.json();
         throw new Error(json.error || 'Failed to delete member program item');
       }
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.byProgram(variables.programId) });
-      queryClient.invalidateQueries({ queryKey: memberProgramItemKeys.detail(variables.itemId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramItemKeys.byProgram(variables.programId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramItemKeys.detail(variables.itemId),
+      });
       // Also invalidate the member program to update calculated fields
-      queryClient.invalidateQueries({ queryKey: memberProgramKeys.detail(variables.programId) });
+      queryClient.invalidateQueries({
+        queryKey: memberProgramKeys.detail(variables.programId),
+      });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });
 }
-
-

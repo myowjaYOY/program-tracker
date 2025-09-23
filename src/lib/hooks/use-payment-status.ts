@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { PaymentStatus } from '@/types/database.types';
-import { PaymentStatusFormData, PaymentStatusUpdateData } from '@/lib/validations/payment-status';
+import {
+  PaymentStatusFormData,
+  PaymentStatusUpdateData,
+} from '@/lib/validations/payment-status';
 
 const paymentStatusKeys = {
   all: ['payment-status'] as const,
@@ -16,7 +19,8 @@ export function usePaymentStatus() {
     queryFn: async () => {
       const res = await fetch('/api/payment-status');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch payment status');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch payment status');
       return json.data as PaymentStatus[];
     },
   });
@@ -28,31 +32,35 @@ export function useActivePaymentStatus() {
     queryFn: async () => {
       const res = await fetch('/api/payment-status');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch payment status');
-      return (json.data as PaymentStatus[]).filter(status => status.active_flag);
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch payment status');
+      return (json.data as PaymentStatus[]).filter(
+        status => status.active_flag
+      );
     },
   });
 }
 
 export function useCreatePaymentStatus() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<PaymentStatus, Error, PaymentStatusFormData>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const res = await fetch('/api/payment-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create payment status');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to create payment status');
       return json.data as PaymentStatus;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: paymentStatusKeys.all });
       toast.success('Payment status created successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to create payment status');
     },
   });
@@ -60,8 +68,12 @@ export function useCreatePaymentStatus() {
 
 export function useUpdatePaymentStatus() {
   const queryClient = useQueryClient();
-  
-  return useMutation<PaymentStatus, Error, { id: string; data: PaymentStatusUpdateData }>({
+
+  return useMutation<
+    PaymentStatus,
+    Error,
+    { id: string; data: PaymentStatusUpdateData }
+  >({
     mutationFn: async ({ id, data }) => {
       const res = await fetch(`/api/payment-status/${id}`, {
         method: 'PUT',
@@ -69,15 +81,18 @@ export function useUpdatePaymentStatus() {
         body: JSON.stringify(data),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to update payment status');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to update payment status');
       return json.data as PaymentStatus;
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: paymentStatusKeys.all });
-      queryClient.invalidateQueries({ queryKey: paymentStatusKeys.detail(variables.id) });
+      queryClient.invalidateQueries({
+        queryKey: paymentStatusKeys.detail(variables.id),
+      });
       toast.success('Payment status updated successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to update payment status');
     },
   });
@@ -85,9 +100,9 @@ export function useUpdatePaymentStatus() {
 
 export function useDeletePaymentStatus() {
   const queryClient = useQueryClient();
-  
+
   return useMutation<void, Error, string>({
-    mutationFn: async (id) => {
+    mutationFn: async id => {
       const res = await fetch(`/api/payment-status/${id}`, {
         method: 'DELETE',
       });
@@ -100,9 +115,8 @@ export function useDeletePaymentStatus() {
       queryClient.invalidateQueries({ queryKey: paymentStatusKeys.all });
       toast.success('Payment status deleted successfully');
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || 'Failed to delete payment status');
     },
   });
 }
-

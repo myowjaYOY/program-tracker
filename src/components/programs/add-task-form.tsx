@@ -19,7 +19,10 @@ import { Close as CloseIcon } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { memberProgramItemTaskSchema, MemberProgramItemTaskFormData } from '@/lib/validations/member-program-item-task';
+import {
+  memberProgramItemTaskSchema,
+  MemberProgramItemTaskFormData,
+} from '@/lib/validations/member-program-item-task';
 import { useMemberProgramItems } from '@/lib/hooks/use-member-program-items';
 
 interface AddTaskFormProps {
@@ -30,7 +33,13 @@ interface AddTaskFormProps {
   loading?: boolean;
 }
 
-export default function AddTaskForm({ open, onClose, onSubmit, programId, loading = false }: AddTaskFormProps) {
+export default function AddTaskForm({
+  open,
+  onClose,
+  onSubmit,
+  programId,
+  loading = false,
+}: AddTaskFormProps) {
   const [selectedItemId, setSelectedItemId] = useState<number | ''>('');
 
   const {
@@ -51,9 +60,11 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
   });
 
   // Fetch program items for the dropdown
-  const { data: programItems = [], isLoading: itemsLoading, error: itemsError } = useMemberProgramItems(programId);
-  
-  
+  const {
+    data: programItems = [],
+    isLoading: itemsLoading,
+    error: itemsError,
+  } = useMemberProgramItems(programId);
 
   const handleFormSubmit = (data: MemberProgramItemTaskFormData) => {
     // Set task_id to 0 for new tasks (not associated with therapy tasks)
@@ -97,7 +108,11 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <Box component="form" onSubmit={handleSubmit(handleFormSubmit)} sx={{ pt: 2 }}>
+        <Box
+          component="form"
+          onSubmit={handleSubmit(handleFormSubmit)}
+          sx={{ pt: 2 }}
+        >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Therapy Selection */}
             <FormControl fullWidth error={!!errors.member_program_item_id}>
@@ -110,7 +125,7 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
                     {...field}
                     label="Therapy"
                     value={field.value || ''}
-                    onChange={(e) => {
+                    onChange={e => {
                       field.onChange(e.target.value);
                       setSelectedItemId(e.target.value);
                     }}
@@ -123,8 +138,11 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
                     ) : programItems.length === 0 ? (
                       <MenuItem disabled>No items found</MenuItem>
                     ) : (
-                      programItems.map((item) => (
-                        <MenuItem key={item.member_program_item_id} value={item.member_program_item_id}>
+                      programItems.map(item => (
+                        <MenuItem
+                          key={item.member_program_item_id}
+                          value={item.member_program_item_id}
+                        >
                           {item.therapies?.therapy_name || 'Unknown Therapy'}
                         </MenuItem>
                       ))
@@ -173,8 +191,9 @@ export default function AddTaskForm({ open, onClose, onSubmit, programId, loadin
                   disabled={!selectedItemId}
                   error={!!errors.task_delay}
                   helperText={errors.task_delay?.message}
-                  onChange={(e) => {
-                    const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                  onChange={e => {
+                    const value =
+                      e.target.value === '' ? 0 : parseInt(e.target.value, 10);
                     field.onChange(value);
                   }}
                 />

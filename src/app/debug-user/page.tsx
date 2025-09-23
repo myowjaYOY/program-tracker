@@ -15,11 +15,11 @@ export default function DebugUserPage() {
     try {
       const response = await fetch('/api/debug/user-info');
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch user info');
       }
-      
+
       setUserInfo(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -36,11 +36,11 @@ export default function DebugUserPage() {
         method: 'POST',
       });
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to make user admin');
       }
-      
+
       alert('Successfully made admin! Refreshing user info...');
       await fetchUserInfo();
     } catch (err) {
@@ -59,19 +59,15 @@ export default function DebugUserPage() {
       <Typography variant="h4" gutterBottom>
         Debug User Info
       </Typography>
-      
+
       <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-        <Button 
-          variant="contained" 
-          onClick={fetchUserInfo}
-          disabled={loading}
-        >
+        <Button variant="contained" onClick={fetchUserInfo} disabled={loading}>
           {loading ? 'Loading...' : 'Refresh User Info'}
         </Button>
-        
+
         {userInfo && !userInfo.isAdmin && (
-          <Button 
-            variant="contained" 
+          <Button
+            variant="contained"
             color="warning"
             onClick={makeAdmin}
             disabled={makingAdmin}
@@ -92,14 +88,26 @@ export default function DebugUserPage() {
           <Typography variant="h6" gutterBottom>
             Session User:
           </Typography>
-          <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+          <pre
+            style={{
+              background: '#f5f5f5',
+              padding: '10px',
+              borderRadius: '4px',
+            }}
+          >
             {JSON.stringify(userInfo.sessionUser, null, 2)}
           </pre>
 
           <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
             Database User:
           </Typography>
-          <pre style={{ background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
+          <pre
+            style={{
+              background: '#f5f5f5',
+              padding: '10px',
+              borderRadius: '4px',
+            }}
+          >
             {JSON.stringify(userInfo.dbUser, null, 2)}
           </pre>
 

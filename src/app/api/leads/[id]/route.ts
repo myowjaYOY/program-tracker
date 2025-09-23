@@ -63,16 +63,16 @@ export async function PUT(
   if (!parse.success) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
-  
+
   // Convert empty pmedate string to null for database
   const updateData = {
     ...parse.data,
-    ...(parse.data.pmedate !== undefined && { 
-      pmedate: parse.data.pmedate === '' ? null : parse.data.pmedate 
+    ...(parse.data.pmedate !== undefined && {
+      pmedate: parse.data.pmedate === '' ? null : parse.data.pmedate,
     }),
     updated_by: user.id,
   };
-  
+
   const { data, error } = await supabase
     .from('leads')
     .update(updateData)

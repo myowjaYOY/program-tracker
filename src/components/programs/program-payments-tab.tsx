@@ -2,11 +2,13 @@
 
 import React from 'react';
 import { Box } from '@mui/material';
-import BaseDataTable, { commonColumns, renderCurrency, renderDate } from '@/components/tables/base-data-table';
+import BaseDataTable, {
+  commonColumns,
+  renderCurrency,
+  renderDate,
+} from '@/components/tables/base-data-table';
 import { MemberPrograms, MemberProgramPayments } from '@/types/database.types';
-import { 
-  useMemberProgramPayments
-} from '@/lib/hooks/use-member-program-payments';
+import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import MemberProgramPaymentForm from '@/components/forms/member-program-payment-form';
 
@@ -18,10 +20,19 @@ interface PaymentRow extends MemberProgramPayments {
   id: number;
 }
 
-export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps) {
-  const { data = [], isLoading, error } = useMemberProgramPayments(program.member_program_id);
+export default function ProgramPaymentsTab({
+  program,
+}: ProgramPaymentsTabProps) {
+  const {
+    data = [],
+    isLoading,
+    error,
+  } = useMemberProgramPayments(program.member_program_id);
   const { data: statuses = [] } = useProgramStatus();
-  const statusName = (statuses.find(s => s.program_status_id === program.program_status_id)?.status_name || '').toLowerCase();
+  const statusName = (
+    statuses.find(s => s.program_status_id === program.program_status_id)
+      ?.status_name || ''
+  ).toLowerCase();
   const canEdit = statusName === 'quote' || statusName === 'active';
 
   const rows: PaymentRow[] = (data || []).map(p => ({
@@ -30,9 +41,24 @@ export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps)
   }));
 
   const columns = [
-    { field: 'payment_due_date', headerName: 'Due Date', width: 130, renderCell: renderDate },
-    { field: 'payment_date', headerName: 'Paid Date', width: 130, renderCell: renderDate },
-    { field: 'payment_amount', headerName: 'Amount', width: 120, renderCell: renderCurrency },
+    {
+      field: 'payment_due_date',
+      headerName: 'Due Date',
+      width: 130,
+      renderCell: renderDate,
+    },
+    {
+      field: 'payment_date',
+      headerName: 'Paid Date',
+      width: 130,
+      renderCell: renderDate,
+    },
+    {
+      field: 'payment_amount',
+      headerName: 'Amount',
+      width: 120,
+      renderCell: renderCurrency,
+    },
     { field: 'payment_status_name', headerName: 'Status', width: 140 },
     { field: 'payment_method_name', headerName: 'Method', width: 140 },
     { field: 'payment_reference', headerName: 'Reference', width: 180 },
@@ -47,7 +73,7 @@ export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps)
         columns={columns as any}
         loading={isLoading}
         error={error?.message || null}
-        getRowId={(row) => row.member_program_payment_id}
+        getRowId={row => row.member_program_payment_id}
         showCreateButton={false}
         showActionsColumn={canEdit}
         onEdit={canEdit ? () => {} : (undefined as unknown as any)}
@@ -66,6 +92,3 @@ export default function ProgramPaymentsTab({ program }: ProgramPaymentsTabProps)
     </Box>
   );
 }
-
-
-

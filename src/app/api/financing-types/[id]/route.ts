@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { financingTypesSchema, FinancingTypesUpdateData } from '@/lib/validations/financing-types';
+import {
+  financingTypesSchema,
+  FinancingTypesUpdateData,
+} from '@/lib/validations/financing-types';
 
 export async function PUT(
   req: NextRequest,

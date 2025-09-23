@@ -17,7 +17,7 @@ export function verifyGHLWebhookSignature(
       .createHmac('sha256', secret)
       .update(payload, 'utf8')
       .digest('hex');
-    
+
     return crypto.timingSafeEqual(
       Buffer.from(signature, 'hex'),
       Buffer.from(expectedSignature, 'hex')
@@ -33,7 +33,7 @@ export function verifyGHLWebhookSignature(
  */
 export function extractContactInfo(payload: any) {
   const contact = payload.contact || {};
-  
+
   return {
     firstName: contact.firstName || contact.first_name || '',
     lastName: contact.lastName || contact.last_name || '',
@@ -49,14 +49,14 @@ export function extractContactInfo(payload: any) {
 /**
  * Check if the stage name should trigger lead creation
  */
-export function shouldCreateLead(stageName: string, triggerStages: string[]): boolean {
+export function shouldCreateLead(
+  stageName: string,
+  triggerStages: string[]
+): boolean {
   if (!stageName) return false;
-  
+
   const normalizedStage = stageName.toLowerCase().trim();
-  return triggerStages.some(trigger => 
+  return triggerStages.some(trigger =>
     normalizedStage.includes(trigger.toLowerCase())
   );
 }
-
-
-

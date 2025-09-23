@@ -48,16 +48,23 @@ export const renderCurrency = (params: GridRenderCellParams) => (
 );
 
 export const renderDate = (params: GridRenderCellParams) => {
-  if (!params || !params.value) return <Typography variant="body2">-</Typography>;
+  if (!params || !params.value)
+    return <Typography variant="body2">-</Typography>;
   const v = params.value as string;
   // If value is a date-only string (YYYY-MM-DD), avoid UTC parsing shift
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [y, m, d] = v.split('-').map(Number);
     const local = new Date(y, (m || 1) - 1, d || 1);
-    return <Typography variant="body2">{local.toLocaleDateString('en-US')}</Typography>;
+    return (
+      <Typography variant="body2">
+        {local.toLocaleDateString('en-US')}
+      </Typography>
+    );
   }
   return (
-    <Typography variant="body2">{new Date(v).toLocaleDateString('en-US')}</Typography>
+    <Typography variant="body2">
+      {new Date(v).toLocaleDateString('en-US')}
+    </Typography>
   );
 };
 
@@ -68,11 +75,11 @@ export const renderDateTime = (params: GridRenderCellParams) => (
 );
 
 export const renderCreatedBy = (params: GridRenderCellParams) => (
-  <Typography variant="body2">{params && params.value || '-'}</Typography>
+  <Typography variant="body2">{(params && params.value) || '-'}</Typography>
 );
 
 export const renderUpdatedBy = (params: GridRenderCellParams) => (
-  <Typography variant="body2">{params && params.value || '-'}</Typography>
+  <Typography variant="body2">{(params && params.value) || '-'}</Typography>
 );
 
 export const renderPhone = (params: GridRenderCellParams) => {
@@ -321,7 +328,9 @@ export default function BaseDataTable<T extends BaseEntity>({
       {/* Data Grid */}
       <Box
         sx={{
-          height: autoHeight ? 'auto' : (gridHeight || { xs: 400, sm: 500, md: 600 }),
+          height: autoHeight
+            ? 'auto'
+            : gridHeight || { xs: 400, sm: 500, md: 600 },
           width: '100%',
           position: autoHeight ? 'static' : 'relative',
         }}
@@ -340,9 +349,14 @@ export default function BaseDataTable<T extends BaseEntity>({
             },
           }}
           pageSizeOptions={pageSizeOptions}
-          {...(onRowClick && { onRowClick: (params: any) => onRowClick(params.row) })}
-          getRowClassName={(params) => {
-            const selected = selectedRowId && params.id === selectedRowId ? 'selected-row' : '';
+          {...(onRowClick && {
+            onRowClick: (params: any) => onRowClick(params.row),
+          })}
+          getRowClassName={params => {
+            const selected =
+              selectedRowId && params.id === selectedRowId
+                ? 'selected-row'
+                : '';
             const extra = rowClassName ? rowClassName(params.row as T) : '';
             return [extra, selected].filter(Boolean).join(' ');
           }}
@@ -362,23 +376,28 @@ export default function BaseDataTable<T extends BaseEntity>({
             },
             // Due-date / schedule gradient classes
             '& .MuiDataGrid-row.row-late, & .MuiDataGrid-row.row-late:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.24),
+              backgroundColor: theme => alpha(theme.palette.error.main, 0.24),
             },
-            '& .MuiDataGrid-row.row-due-0, & .MuiDataGrid-row.row-due-0:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.20),
-            },
-            '& .MuiDataGrid-row.row-due-1, & .MuiDataGrid-row.row-due-1:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.16),
-            },
-            '& .MuiDataGrid-row.row-due-2, & .MuiDataGrid-row.row-due-2:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.12),
-            },
-            '& .MuiDataGrid-row.row-due-3, & .MuiDataGrid-row.row-due-3:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.08),
-            },
-            '& .MuiDataGrid-row.row-due-4, & .MuiDataGrid-row.row-due-4:hover': {
-              backgroundColor: (theme) => alpha(theme.palette.error.main, 0.04),
-            },
+            '& .MuiDataGrid-row.row-due-0, & .MuiDataGrid-row.row-due-0:hover':
+              {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.2),
+              },
+            '& .MuiDataGrid-row.row-due-1, & .MuiDataGrid-row.row-due-1:hover':
+              {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.16),
+              },
+            '& .MuiDataGrid-row.row-due-2, & .MuiDataGrid-row.row-due-2:hover':
+              {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.12),
+              },
+            '& .MuiDataGrid-row.row-due-3, & .MuiDataGrid-row.row-due-3:hover':
+              {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.08),
+              },
+            '& .MuiDataGrid-row.row-due-4, & .MuiDataGrid-row.row-due-4:hover':
+              {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.04),
+              },
           }}
         />
         {loading && (

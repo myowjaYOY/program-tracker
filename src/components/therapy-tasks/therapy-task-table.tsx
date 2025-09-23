@@ -7,12 +7,16 @@ import BaseDataTable, {
   commonColumns,
 } from '@/components/tables/base-data-table';
 import TherapyTaskForm from '@/components/forms/therapy-task-form';
-import { useTherapyTasks, useDeleteTherapyTask } from '@/lib/hooks/use-therapy-tasks';
+import {
+  useTherapyTasks,
+  useDeleteTherapyTask,
+} from '@/lib/hooks/use-therapy-tasks';
 import { TherapyTasks } from '@/types/database.types';
 import { TherapyTaskFormData } from '@/lib/validations/therapy-task';
 
 // Extend TherapyTasks to satisfy BaseEntity interface
-interface TherapyTaskEntity extends Omit<TherapyTasks, 'created_at' | 'updated_at'> {
+interface TherapyTaskEntity
+  extends Omit<TherapyTasks, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -31,7 +35,7 @@ const therapyTaskColumns: GridColDef[] = [
     field: 'therapy_name',
     headerName: 'Therapy',
     width: 150,
-    renderCell: (params) => (
+    renderCell: params => (
       <Box
         sx={{
           overflow: 'hidden',
@@ -56,7 +60,7 @@ const therapyTaskColumns: GridColDef[] = [
     headerName: 'Description',
     width: 250,
     flex: 1,
-    renderCell: (params) => (
+    renderCell: params => (
       <Box
         sx={{
           overflow: 'hidden',
@@ -75,10 +79,12 @@ const therapyTaskColumns: GridColDef[] = [
     headerName: 'Delay (days)',
     width: 120,
     type: 'number',
-    renderCell: (params) => (
+    renderCell: params => (
       <Chip
         label={params.value}
-        color={params.value < 0 ? 'warning' : params.value > 0 ? 'info' : 'default'}
+        color={
+          params.value < 0 ? 'warning' : params.value > 0 ? 'info' : 'default'
+        }
         size="small"
         variant="outlined"
       />
@@ -133,21 +139,26 @@ export default function TherapyTaskTable() {
           }
         : {};
 
-
     return (
-      <TherapyTaskForm initialValues={formData} onSuccess={onClose} mode={mode} />
+      <TherapyTaskForm
+        initialValues={formData}
+        onSuccess={onClose}
+        mode={mode}
+      />
     );
   };
 
   // Transform therapy tasks data to include id property and handle null dates
-  const therapyTasksWithId: TherapyTaskEntity[] = (therapyTasks || []).map(task => ({
-    ...task,
-    id: task.task_id,
-    created_at: task.created_at || new Date().toISOString(),
-    updated_at: task.updated_at || new Date().toISOString(),
-    created_by: task.created_by_email || '-',
-    updated_by: task.updated_by_email || '-',
-  }));
+  const therapyTasksWithId: TherapyTaskEntity[] = (therapyTasks || []).map(
+    task => ({
+      ...task,
+      id: task.task_id,
+      created_at: task.created_at || new Date().toISOString(),
+      updated_at: task.updated_at || new Date().toISOString(),
+      created_by: task.created_by_email || '-',
+      updated_by: task.updated_by_email || '-',
+    })
+  );
 
   return (
     <BaseDataTable<TherapyTaskEntity>

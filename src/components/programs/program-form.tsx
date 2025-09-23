@@ -4,14 +4,22 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
-import { memberProgramSchema, MemberProgramFormData } from '@/lib/validations/member-program';
+import {
+  memberProgramSchema,
+  MemberProgramFormData,
+} from '@/lib/validations/member-program';
 import BaseForm from '@/components/forms/base-form';
-import { useCreateMemberProgram, useUpdateMemberProgram } from '@/lib/hooks/use-member-programs';
+import {
+  useCreateMemberProgram,
+  useUpdateMemberProgram,
+} from '@/lib/hooks/use-member-programs';
 import { useActiveLeads } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 
 interface ProgramFormProps {
-  initialValues?: Partial<MemberProgramFormData> & { member_program_id?: number };
+  initialValues?: Partial<MemberProgramFormData> & {
+    member_program_id?: number;
+  };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }
@@ -101,7 +109,7 @@ export default function ProgramForm({
         <MenuItem value="">
           <em>Select a lead</em>
         </MenuItem>
-        {leads.map((lead) => (
+        {leads.map(lead => (
           <MenuItem key={lead.lead_id} value={lead.lead_id}>
             {lead.first_name} {lead.last_name} ({lead.email})
           </MenuItem>
@@ -127,8 +135,11 @@ export default function ProgramForm({
         <MenuItem value="">
           <em>Select a status</em>
         </MenuItem>
-        {programStatuses.map((status) => (
-          <MenuItem key={status.program_status_id} value={status.program_status_id}>
+        {programStatuses.map(status => (
+          <MenuItem
+            key={status.program_status_id}
+            value={status.program_status_id}
+          >
             {status.status_name}
           </MenuItem>
         ))}

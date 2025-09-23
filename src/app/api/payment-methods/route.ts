@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { paymentMethodsSchema, PaymentMethodsFormData } from '@/lib/validations/payment-methods';
+import {
+  paymentMethodsSchema,
+  PaymentMethodsFormData,
+} from '@/lib/validations/payment-methods';
 
 export async function GET(_req: NextRequest) {
   // STANDARD: Always join to public.users for created_by/updated_by for all entity APIs

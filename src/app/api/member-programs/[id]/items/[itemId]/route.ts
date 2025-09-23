@@ -6,8 +6,11 @@ export async function PUT(
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -15,13 +18,13 @@ export async function PUT(
   try {
     const { id, itemId } = await context.params;
     const body = await req.json();
-    
+
     // If therapy_id is being updated, get the new cost and charge
-    let updateData = { ...body };
-    
+    const updateData = { ...body };
+
     // Remove therapy_type_id as it's not a column in member_program_items
     delete updateData.therapy_type_id;
-    
+
     if (body.therapy_id) {
       const { data: therapyData, error: therapyError } = await supabase
         .from('therapies')
@@ -30,7 +33,10 @@ export async function PUT(
         .single();
 
       if (therapyError || !therapyData) {
-        return NextResponse.json({ error: 'Therapy not found' }, { status: 404 });
+        return NextResponse.json(
+          { error: 'Therapy not found' },
+          { status: 404 }
+        );
       }
 
       updateData.item_cost = therapyData.cost;
@@ -49,7 +55,10 @@ export async function PUT(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to update member program item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to update member program item' },
+        { status: 500 }
+      );
     }
 
     // Update the member program's calculated fields
@@ -57,7 +66,10 @@ export async function PUT(
 
     return NextResponse.json({ data });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -66,15 +78,18 @@ export async function DELETE(
   context: { params: Promise<{ id: string; itemId: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const { id, itemId } = await context.params;
-    
+
     const { error } = await supabase
       .from('member_program_items')
       .delete()
@@ -82,7 +97,10 @@ export async function DELETE(
       .eq('member_program_id', id);
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to delete member program item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to delete member program item' },
+        { status: 500 }
+      );
     }
 
     // Update the member program's calculated fields
@@ -90,20 +108,28 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-async function updateMemberProgramCalculatedFields(supabase: any, memberProgramId: number) {
+async function updateMemberProgramCalculatedFields(
+  supabase: any,
+  memberProgramId: number
+) {
   try {
     // Get all items for this member program
     const { data: items, error: itemsError } = await supabase
       .from('member_program_items')
-      .select(`
+      .select(
+        `
         quantity,
         item_cost,
         item_charge
-      `)
+      `
+      )
       .eq('member_program_id', memberProgramId)
       .eq('active_flag', true);
 
@@ -119,7 +145,7 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       const quantity = item.quantity || 1;
       const cost = item.item_cost || 0;
       const charge = item.item_charge || 0;
-      
+
       totalCost += cost * quantity;
       totalCharge += charge * quantity;
     });
@@ -135,11 +161,9 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .eq('member_program_id', memberProgramId)
       .select();
 
-    
-
-  // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
-  // Program Price = totalCharge + max(0, finance_charges) + discounts
-  // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
+    // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
+    // Program Price = totalCharge + max(0, finance_charges) + discounts
+    // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
     let financeCharges = 0;
     let discounts = 0;
     const { data: finVals } = await supabase
@@ -151,11 +175,14 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       financeCharges = Number(finVals.finance_charges || 0);
       discounts = Number(finVals.discounts || 0);
     }
-  const positiveFinance = Math.max(0, financeCharges);
-  const negativeFinanceFee = Math.max(0, -financeCharges);
-  const finalTotal = totalCharge + positiveFinance + discounts;
-  const margin = finalTotal > 0 ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100 : 0;
-    
+    const positiveFinance = Math.max(0, financeCharges);
+    const negativeFinanceFee = Math.max(0, -financeCharges);
+    const finalTotal = totalCharge + positiveFinance + discounts;
+    const margin =
+      finalTotal > 0
+        ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100
+        : 0;
+
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
       .from('member_program_finances')
@@ -164,7 +191,6 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
       .single();
 
     if (financesFetchError && financesFetchError.code !== 'PGRST116') {
-      
     } else if (!existingFinances) {
       // Create default finances record
       const { data: newFinances, error: createFinancesError } = await supabase
@@ -176,22 +202,18 @@ async function updateMemberProgramCalculatedFields(supabase: any, memberProgramI
           updated_by: (await supabase.auth.getUser()).data.user?.id,
         })
         .select();
-
-      
-  } else {
-    // Update existing finances record
-    const { data: updatedFinances, error: updateFinancesError } = await supabase
-      .from('member_program_finances')
-      .update({
-        final_total_price: finalTotal,
-        margin: margin,
-        updated_by: (await supabase.auth.getUser()).data.user?.id,
-      })
-      .eq('member_program_id', memberProgramId)
-      .select();
-
-      
+    } else {
+      // Update existing finances record
+      const { data: updatedFinances, error: updateFinancesError } =
+        await supabase
+          .from('member_program_finances')
+          .update({
+            final_total_price: finalTotal,
+            margin: margin,
+            updated_by: (await supabase.auth.getUser()).data.user?.id,
+          })
+          .eq('member_program_id', memberProgramId)
+          .select();
     }
-  } catch (error) {
-  }
+  } catch (error) {}
 }

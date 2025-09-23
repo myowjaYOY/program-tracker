@@ -2,14 +2,20 @@
 
 import React from 'react';
 import { GridColDef } from '@mui/x-data-grid';
-import BaseDataTable, { commonColumns } from '@/components/tables/base-data-table';
+import BaseDataTable, {
+  commonColumns,
+} from '@/components/tables/base-data-table';
 import { PaymentMethods } from '@/types/database.types';
 import { PaymentMethodsFormData } from '@/lib/validations/payment-methods';
-import { usePaymentMethods, useDeletePaymentMethods } from '@/lib/hooks/use-payment-methods';
+import {
+  usePaymentMethods,
+  useDeletePaymentMethods,
+} from '@/lib/hooks/use-payment-methods';
 import PaymentMethodsForm from '@/components/forms/payment-methods-form';
 
 // Extended interface for table display
-interface PaymentMethodsEntity extends Omit<PaymentMethods, 'created_at' | 'updated_at'> {
+interface PaymentMethodsEntity
+  extends Omit<PaymentMethods, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -65,25 +71,33 @@ export default function PaymentMethodsTable() {
     if (!open) return null;
 
     // Convert PaymentMethodsEntity to PaymentMethodsFormData for the form
-    const formData: Partial<PaymentMethodsFormData> & { payment_method_id?: number } =
-      initialValues
-        ? {
-            payment_method_name: initialValues.payment_method_name || '',
-            payment_method_description: initialValues.payment_method_description || '',
-            active_flag: initialValues.active_flag,
-            ...(initialValues.payment_method_id && {
-              payment_method_id: initialValues.payment_method_id,
-            }),
-          }
-        : {};
+    const formData: Partial<PaymentMethodsFormData> & {
+      payment_method_id?: number;
+    } = initialValues
+      ? {
+          payment_method_name: initialValues.payment_method_name || '',
+          payment_method_description:
+            initialValues.payment_method_description || '',
+          active_flag: initialValues.active_flag,
+          ...(initialValues.payment_method_id && {
+            payment_method_id: initialValues.payment_method_id,
+          }),
+        }
+      : {};
 
     return (
-      <PaymentMethodsForm initialValues={formData} onSuccess={onClose} mode={mode} />
+      <PaymentMethodsForm
+        initialValues={formData}
+        onSuccess={onClose}
+        mode={mode}
+      />
     );
   };
 
   // Transform payment methods data to include id property and handle null dates
-  const paymentMethodsWithId: PaymentMethodsEntity[] = (paymentMethods || []).map(method => ({
+  const paymentMethodsWithId: PaymentMethodsEntity[] = (
+    paymentMethods || []
+  ).map(method => ({
     ...method,
     id: method.payment_method_id,
     created_at: method.created_at || new Date().toISOString(),

@@ -1,15 +1,15 @@
 'use client';
 
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper,
-  Chip
-} from '@mui/material';
+import { Box, Typography, Paper, Chip } from '@mui/material';
 import { GridColDef } from '@mui/x-data-grid';
 import BaseDataTable from '@/components/tables/base-data-table';
-import { ProgramTemplate, ProgramTemplateItems, Therapies, TherapyTasks } from '@/types/database.types';
+import {
+  ProgramTemplate,
+  ProgramTemplateItems,
+  Therapies,
+  TherapyTasks,
+} from '@/types/database.types';
 import { useProgramTemplateItems } from '@/lib/hooks/use-program-template-items';
 import { useTherapies } from '@/lib/hooks/use-therapies';
 import { useTherapyTasks } from '@/lib/hooks/use-therapy-tasks';
@@ -19,16 +19,18 @@ interface TemplateTasksTabProps {
 }
 
 export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
-  const { data: templateItems = [] } = useProgramTemplateItems(template.program_template_id);
+  const { data: templateItems = [] } = useProgramTemplateItems(
+    template.program_template_id
+  );
   const { data: therapies = [] } = useTherapies();
   const { data: allTasks = [] } = useTherapyTasks();
 
   // Get all therapy IDs from template items
   const templateTherapyIds = templateItems.map(item => item.therapy_id);
-  
+
   // Get all tasks associated with therapies in this template
-  const templateTasks = allTasks.filter(task => 
-    templateTherapyIds.includes(task.therapy_id) && task.active_flag
+  const templateTasks = allTasks.filter(
+    task => templateTherapyIds.includes(task.therapy_id) && task.active_flag
   );
 
   // Map tasks to include therapy name for grouping
@@ -40,7 +42,6 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
       therapy_name: therapy?.therapy_name || 'Unknown Therapy',
     };
   });
-
 
   // Define columns for the DataGrid
   const columns: GridColDef[] = [
@@ -65,9 +66,15 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
       headerName: 'Delay (Days)',
       width: 150,
       renderCell: (params: any) => (
-        <Chip 
+        <Chip
           label={`${params.value > 0 ? '+' : ''}${params.value} days`}
-          color={params.value > 0 ? 'primary' : params.value < 0 ? 'error' : 'default'}
+          color={
+            params.value > 0
+              ? 'primary'
+              : params.value < 0
+                ? 'error'
+                : 'default'
+          }
           size="small"
         />
       ),
@@ -77,7 +84,7 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
       headerName: 'Status',
       width: 120,
       renderCell: (params: any) => (
-        <Chip 
+        <Chip
           label={params.value ? 'Active' : 'Inactive'}
           color={params.value ? 'success' : 'default'}
           size="small"
@@ -86,7 +93,6 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
       ),
     },
   ];
-
 
   return (
     <Box>

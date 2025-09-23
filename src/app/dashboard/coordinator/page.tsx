@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Box, Card, CardContent, Tab, Tabs, Typography, MenuItem, TextField, Divider } from '@mui/material';
+import {
+  Box,
+  Card,
+  CardContent,
+  Tab,
+  Tabs,
+  Typography,
+  MenuItem,
+  TextField,
+  Divider,
+} from '@mui/material';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
@@ -17,26 +27,40 @@ import { MemberPrograms } from '@/types/database.types';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 
 export default function CoordinatorPage() {
-  const { data: programs = [] } = useMemberPrograms() as { data: MemberPrograms[] | undefined } as any;
+  const { data: programs = [] } = useMemberPrograms() as {
+    data: MemberPrograms[] | undefined;
+  } as any;
   const { data: metrics } = useCoordinatorMetrics();
   const [tab, setTab] = useState(0);
 
   // Global filters for grids only
   const [memberFilter, setMemberFilter] = useState<number | null>(null);
-  const [range, setRange] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  const [range, setRange] = useState<
+    'all' | 'today' | 'week' | 'month' | 'custom'
+  >('all');
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
 
   // Members: only leads with programs not Cancelled/Completed
   const memberOptions = useMemo(() => {
     const allowed = new Set(['active', 'paused', 'quote']);
-    const filtered = (programs || []).filter((p: any) => allowed.has((p.status_name || '').toLowerCase()));
+    const filtered = (programs || []).filter((p: any) =>
+      allowed.has((p.status_name || '').toLowerCase())
+    );
     const pairs = filtered
       .filter((p: any) => !!p.lead_id)
-      .map((p: any) => ({ id: p.lead_id as number, name: (p.lead_name as string) || `Lead #${p.lead_id}` }));
+      .map((p: any) => ({
+        id: p.lead_id as number,
+        name: (p.lead_name as string) || `Lead #${p.lead_id}`,
+      }));
     const seen = new Set<number>();
     const uniq: { id: number; name: string }[] = [];
-    for (const pr of pairs) { if (!seen.has(pr.id)) { seen.add(pr.id); uniq.push(pr); } }
+    for (const pr of pairs) {
+      if (!seen.has(pr.id)) {
+        seen.add(pr.id);
+        uniq.push(pr);
+      }
+    }
     return uniq;
   }, [programs]);
 
@@ -44,8 +68,20 @@ export default function CoordinatorPage() {
     <Box sx={{ p: 2 }}>
       {/* Header (match Reports page style) */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4" component="h1" fontWeight="bold" color="primary.main">
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 2,
+          }}
+        >
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight="bold"
+            color="primary.main"
+          >
             Coordinator Dashboard
           </Typography>
         </Box>
@@ -57,24 +93,63 @@ export default function CoordinatorPage() {
       <Card>
         <CardContent sx={{ py: 2 }}>
           {/* Summary Cards */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3, alignItems: 'center' }}>
-            <Card sx={{ borderTop: theme => `4px solid ${theme.palette.error.main}` }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(4, 1fr)',
+              },
+              gap: 2,
+              mb: 3,
+              alignItems: 'center',
+            }}
+          >
+            <Card
+              sx={{
+                borderTop: theme => `4px solid ${theme.palette.error.main}`,
+              }}
+            >
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Late Tasks</Typography>
-                    <Typography variant="h4" color="error.main">{metrics?.lateTasks ?? 0}</Typography>
+                    <Typography color="textSecondary" variant="body2">
+                      Late Tasks
+                    </Typography>
+                    <Typography variant="h4" color="error.main">
+                      {metrics?.lateTasks ?? 0}
+                    </Typography>
                   </Box>
-                  <NotificationsActiveIcon color="error" sx={{ fontSize: 36 }} />
+                  <NotificationsActiveIcon
+                    color="error"
+                    sx={{ fontSize: 36 }}
+                  />
                 </Box>
               </CardContent>
             </Card>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Tasks Due Today</Typography>
-                    <Typography variant="h4" color="primary.main">{metrics?.tasksDueToday ?? 0}</Typography>
+                    <Typography color="textSecondary" variant="body2">
+                      Tasks Due Today
+                    </Typography>
+                    <Typography variant="h4" color="primary.main">
+                      {metrics?.tasksDueToday ?? 0}
+                    </Typography>
                   </Box>
                   <TodayIcon color="primary" sx={{ fontSize: 36 }} />
                 </Box>
@@ -82,10 +157,20 @@ export default function CoordinatorPage() {
             </Card>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Appointments Today</Typography>
-                    <Typography variant="h4" color="secondary.main">{metrics?.apptsDueToday ?? 0}</Typography>
+                    <Typography color="textSecondary" variant="body2">
+                      Appointments Today
+                    </Typography>
+                    <Typography variant="h4" color="secondary.main">
+                      {metrics?.apptsDueToday ?? 0}
+                    </Typography>
                   </Box>
                   <EventAvailableIcon color="secondary" sx={{ fontSize: 36 }} />
                 </Box>
@@ -93,10 +178,20 @@ export default function CoordinatorPage() {
             </Card>
             <Card>
               <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
                   <Box>
-                    <Typography color="textSecondary" variant="body2">Program Changes (This Week)</Typography>
-                    <Typography variant="h4">{metrics?.programChangesThisWeek ?? 0}</Typography>
+                    <Typography color="textSecondary" variant="body2">
+                      Program Changes (This Week)
+                    </Typography>
+                    <Typography variant="h4">
+                      {metrics?.programChangesThisWeek ?? 0}
+                    </Typography>
                   </Box>
                   <AutoGraphIcon sx={{ fontSize: 36 }} />
                 </Box>
@@ -117,25 +212,31 @@ export default function CoordinatorPage() {
                 select
                 label="Member"
                 value={memberFilter ?? ''}
-                onChange={(e) => setMemberFilter(e.target.value ? Number(e.target.value) : null)}
+                onChange={e =>
+                  setMemberFilter(
+                    e.target.value ? Number(e.target.value) : null
+                  )
+                }
                 size="small"
                 sx={{ minWidth: 220 }}
               >
                 <MenuItem value="">All Members</MenuItem>
                 {memberOptions.map(m => (
-                  <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>
+                  <MenuItem key={m.id} value={m.id}>
+                    {m.name}
+                  </MenuItem>
                 ))}
               </TextField>
               <TextField
                 select
                 label="Date Range"
                 value={range}
-                onChange={(e) => {
+                onChange={e => {
                   const val = e.target.value as any;
                   setRange(val);
                   if (val === 'custom') {
                     const today = new Date();
-                    const iso = today.toISOString().slice(0,10);
+                    const iso = today.toISOString().slice(0, 10);
                     setStart(prev => prev || iso);
                     setEnd(prev => prev || iso);
                   }
@@ -155,14 +256,14 @@ export default function CoordinatorPage() {
                     type="date"
                     label="Start"
                     value={start || ''}
-                    onChange={(e) => setStart(e.target.value || null)}
+                    onChange={e => setStart(e.target.value || null)}
                     size="small"
                   />
                   <TextField
                     type="date"
                     label="End"
                     value={end || ''}
-                    onChange={(e) => setEnd(e.target.value || null)}
+                    onChange={e => setEnd(e.target.value || null)}
                     size="small"
                   />
                 </>
@@ -179,8 +280,16 @@ export default function CoordinatorPage() {
             sx={{ '& .MuiTabs-flexContainer': { gap: 4 } }}
           >
             <Tab icon={<ListAltIcon />} iconPosition="start" label="Script" />
-            <Tab icon={<AssignmentTurnedInIcon />} iconPosition="start" label="To Do" />
-            <Tab icon={<AutoGraphIcon />} iconPosition="start" label="Program Changes" />
+            <Tab
+              icon={<AssignmentTurnedInIcon />}
+              iconPosition="start"
+              label="To Do"
+            />
+            <Tab
+              icon={<AutoGraphIcon />}
+              iconPosition="start"
+              label="Program Changes"
+            />
           </Tabs>
           <Box sx={{ mt: 2 }}>
             {tab === 0 && (
@@ -212,5 +321,3 @@ export default function CoordinatorPage() {
     </Box>
   );
 }
-
-

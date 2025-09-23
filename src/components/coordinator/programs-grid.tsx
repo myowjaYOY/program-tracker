@@ -2,11 +2,14 @@
 
 import React from 'react';
 import { GridColDef } from '@mui/x-data-grid';
-import BaseDataTable, { renderActiveFlag } from '@/components/tables/base-data-table';
+import BaseDataTable, {
+  renderActiveFlag,
+} from '@/components/tables/base-data-table';
 import { useMemberPrograms } from '@/lib/hooks/use-member-programs';
 import { MemberPrograms } from '@/types/database.types';
 
-interface MemberProgramEntity extends Omit<MemberPrograms, 'created_at' | 'updated_at'> {
+interface MemberProgramEntity
+  extends Omit<MemberPrograms, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
@@ -14,12 +17,35 @@ interface MemberProgramEntity extends Omit<MemberPrograms, 'created_at' | 'updat
 
 const columns: GridColDef[] = [
   { field: 'lead_name', headerName: 'Member', width: 200 },
-  { field: 'program_template_name', headerName: 'Program Name', flex: 1, minWidth: 240 },
+  {
+    field: 'program_template_name',
+    headerName: 'Program Name',
+    flex: 1,
+    minWidth: 240,
+  },
   { field: 'status_name', headerName: 'Status', width: 150 },
-  { field: 'start_date', headerName: 'Start Date', width: 140, renderCell: (params: any) => params.value ? new Date(params.value).toLocaleDateString() : '-' },
-  { field: 'created_at', headerName: 'Created Date', width: 140, renderCell: (params: any) => params.value ? new Date(params.value).toLocaleDateString() : '-' },
+  {
+    field: 'start_date',
+    headerName: 'Start Date',
+    width: 140,
+    renderCell: (params: any) =>
+      params.value ? new Date(params.value).toLocaleDateString() : '-',
+  },
+  {
+    field: 'created_at',
+    headerName: 'Created Date',
+    width: 140,
+    renderCell: (params: any) =>
+      params.value ? new Date(params.value).toLocaleDateString() : '-',
+  },
   { field: 'created_by', headerName: 'Created By', width: 180 },
-  { field: 'updated_at', headerName: 'Updated Date', width: 140, renderCell: (params: any) => params.value ? new Date(params.value).toLocaleDateString() : '-' },
+  {
+    field: 'updated_at',
+    headerName: 'Updated Date',
+    width: 140,
+    renderCell: (params: any) =>
+      params.value ? new Date(params.value).toLocaleDateString() : '-',
+  },
   { field: 'updated_by', headerName: 'Updated By', width: 180 },
 ];
 
@@ -28,17 +54,22 @@ interface CoordinatorProgramsGridProps {
   selectedProgram: MemberPrograms | null;
 }
 
-export default function CoordinatorProgramsGrid({ onProgramSelect, selectedProgram }: CoordinatorProgramsGridProps) {
+export default function CoordinatorProgramsGrid({
+  onProgramSelect,
+  selectedProgram,
+}: CoordinatorProgramsGridProps) {
   const { data: programs, isLoading, error } = useMemberPrograms();
 
-  const programsWithId: MemberProgramEntity[] = (programs || []).map(program => ({
-    ...program,
-    id: program.member_program_id,
-    created_at: program.created_at || new Date().toISOString(),
-    updated_at: program.updated_at || new Date().toISOString(),
-    created_by: program.created_by_email || '-',
-    updated_by: program.updated_by_email || '-',
-  }));
+  const programsWithId: MemberProgramEntity[] = (programs || []).map(
+    program => ({
+      ...program,
+      id: program.member_program_id,
+      created_at: program.created_at || new Date().toISOString(),
+      updated_at: program.updated_at || new Date().toISOString(),
+      created_by: program.created_by_email || '-',
+      updated_by: program.updated_by_email || '-',
+    })
+  );
 
   const handleRowClick = (row: MemberProgramEntity) => {
     const program: MemberPrograms = {
@@ -87,5 +118,3 @@ export default function CoordinatorProgramsGrid({ onProgramSelect, selectedProgr
     />
   );
 }
-
-

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { paymentMethodsSchema, PaymentMethodsUpdateData } from '@/lib/validations/payment-methods';
+import {
+  paymentMethodsSchema,
+  PaymentMethodsUpdateData,
+} from '@/lib/validations/payment-methods';
 
 export async function PUT(
   req: NextRequest,

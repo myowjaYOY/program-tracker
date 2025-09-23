@@ -13,7 +13,8 @@ export function useTherapyTypes() {
     queryFn: async () => {
       const res = await fetch('/api/therapy-types');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch therapy types');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch therapy types');
       return json.data as TherapyType[];
     },
   });
@@ -25,10 +26,9 @@ export function useActiveTherapyTypes() {
     queryFn: async () => {
       const res = await fetch('/api/therapy-types');
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch therapy types');
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to fetch therapy types');
       return (json.data as TherapyType[]).filter(t => t.active_flag);
     },
   });
 }
-
-

@@ -41,11 +41,3 @@ export default function TherapyTasksPage() {
     </Box>
   );
 }
-
-
-
-
-
-
-
-

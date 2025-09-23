@@ -1,20 +1,23 @@
 'use client';
 
 import React, { useState } from 'react';
-import { 
-  Box, 
-  TextField, 
-  FormControlLabel, 
+import {
+  Box,
+  TextField,
+  FormControlLabel,
   Switch,
   Typography,
   Paper,
   Button,
-  CircularProgress
+  CircularProgress,
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { programTemplateSchema, ProgramTemplateFormData } from '@/lib/validations/program-template';
+import {
+  programTemplateSchema,
+  ProgramTemplateFormData,
+} from '@/lib/validations/program-template';
 import { ProgramTemplate } from '@/types/database.types';
 
 interface TemplateInfoTabProps {
@@ -23,22 +26,26 @@ interface TemplateInfoTabProps {
   onUnsavedChangesChange: (hasChanges: boolean) => void;
 }
 
-export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedChangesChange }: TemplateInfoTabProps) {
+export default function TemplateInfoTab({
+  template,
+  onTemplateUpdate,
+  onUnsavedChangesChange,
+}: TemplateInfoTabProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  
+
   const {
     control,
     handleSubmit,
     formState: { errors, isDirty },
-    reset
+    reset,
   } = useForm<ProgramTemplateFormData>({
     resolver: zodResolver(programTemplateSchema),
     defaultValues: {
       program_template_name: template.program_template_name,
       description: template.description || '',
       active_flag: template.active_flag,
-    }
+    },
   });
 
   // Reset form when template changes
@@ -60,12 +67,12 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
   const onSubmit = async (data: ProgramTemplateFormData) => {
     setIsSaving(true);
     setSaveSuccess(false);
-    
+
     try {
       const updatedTemplate = { ...template, ...data };
       await onTemplateUpdate(updatedTemplate);
       setSaveSuccess(true);
-      
+
       // Hide success message after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (error) {
@@ -82,7 +89,14 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', gap: 4 }}>
           {/* Left side - stacked fields */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 255px' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              flex: '1 1 255px',
+            }}
+          >
             <Controller
               name="program_template_name"
               control={control}
@@ -97,7 +111,7 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
                 />
               )}
             />
-            
+
             <TextField
               label="Total Cost"
               value={`$${(template.total_cost || 0).toFixed(2)}`}
@@ -116,7 +130,7 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
                 },
               }}
             />
-            
+
             <TextField
               label="Total Charge"
               value={`$${(template.total_charge || 0).toFixed(2)}`}
@@ -135,7 +149,7 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
                 },
               }}
             />
-            
+
             <TextField
               label="Margin Percentage"
               value={`${(template.margin_percentage || 0).toFixed(1)}%`}
@@ -157,7 +171,14 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
           </Box>
 
           {/* Right side - Active switch and Description */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: '1 1 255px' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 3,
+              flex: '1 1 255px',
+            }}
+          >
             <Controller
               name="active_flag"
               control={control}
@@ -166,14 +187,14 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
                   control={
                     <Switch
                       checked={field.value}
-                      onChange={(e) => field.onChange(e.target.checked)}
+                      onChange={e => field.onChange(e.target.checked)}
                     />
                   }
                   label="Active"
                 />
               )}
             />
-            
+
             <Controller
               name="description"
               control={control}
@@ -191,21 +212,31 @@ export default function TemplateInfoTab({ template, onTemplateUpdate, onUnsavedC
             />
           </Box>
         </Box>
-        
+
         {/* Save Button and Status */}
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}>
+        <Box
+          sx={{
+            mt: 3,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            gap: 2,
+          }}
+        >
           {/* Success Message */}
           {saveSuccess && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              color: 'success.main',
-              fontSize: '0.875rem'
-            }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                color: 'success.main',
+                fontSize: '0.875rem',
+              }}
+            >
               ✓ Changes saved successfully!
             </Box>
           )}
-          
+
           {/* Save Button */}
           <Button
             variant="contained"

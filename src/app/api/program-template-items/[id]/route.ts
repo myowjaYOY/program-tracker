@@ -6,8 +6,11 @@ export async function PUT(
   context: { params: { id: string } }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -15,18 +18,27 @@ export async function PUT(
   try {
     const { id } = context.params;
     const body = await req.json();
-    
+
     // Validate required fields
     if (body.therapy_id !== undefined && !body.therapy_id) {
-      return NextResponse.json({ error: 'Therapy ID cannot be empty' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Therapy ID cannot be empty' },
+        { status: 400 }
+      );
     }
 
     if (body.quantity !== undefined && body.quantity < 1) {
-      return NextResponse.json({ error: 'Quantity must be at least 1' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Quantity must be at least 1' },
+        { status: 400 }
+      );
     }
 
     if (body.days_from_start !== undefined && body.days_from_start < 0) {
-      return NextResponse.json({ error: 'Days from start cannot be negative' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Days from start cannot be negative' },
+        { status: 400 }
+      );
     }
 
     const updateData = {
@@ -43,7 +55,10 @@ export async function PUT(
 
     if (error) {
       console.error('Error updating program template item:', error);
-      return NextResponse.json({ error: 'Failed to update program template item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to update program template item' },
+        { status: 500 }
+      );
     }
 
     // Update the program template's calculated fields
@@ -52,7 +67,10 @@ export async function PUT(
     return NextResponse.json({ data });
   } catch (error) {
     console.error('Error in program template item PUT:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -61,15 +79,18 @@ export async function DELETE(
   context: { params: { id: string } }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
-  
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
+
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
     const { id } = context.params;
-    
+
     // Get the item to find the template ID before deletion
     const { data: item, error: fetchError } = await supabase
       .from('program_template_items')
@@ -79,7 +100,10 @@ export async function DELETE(
 
     if (fetchError) {
       console.error('Error fetching item for deletion:', fetchError);
-      return NextResponse.json({ error: 'Failed to fetch item for deletion' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch item for deletion' },
+        { status: 500 }
+      );
     }
 
     const templateId = item.program_template_id;
@@ -87,36 +111,49 @@ export async function DELETE(
     // Soft delete by setting active_flag to false
     const { error } = await supabase
       .from('program_template_items')
-      .update({ 
+      .update({
         active_flag: false,
-        updated_by: session.user.id 
+        updated_by: session.user.id,
       })
       .eq('program_template_items_id', id);
 
     if (error) {
       console.error('Error deleting program template item:', error);
-      return NextResponse.json({ error: 'Failed to delete program template item' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to delete program template item' },
+        { status: 500 }
+      );
     }
 
     // Update the program template's calculated fields
     await updateTemplateCalculatedFields(supabase, templateId);
 
-    return NextResponse.json({ message: 'Program template item deleted successfully' });
+    return NextResponse.json({
+      message: 'Program template item deleted successfully',
+    });
   } catch (error) {
     console.error('Error in program template item DELETE:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
-async function updateTemplateCalculatedFields(supabase: any, templateId: number) {
+async function updateTemplateCalculatedFields(
+  supabase: any,
+  templateId: number
+) {
   try {
     // Get all items for this template
     const { data: items, error: itemsError } = await supabase
       .from('program_template_items')
-      .select(`
+      .select(
+        `
         quantity,
         therapy:therapies(cost, charge)
-      `)
+      `
+      )
       .eq('program_template_id', templateId)
       .eq('active_flag', true);
 
@@ -137,7 +174,8 @@ async function updateTemplateCalculatedFields(supabase: any, templateId: number)
     });
 
     // Calculate margin percentage
-    const marginPercentage = totalCost > 0 ? ((totalCharge - totalCost) / totalCost) * 100 : 0;
+    const marginPercentage =
+      totalCost > 0 ? ((totalCharge - totalCost) / totalCost) * 100 : 0;
 
     // Update the template
     const { error: updateError } = await supabase

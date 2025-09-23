@@ -34,7 +34,15 @@ export function BaseForm<T>({
       <Grid container spacing={2} mt={3} mb={3}>
         {children}
       </Grid>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2, ...buttonContainerSx }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 2,
+          mt: 2,
+          ...buttonContainerSx,
+        }}
+      >
         {onCancel && (
           <Button
             variant="outlined"

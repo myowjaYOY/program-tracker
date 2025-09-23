@@ -47,6 +47,7 @@ The integration will automatically create default status and campaign records if
 ### 4. Trigger Stages
 
 The integration will create leads when contacts reach any of these stages:
+
 - `confirmed`
 - `qualified`
 - `ready to book`
@@ -111,6 +112,7 @@ curl -X POST https://yourdomain.com/api/webhooks/ghl \
 ### Logs
 
 Check your application logs for webhook activity:
+
 - Successful lead creation: `Lead created successfully: {leadId}`
 - Duplicate leads: `Lead with email {email} already exists`
 - Missing fields: `Missing required contact fields: {contactInfo}`
@@ -134,12 +136,14 @@ export const TRIGGER_STAGES = [
 ### Changing Default Values
 
 Update the environment variables:
+
 - `GHL_DEFAULT_STATUS_NAME`: Change the default status for imported leads
 - `GHL_DEFAULT_CAMPAIGN_NAME`: Change the default campaign for imported leads
 
 ### Custom Lead Processing
 
 Modify `src/lib/services/ghl-service.ts` to add custom logic:
+
 - Additional field mapping
 - Custom validation rules
 - Integration with other systems
@@ -154,16 +158,8 @@ Modify `src/lib/services/ghl-service.ts` to add custom logic:
 ## Support
 
 If you encounter issues:
+
 1. Check the application logs for error messages
 2. Verify your environment variables are set correctly
 3. Test the webhook endpoint manually
 4. Ensure your GHL webhook configuration matches the setup instructions
-
-
-
-
-
-
-
-
-

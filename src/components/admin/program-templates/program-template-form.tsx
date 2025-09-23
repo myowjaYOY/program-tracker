@@ -4,12 +4,20 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel } from '@mui/material';
-import { programTemplateSchema, ProgramTemplateFormData } from '@/lib/validations/program-template';
+import {
+  programTemplateSchema,
+  ProgramTemplateFormData,
+} from '@/lib/validations/program-template';
 import BaseForm from '@/components/forms/base-form';
-import { useCreateProgramTemplate, useUpdateProgramTemplate } from '@/lib/hooks/use-program-templates';
+import {
+  useCreateProgramTemplate,
+  useUpdateProgramTemplate,
+} from '@/lib/hooks/use-program-templates';
 
 interface ProgramTemplateFormProps {
-  initialValues?: Partial<ProgramTemplateFormData> & { program_template_id?: number };
+  initialValues?: Partial<ProgramTemplateFormData> & {
+    program_template_id?: number;
+  };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }

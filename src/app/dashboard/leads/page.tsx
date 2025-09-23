@@ -35,13 +35,15 @@ function LeadTableSkeleton() {
 
 export default function LeadsPage() {
   return (
-    <Box sx={{ 
-      p: 3, 
-      height: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column',
-      boxSizing: 'border-box'
-    }}>
+    <Box
+      sx={{
+        p: 3,
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}
+    >
       <Suspense fallback={<LeadTableSkeleton />}>
         <LeadTable />
       </Suspense>

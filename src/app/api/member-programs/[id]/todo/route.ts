@@ -6,7 +6,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -19,19 +22,32 @@ export async function GET(
       .from('member_program_items')
       .select('member_program_item_id')
       .eq('member_program_id', id);
-    if (itemErr) return NextResponse.json({ error: 'Failed to load items' }, { status: 500 });
-    const itemIds = (itemIdsData || []).map((r: any) => r.member_program_item_id);
+    if (itemErr)
+      return NextResponse.json(
+        { error: 'Failed to load items' },
+        { status: 500 }
+      );
+    const itemIds = (itemIdsData || []).map(
+      (r: any) => r.member_program_item_id
+    );
 
     const { data: schedIdsData, error: schedErr } = await supabase
       .from('member_program_item_schedule')
       .select('member_program_item_schedule_id, member_program_item_id')
       .in('member_program_item_id', itemIds);
-    if (schedErr) return NextResponse.json({ error: 'Failed to load item schedules' }, { status: 500 });
-    const scheduleIds = (schedIdsData || []).map((r: any) => r.member_program_item_schedule_id);
+    if (schedErr)
+      return NextResponse.json(
+        { error: 'Failed to load item schedules' },
+        { status: 500 }
+      );
+    const scheduleIds = (schedIdsData || []).map(
+      (r: any) => r.member_program_item_schedule_id
+    );
 
     const { data, error } = await supabase
       .from('member_program_items_task_schedule')
-      .select(`
+      .select(
+        `
         member_program_item_task_schedule_id,
         member_program_item_schedule_id,
         member_program_item_task_id,
@@ -49,17 +65,24 @@ export async function GET(
             therapies!inner(therapy_name, therapytype(therapy_type_name))
           )
         )
-      `)
+      `
+      )
       .in('member_program_item_schedule_id', scheduleIds)
       .order('due_date', { ascending: true });
 
-    if (error) return NextResponse.json({ error: 'Failed to fetch task schedule' }, { status: 500 });
+    if (error)
+      return NextResponse.json(
+        { error: 'Failed to fetch task schedule' },
+        { status: 500 }
+      );
 
     // Resolve user emails for audit fields
-    const userIds = Array.from(new Set([
-      ...((data || []).map((r: any) => r.created_by).filter(Boolean)),
-      ...((data || []).map((r: any) => r.updated_by).filter(Boolean)),
-    ]));
+    const userIds = Array.from(
+      new Set([
+        ...(data || []).map((r: any) => r.created_by).filter(Boolean),
+        ...(data || []).map((r: any) => r.updated_by).filter(Boolean),
+      ])
+    );
 
     let users: any[] = [];
     if (userIds.length > 0) {
@@ -85,8 +108,9 @@ export async function GET(
 
     return NextResponse.json({ data: enriched });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
-
-

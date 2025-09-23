@@ -10,7 +10,12 @@ export const programTemplateItemSchema = z.object({
   instructions: z.string().optional(),
 });
 
-export const programTemplateItemUpdateSchema = programTemplateItemSchema.partial();
+export const programTemplateItemUpdateSchema =
+  programTemplateItemSchema.partial();
 
-export type ProgramTemplateItemFormData = z.infer<typeof programTemplateItemSchema>;
-export type ProgramTemplateItemUpdateData = z.infer<typeof programTemplateItemUpdateSchema>;
+export type ProgramTemplateItemFormData = z.infer<
+  typeof programTemplateItemSchema
+>;
+export type ProgramTemplateItemUpdateData = z.infer<
+  typeof programTemplateItemUpdateSchema
+>;

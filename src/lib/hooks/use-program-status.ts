@@ -36,7 +36,11 @@ export function useActiveProgramStatus() {
         throw new Error(json.error || 'Failed to fetch program status');
       return (json.data as ProgramStatus[])
         .filter(ps => ps.active_flag)
-        .sort((a, b) => a.status_name.localeCompare(b.status_name, undefined, { sensitivity: 'accent' }));
+        .sort((a, b) =>
+          a.status_name.localeCompare(b.status_name, undefined, {
+            sensitivity: 'accent',
+          })
+        );
     },
   });
 }

@@ -11,4 +11,3 @@ export const memberProgramSchema = z.object({
 
 export const memberProgramUpdateSchema = memberProgramSchema.partial();
 export type MemberProgramFormData = z.infer<typeof memberProgramSchema>;
-

@@ -35,5 +35,3 @@ export const TRIGGER_STAGES = [
   'ready to book',
   'appointment scheduled',
 ] as const;
-
-

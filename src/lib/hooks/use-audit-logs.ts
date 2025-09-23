@@ -32,9 +32,11 @@ export interface AuditLogsFilters {
 export const auditLogKeys = {
   all: ['audit-logs'] as const,
   lists: () => [...auditLogKeys.all, 'list'] as const,
-  list: (filters: AuditLogsFilters) => [...auditLogKeys.lists(), filters] as const,
+  list: (filters: AuditLogsFilters) =>
+    [...auditLogKeys.lists(), filters] as const,
   details: () => [...auditLogKeys.all, 'detail'] as const,
-  detail: (table: string, recordId: string) => [...auditLogKeys.details(), table, recordId] as const,
+  detail: (table: string, recordId: string) =>
+    [...auditLogKeys.details(), table, recordId] as const,
 };
 
 // Hook to fetch audit logs with filters
@@ -43,19 +45,21 @@ export function useAuditLogs(filters: AuditLogsFilters = {}) {
     queryKey: auditLogKeys.list(filters),
     queryFn: async (): Promise<AuditLogsResponse> => {
       const searchParams = new URLSearchParams();
-      
+
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           searchParams.append(key, value.toString());
         }
       });
 
-      const response = await fetch(`/api/audit-logs?${searchParams.toString()}`);
-      
+      const response = await fetch(
+        `/api/audit-logs?${searchParams.toString()}`
+      );
+
       if (!response.ok) {
         throw new Error('Failed to fetch audit logs');
       }
-      
+
       return response.json();
     },
     staleTime: 2 * 60 * 1000, // 2 minutes - longer cache for better performance
@@ -71,11 +75,11 @@ export function useAuditLogsForRecord(table: string, recordId: string) {
     queryKey: auditLogKeys.detail(table, recordId),
     queryFn: async (): Promise<{ data: AuditLog[] }> => {
       const response = await fetch(`/api/audit-logs/${table}/${recordId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch audit logs for record');
       }
-      
+
       return response.json();
     },
     enabled: !!table && !!recordId,
@@ -89,14 +93,16 @@ export function useAuditTables() {
     queryKey: [...auditLogKeys.all, 'tables'],
     queryFn: async (): Promise<string[]> => {
       const response = await fetch('/api/audit-logs?limit=1');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch audit tables');
       }
-      
+
       const data = await response.json();
       // Extract unique table names from the response
-      const tables = new Set(data.data?.map((log: AuditLog) => log.table_name) || []);
+      const tables = new Set(
+        data.data?.map((log: AuditLog) => log.table_name) || []
+      );
       return Array.from(tables).sort();
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -109,14 +115,16 @@ export function useAuditOperations() {
     queryKey: [...auditLogKeys.all, 'operations'],
     queryFn: async (): Promise<string[]> => {
       const response = await fetch('/api/audit-logs?limit=1');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch audit operations');
       }
-      
+
       const data = await response.json();
       // Extract unique operations from the response
-      const operations = new Set(data.data?.map((log: AuditLog) => log.operation) || []);
+      const operations = new Set(
+        data.data?.map((log: AuditLog) => log.operation) || []
+      );
       return Array.from(operations).sort();
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -127,13 +135,15 @@ export function useAuditOperations() {
 export function useAuditUsers() {
   return useQuery({
     queryKey: [...auditLogKeys.all, 'users'],
-    queryFn: async (): Promise<{ id: string; email: string; full_name: string }[]> => {
+    queryFn: async (): Promise<
+      { id: string; email: string; full_name: string }[]
+    > => {
       const response = await fetch('/api/audit-logs?action=users');
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch audit users');
       }
-      
+
       const data = await response.json();
       return data.data || [];
     },

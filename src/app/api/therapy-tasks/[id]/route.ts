@@ -78,13 +78,8 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ message: 'Therapy task deleted successfully' }, { status: 200 });
+  return NextResponse.json(
+    { message: 'Therapy task deleted successfully' },
+    { status: 200 }
+  );
 }
-
-
-
-
-
-
-
-

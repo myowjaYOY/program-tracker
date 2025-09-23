@@ -12,4 +12,6 @@ export const memberProgramItemSchema = z.object({
 export const memberProgramItemUpdateSchema = memberProgramItemSchema.partial();
 
 export type MemberProgramItemFormData = z.infer<typeof memberProgramItemSchema>;
-export type MemberProgramItemUpdateData = z.infer<typeof memberProgramItemUpdateSchema>;
+export type MemberProgramItemUpdateData = z.infer<
+  typeof memberProgramItemUpdateSchema
+>;

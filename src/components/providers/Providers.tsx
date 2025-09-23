@@ -29,11 +29,7 @@ export function Providers({ children }: ProvidersProps) {
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <CssBaseline />
           {children}
-          <Toaster
-            position="top-right"
-            duration={4000}
-            theme="dark"
-          />
+          <Toaster position="top-right" duration={4000} theme="dark" />
           <ReactQueryDevtools initialIsOpen={false} />
         </LocalizationProvider>
       </ThemeProvider>

@@ -5,14 +5,22 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Grid, TextField, MenuItem, Box } from '@mui/material';
 import BaseForm from './base-form';
-import { MemberProgramPaymentsFormData, memberProgramPaymentsSchema } from '@/lib/validations/member-program-payments';
+import {
+  MemberProgramPaymentsFormData,
+  memberProgramPaymentsSchema,
+} from '@/lib/validations/member-program-payments';
 import { useActivePaymentMethods } from '@/lib/hooks/use-payment-methods';
 import { useActivePaymentStatus } from '@/lib/hooks/use-payment-status';
-import { useCreateMemberProgramPayment, useUpdateMemberProgramPayment } from '@/lib/hooks/use-member-program-payments';
+import {
+  useCreateMemberProgramPayment,
+  useUpdateMemberProgramPayment,
+} from '@/lib/hooks/use-member-program-payments';
 
 interface MemberProgramPaymentFormProps {
   programId: number;
-  initialValues?: Partial<MemberProgramPaymentsFormData> & { member_program_payment_id?: number };
+  initialValues?: Partial<MemberProgramPaymentsFormData> & {
+    member_program_payment_id?: number;
+  };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }
@@ -36,19 +44,35 @@ export default function MemberProgramPaymentForm({
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const normalizedInitials = React.useMemo(() => ({
-    ...initialValues,
-    payment_due_date: normalizeDateInput((initialValues as any)?.payment_due_date),
-    payment_date: normalizeDateInput((initialValues as any)?.payment_date),
-  }), [initialValues]);
+  const normalizedInitials = React.useMemo(
+    () => ({
+      ...initialValues,
+      payment_due_date: normalizeDateInput(
+        (initialValues as any)?.payment_due_date
+      ),
+      payment_date: normalizeDateInput((initialValues as any)?.payment_date),
+    }),
+    [initialValues]
+  );
 
-  const { control, register, handleSubmit, formState: { errors, isSubmitting }, reset, setError, clearErrors, watch } = useForm<MemberProgramPaymentsFormData>({
+  const {
+    control,
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+    setError,
+    clearErrors,
+    watch,
+  } = useForm<MemberProgramPaymentsFormData>({
     resolver: zodResolver(memberProgramPaymentsSchema),
     defaultValues: {
       member_program_id: programId,
       payment_amount: 0,
-      payment_due_date: normalizeDateInput((initialValues as any)?.payment_due_date) || '',
-      payment_date: normalizeDateInput((initialValues as any)?.payment_date) || undefined,
+      payment_due_date:
+        normalizeDateInput((initialValues as any)?.payment_due_date) || '',
+      payment_date:
+        normalizeDateInput((initialValues as any)?.payment_date) || undefined,
       payment_status_id: undefined as unknown as number,
       payment_method_id: undefined as unknown as number,
       payment_reference: '',
@@ -63,8 +87,11 @@ export default function MemberProgramPaymentForm({
     reset({
       member_program_id: programId,
       payment_amount: (normalizedInitials as any)?.payment_amount ?? 0,
-      payment_due_date: normalizeDateInput((normalizedInitials as any)?.payment_due_date) || '',
-      payment_date: normalizeDateInput((normalizedInitials as any)?.payment_date) || undefined,
+      payment_due_date:
+        normalizeDateInput((normalizedInitials as any)?.payment_due_date) || '',
+      payment_date:
+        normalizeDateInput((normalizedInitials as any)?.payment_date) ||
+        undefined,
       payment_status_id: (normalizedInitials as any)?.payment_status_id as any,
       payment_method_id: (normalizedInitials as any)?.payment_method_id as any,
       payment_reference: (normalizedInitials as any)?.payment_reference || '',
@@ -84,7 +111,9 @@ export default function MemberProgramPaymentForm({
       const sid = (s.payment_status_id ?? (s.status_id as any)) as number;
       return sid === (watchedStatusId as unknown as number);
     });
-    const name = (sel?.status_name || sel?.payment_status_name || '').toString().toLowerCase();
+    const name = (sel?.status_name || sel?.payment_status_name || '')
+      .toString()
+      .toLowerCase();
     return name === 'paid';
   }, [watchedStatusId, statusOptions]);
 
@@ -93,27 +122,39 @@ export default function MemberProgramPaymentForm({
       const sid = (s.payment_status_id ?? (s.status_id as any)) as number;
       return sid === (values.payment_status_id as unknown as number);
     });
-    const statusName = (selectedStatus?.status_name || selectedStatus?.payment_status_name || '').toString().toLowerCase();
+    const statusName = (
+      selectedStatus?.status_name ||
+      selectedStatus?.payment_status_name ||
+      ''
+    )
+      .toString()
+      .toLowerCase();
     const isPaid = statusName === 'paid';
 
     // Enforce Paid Date when status is Paid
     if (isPaid && !values.payment_date) {
-      setError('payment_date', { type: 'required', message: 'Paid Date is required when status is Paid' });
+      setError('payment_date', {
+        type: 'required',
+        message: 'Paid Date is required when status is Paid',
+      });
       return;
     }
 
     const payload: MemberProgramPaymentsFormData = {
       ...values,
       // Ensure paid date is null unless status is Paid
-      payment_date: isPaid ? (values.payment_date || null) : null,
+      payment_date: isPaid ? values.payment_date || null : null,
     };
 
     if (isEdit && initialValues?.member_program_payment_id) {
-      await updatePayment.mutateAsync({ id: initialValues.member_program_payment_id, ...payload });
+      await updatePayment.mutateAsync({
+        id: initialValues.member_program_payment_id,
+        ...payload,
+      });
     } else {
       await createPayment.mutateAsync(payload);
     }
-    onSuccess && onSuccess();
+    onSuccess?.();
   };
 
   return (
@@ -127,7 +168,7 @@ export default function MemberProgramPaymentForm({
     >
       <Grid item xs={12}>
         <Box
-          sx={(theme) => ({
+          sx={theme => ({
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
             columnGap: theme.spacing(2),
@@ -188,7 +229,10 @@ export default function MemberProgramPaymentForm({
                   <em>Select status</em>
                 </MenuItem>
                 {statusOptions.map((s: any) => (
-                  <MenuItem key={s.payment_status_id} value={s.payment_status_id}>
+                  <MenuItem
+                    key={s.payment_status_id}
+                    value={s.payment_status_id}
+                  >
                     {s.status_name || s.payment_status_name || s.status_name}
                   </MenuItem>
                 ))}
@@ -197,7 +241,14 @@ export default function MemberProgramPaymentForm({
           />
 
           {/* Left column rows 3-4 merged to keep tight spacing between Method and Reference */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, gridRow: { xs: 'auto', sm: 'span 2' } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              gridRow: { xs: 'auto', sm: 'span 2' },
+            }}
+          >
             <Controller
               name="payment_method_id"
               control={control}
@@ -217,7 +268,10 @@ export default function MemberProgramPaymentForm({
                     <em>Select method</em>
                   </MenuItem>
                   {methodOptions.map((m: any) => (
-                    <MenuItem key={m.payment_method_id} value={m.payment_method_id}>
+                    <MenuItem
+                      key={m.payment_method_id}
+                      value={m.payment_method_id}
+                    >
                       {m.method_name || m.payment_method_name}
                     </MenuItem>
                   ))}
@@ -249,5 +303,3 @@ export default function MemberProgramPaymentForm({
     </BaseForm>
   );
 }
-
-

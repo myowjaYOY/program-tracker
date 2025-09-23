@@ -21,9 +21,7 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuditLogsForRecord } from '@/lib/hooks/use-audit-logs';
 
 interface AuditHistoryDialogProps {
@@ -67,12 +65,7 @@ export default function AuditHistoryDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-    >
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle
         sx={{
           display: 'flex',
@@ -81,9 +74,7 @@ export default function AuditHistoryDialog({
         }}
       >
         <Box>
-          <Typography variant="h6">
-            Audit History
-          </Typography>
+          <Typography variant="h6">Audit History</Typography>
           {recordTitle && (
             <Typography variant="body2" color="text.secondary">
               {recordTitle}
@@ -97,26 +88,24 @@ export default function AuditHistoryDialog({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      
+
       <DialogContent>
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
           </Box>
         )}
-        
+
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error.message}
           </Alert>
         )}
-        
+
         {data && data.data.length === 0 && (
-          <Alert severity="info">
-            No audit history found for this record.
-          </Alert>
+          <Alert severity="info">No audit history found for this record.</Alert>
         )}
-        
+
         {data && data.data.length > 0 && (
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
@@ -131,18 +120,16 @@ export default function AuditHistoryDialog({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {data.data.map((log) => (
+                {data.data.map(log => (
                   <TableRow key={log.id}>
                     <TableCell>
-                      <Chip 
-                        label={log.operation} 
+                      <Chip
+                        label={log.operation}
                         size="small"
                         color={getOperationColor(log.operation) as any}
                       />
                     </TableCell>
-                    <TableCell>
-                      {log.column_name || '-'}
-                    </TableCell>
+                    <TableCell>{log.column_name || '-'}</TableCell>
                     <TableCell>
                       <Box
                         sx={{
@@ -182,11 +169,12 @@ export default function AuditHistoryDialog({
           </TableContainer>
         )}
       </DialogContent>
-      
+
       <DialogActions>
-        <Button onClick={onClose} sx={{ borderRadius: 0 }}>Close</Button>
+        <Button onClick={onClose} sx={{ borderRadius: 0 }}>
+          Close
+        </Button>
       </DialogActions>
     </Dialog>
   );
 }
-

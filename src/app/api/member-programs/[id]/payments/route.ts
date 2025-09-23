@@ -7,7 +7,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
 
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -18,15 +21,20 @@ export async function GET(
 
     const { data, error } = await supabase
       .from('member_program_payments')
-      .select(`*,
+      .select(
+        `*,
         payment_status:payment_status(payment_status_name),
         payment_methods:payment_methods(payment_method_name)
-      `)
+      `
+      )
       .eq('member_program_id', id)
       .order('payment_due_date', { ascending: true });
 
     if (error) {
-      return NextResponse.json({ error: 'Failed to fetch program payments' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Failed to fetch program payments' },
+        { status: 500 }
+      );
     }
 
     const mapped = (data || []).map((row: any) => ({
@@ -37,7 +45,10 @@ export async function GET(
 
     return NextResponse.json({ data: mapped }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
 
@@ -46,7 +57,10 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
-  const { data: { session }, error: authError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: authError,
+  } = await supabase.auth.getSession();
 
   if (authError || !session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -56,7 +70,10 @@ export async function POST(
     const { id } = await context.params;
     const programId = parseInt(id, 10);
     if (!Number.isFinite(programId)) {
-      return NextResponse.json({ error: 'Invalid program id' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Invalid program id' },
+        { status: 400 }
+      );
     }
 
     let body: any;
@@ -68,7 +85,10 @@ export async function POST(
 
     // Basic validation; deeper Zod validation is handled on client; enforce minimal server checks
     if (body.member_program_id && body.member_program_id !== programId) {
-      return NextResponse.json({ error: 'member_program_id mismatch' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'member_program_id mismatch' },
+        { status: 400 }
+      );
     }
 
     const insertData = {
@@ -87,14 +107,19 @@ export async function POST(
     const { data, error } = await supabase
       .from('member_program_payments')
       .insert([insertData])
-      .select(`*,
+      .select(
+        `*,
         payment_status:payment_status(payment_status_name),
         payment_methods:payment_methods(payment_method_name)
-      `)
+      `
+      )
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message || 'Failed to create payment' }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message || 'Failed to create payment' },
+        { status: 500 }
+      );
     }
 
     const mapped = data && {
@@ -105,6 +130,9 @@ export async function POST(
 
     return NextResponse.json({ data: mapped }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

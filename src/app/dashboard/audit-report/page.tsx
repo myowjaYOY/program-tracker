@@ -35,25 +35,18 @@ function AuditReportSkeleton() {
 
 export default function AuditReportPage() {
   return (
-    <Box sx={{ 
-      p: 3, 
-      height: '100vh', 
-      display: 'flex', 
-      flexDirection: 'column',
-      boxSizing: 'border-box'
-    }}>
+    <Box
+      sx={{
+        p: 3,
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        boxSizing: 'border-box',
+      }}
+    >
       <Suspense fallback={<AuditReportSkeleton />}>
         <AuditReportTable />
       </Suspense>
     </Box>
   );
 }
-
-
-
-
-
-
-
-
-

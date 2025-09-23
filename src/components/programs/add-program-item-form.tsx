@@ -1,17 +1,20 @@
 'use client';
 
 import React from 'react';
-import { 
-  TextField, 
+import {
+  TextField,
   MenuItem,
   Typography,
   Paper,
   Grid,
-  Box
+  Box,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { memberProgramItemSchema, MemberProgramItemFormData } from '@/lib/validations/member-program-item';
+import {
+  memberProgramItemSchema,
+  MemberProgramItemFormData,
+} from '@/lib/validations/member-program-item';
 import { Therapies, TherapyType } from '@/types/database.types';
 import { useTherapyTypes } from '@/lib/hooks/use-therapy-types';
 import { BaseForm } from '@/components/forms/base-form';
@@ -24,17 +27,23 @@ interface AddProgramItemFormProps {
   mode?: 'create' | 'edit';
 }
 
-export default function AddProgramItemForm({ therapies, onSave, onCancel, initialValues, mode = 'create' }: AddProgramItemFormProps) {
+export default function AddProgramItemForm({
+  therapies,
+  onSave,
+  onCancel,
+  initialValues,
+  mode = 'create',
+}: AddProgramItemFormProps) {
   const { data: therapyTypes = [] } = useTherapyTypes();
   const usedCount = Number((initialValues as any)?.used_count || 0);
-  
+
   const {
     control,
     handleSubmit,
     watch,
     setValue,
     reset,
-    formState: { errors, isSubmitting }
+    formState: { errors, isSubmitting },
   } = useForm<MemberProgramItemFormData>({
     resolver: zodResolver(memberProgramItemSchema),
     defaultValues: {
@@ -44,7 +53,7 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
       days_from_start: initialValues?.days_from_start || 0,
       days_between: initialValues?.days_between || 0,
       instructions: initialValues?.instructions || '',
-    }
+    },
   });
 
   const selectedTherapyTypeId = watch('therapy_type_id');
@@ -64,13 +73,17 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
       });
     }
   }, [initialValues, mode, reset]);
-  
+
   // Filter therapies based on selected therapy type
-  const filteredTherapies = selectedTherapyTypeId 
-    ? therapies.filter(t => t.therapy_type_id === selectedTherapyTypeId && t.active_flag)
+  const filteredTherapies = selectedTherapyTypeId
+    ? therapies.filter(
+        t => t.therapy_type_id === selectedTherapyTypeId && t.active_flag
+      )
     : [];
-  
-  const selectedTherapy = therapies.find(t => t.therapy_id === selectedTherapyId);
+
+  const selectedTherapy = therapies.find(
+    t => t.therapy_id === selectedTherapyId
+  );
 
   // Reset therapy selection when therapy type changes
   const handleTherapyTypeChange = (therapyTypeId: number) => {
@@ -87,7 +100,15 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
     <BaseForm
       onSubmit={onSubmit}
       isSubmitting={isSubmitting}
-      submitText={isSubmitting ? (mode === 'edit' ? 'Updating...' : 'Adding...') : (mode === 'edit' ? 'Update' : 'Create')}
+      submitText={
+        isSubmitting
+          ? mode === 'edit'
+            ? 'Updating...'
+            : 'Adding...'
+          : mode === 'edit'
+            ? 'Update'
+            : 'Create'
+      }
       submitHandler={handleSubmit(onSubmit)}
       buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
     >
@@ -106,7 +127,7 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
               helperText={errors.therapy_type_id?.message}
               sx={{ minWidth: 300, maxWidth: 300 }}
               disabled={mode === 'edit'}
-              onChange={(e) => {
+              onChange={e => {
                 const value = Number(e.target.value);
                 field.onChange(value);
                 handleTherapyTypeChange(value);
@@ -115,9 +136,14 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
               <MenuItem value={0}>Select a therapy type...</MenuItem>
               {therapyTypes
                 .filter(t => t.active_flag)
-                .sort((a, b) => a.therapy_type_name.localeCompare(b.therapy_type_name))
-                .map((therapyType) => (
-                  <MenuItem key={therapyType.therapy_type_id} value={therapyType.therapy_type_id}>
+                .sort((a, b) =>
+                  a.therapy_type_name.localeCompare(b.therapy_type_name)
+                )
+                .map(therapyType => (
+                  <MenuItem
+                    key={therapyType.therapy_type_id}
+                    value={therapyType.therapy_type_id}
+                  >
                     {therapyType.therapy_type_name}
                   </MenuItem>
                 ))}
@@ -145,7 +171,7 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
               <MenuItem value={0}>Select a therapy...</MenuItem>
               {filteredTherapies
                 .sort((a, b) => a.therapy_name.localeCompare(b.therapy_name))
-                .map((therapy) => (
+                .map(therapy => (
                   <MenuItem key={therapy.therapy_id} value={therapy.therapy_id}>
                     {therapy.therapy_name}
                   </MenuItem>
@@ -170,13 +196,17 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
                   required
                   disabled={mode === 'create' && !selectedTherapyId}
                   inputProps={{ min: Math.max(1, usedCount) }}
-                  error={!!errors.quantity || (mode === 'edit' && quantity < usedCount)}
-                  helperText={
+                  error={
+                    !!errors.quantity ||
                     (mode === 'edit' && quantity < usedCount)
-                      ? `Minimum is ${usedCount} (used)`
-                      : (errors.quantity?.message || (usedCount > 0 ? `${usedCount} used` : undefined))
                   }
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  helperText={
+                    mode === 'edit' && quantity < usedCount
+                      ? `Minimum is ${usedCount} (used)`
+                      : errors.quantity?.message ||
+                        (usedCount > 0 ? `${usedCount} used` : undefined)
+                  }
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -196,7 +226,7 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
                   inputProps={{ min: 0 }}
                   error={!!errors.days_from_start}
                   helperText={errors.days_from_start?.message}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -214,8 +244,11 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
                   disabled={mode === 'create' && !selectedTherapyId}
                   inputProps={{ min: 0 }}
                   error={!!errors.days_between}
-                  helperText={errors.days_between?.message || "Leave as 0 for single occurrence"}
-                  onChange={(e) => field.onChange(Number(e.target.value))}
+                  helperText={
+                    errors.days_between?.message ||
+                    'Leave as 0 for single occurrence'
+                  }
+                  onChange={e => field.onChange(Number(e.target.value))}
                 />
               )}
             />
@@ -261,17 +294,28 @@ export default function AddProgramItemForm({ therapies, onSave, onCancel, initia
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Tot Cost: ${((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
+                Tot Cost: $
+                {((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Tot Chg: ${((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
+                Tot Chg: $
+                {((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid item xs={2.4}>
               <Typography variant="body2" color="text.secondary">
-                Margin %: {(selectedTherapy?.charge || 0) > 0 ? ((((selectedTherapy?.charge || 0) - (selectedTherapy?.cost || 0)) / (selectedTherapy?.charge || 0)) * 100).toFixed(1) : 0}%
+                Margin %:{' '}
+                {(selectedTherapy?.charge || 0) > 0
+                  ? (
+                      (((selectedTherapy?.charge || 0) -
+                        (selectedTherapy?.cost || 0)) /
+                        (selectedTherapy?.charge || 0)) *
+                      100
+                    ).toFixed(1)
+                  : 0}
+                %
               </Typography>
             </Grid>
           </Grid>
