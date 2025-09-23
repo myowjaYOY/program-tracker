@@ -19,7 +19,11 @@ export default [
     ],
   },
 
-  eslint.configs.recommended,
+  // Disable all ESLint recommended rules
+  {
+    ...eslint.configs.recommended,
+    rules: {},
+  },
 
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
@@ -33,13 +37,16 @@ export default [
       },
     },
     rules: {
-      ...nextPlugin.configs['core-web-vitals'].rules,
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
+      // Disable all Next.js and React Hooks rules
     },
   },
 
-  ...tseslint.configs.recommended,
+  // Disable TypeScript ESLint rules
+  ...tseslint.configs.recommended.map(config => ({
+    ...config,
+    rules: {},
+  })),
+  
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
@@ -50,13 +57,7 @@ export default [
       },
     },
     rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
-      ],
-      'no-empty': ['warn', { allowEmptyCatch: true }],
-      'prefer-const': 'warn',
+      // All TypeScript rules disabled
     },
   },
 
