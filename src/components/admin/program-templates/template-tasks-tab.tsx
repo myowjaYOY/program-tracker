@@ -98,13 +98,10 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
     <Box>
       <BaseDataTable
         title=""
-        data={mappedTasks}
+        data={mappedTasks as any}
         columns={columns}
         loading={false}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         autoHeight
       />

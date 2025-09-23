@@ -33,7 +33,7 @@ export default function TherapyTypeForm({
     setValue,
     watch,
   } = useForm<TherapyTypeFormData>({
-    resolver: zodResolver(therapyTypeSchema),
+    resolver: zodResolver(therapyTypeSchema) as any,
     defaultValues: {
       therapy_type_name: '',
       description: '',
@@ -60,7 +60,7 @@ export default function TherapyTypeForm({
   return (
     <BaseForm<TherapyTypeFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createTherapyType.isPending ||

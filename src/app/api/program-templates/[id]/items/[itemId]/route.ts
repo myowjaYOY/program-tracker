@@ -152,7 +152,7 @@ async function updateTemplateCalculatedFields(
     );
 
     // Transform items to match the expected format for calculation
-    const transformedItems = (items || []).map(item => ({
+    const transformedItems = (items || []).map((item: any) => ({
       quantity: item.quantity || 1,
       cost: item.therapies?.cost || 0,
       charge: item.therapies?.charge || 0,

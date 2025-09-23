@@ -50,13 +50,15 @@ export function useCreateMemberProgramItem() {
       return json.data as MemberProgramItems;
     },
     onSuccess: data => {
-      queryClient.invalidateQueries({
-        queryKey: memberProgramItemKeys.byProgram(data.member_program_id),
-      });
-      // Also invalidate the member program to update calculated fields
-      queryClient.invalidateQueries({
-        queryKey: memberProgramKeys.detail(data.member_program_id),
-      });
+      if (data.member_program_id) {
+        queryClient.invalidateQueries({
+          queryKey: memberProgramItemKeys.byProgram(data.member_program_id),
+        });
+        // Also invalidate the member program to update calculated fields
+        queryClient.invalidateQueries({
+          queryKey: memberProgramKeys.detail(data.member_program_id),
+        });
+      }
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
     },
   });

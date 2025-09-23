@@ -35,7 +35,7 @@ export default function ProgramStatusForm({
     setValue,
     watch,
   } = useForm<ProgramStatusFormData>({
-    resolver: zodResolver(programStatusSchema),
+    resolver: zodResolver(programStatusSchema) as any,
     defaultValues: {
       status_name: '',
       description: '',
@@ -62,7 +62,7 @@ export default function ProgramStatusForm({
   return (
     <BaseForm<ProgramStatusFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createProgramStatus.isPending ||

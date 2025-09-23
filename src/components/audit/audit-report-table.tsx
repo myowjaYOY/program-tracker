@@ -209,7 +209,7 @@ export default function AuditReportTable() {
       {showFilters && (
         <Paper sx={{ p: 2, mb: 2 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Table</InputLabel>
                 <Select
@@ -232,7 +232,7 @@ export default function AuditReportTable() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Operation</InputLabel>
                 <Select
@@ -252,7 +252,7 @@ export default function AuditReportTable() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -265,7 +265,7 @@ export default function AuditReportTable() {
               />
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Changed By</InputLabel>
                 <Select
@@ -288,7 +288,7 @@ export default function AuditReportTable() {
               </FormControl>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -302,7 +302,7 @@ export default function AuditReportTable() {
               />
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 fullWidth
                 size="small"
@@ -316,7 +316,7 @@ export default function AuditReportTable() {
               />
             </Grid>
 
-            <Grid item xs={12} sm={6} md={2}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button variant="outlined" size="small" onClick={clearFilters}>
                   Clear
@@ -353,18 +353,11 @@ export default function AuditReportTable() {
         columns={columns}
         loading={isLoading}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         autoHeight={false}
         gridHeight="calc(100vh - 200px)"
         pageSize={50}
         pageSizeOptions={[25, 50, 100, 200]}
-        disableRowSelectionOnClick
-        disableColumnMenu={false}
-        disableColumnFilter={false}
-        disableColumnSelector={false}
       />
 
       {/* Detail Dialog */}
@@ -390,7 +383,7 @@ export default function AuditReportTable() {
           {selectedLog && (
             <Box>
               <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={6}>
+                <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Table
                   </Typography>
@@ -398,7 +391,7 @@ export default function AuditReportTable() {
                     {selectedLog.table_name}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Record ID
                   </Typography>
@@ -406,7 +399,7 @@ export default function AuditReportTable() {
                     {selectedLog.record_id}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Operation
                   </Typography>
@@ -416,7 +409,7 @@ export default function AuditReportTable() {
                     size="small"
                   />
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Changed By
                   </Typography>
@@ -426,7 +419,7 @@ export default function AuditReportTable() {
                       '-'}
                   </Typography>
                 </Grid>
-                <Grid item xs={6}>
+                <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Changed At
                   </Typography>
@@ -435,7 +428,7 @@ export default function AuditReportTable() {
                   </Typography>
                 </Grid>
                 {selectedLog.column_name && (
-                  <Grid item xs={6}>
+                  <Grid size={6}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Column
                     </Typography>

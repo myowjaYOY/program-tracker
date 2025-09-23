@@ -39,7 +39,7 @@ export default function TherapyTaskForm({
     watch,
     control,
   } = useForm<TherapyTaskFormData>({
-    resolver: zodResolver(therapyTaskSchema),
+    resolver: zodResolver(therapyTaskSchema) as any,
     defaultValues: {
       task_name: initialValues?.task_name || '',
       description: initialValues?.description || '',
@@ -81,7 +81,7 @@ export default function TherapyTaskForm({
   return (
     <BaseForm<TherapyTaskFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createTherapyTask.isPending ||

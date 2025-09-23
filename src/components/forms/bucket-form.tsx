@@ -27,7 +27,7 @@ export default function BucketForm({
     setValue,
     watch,
   } = useForm<BucketFormData>({
-    resolver: zodResolver(bucketSchema),
+    resolver: zodResolver(bucketSchema) as any,
     defaultValues: {
       bucket_name: '',
       description: '',
@@ -43,7 +43,7 @@ export default function BucketForm({
     if (isEdit && initialValues?.bucket_id) {
       await updateBucket.mutateAsync({
         id: initialValues.bucket_id,
-        data: values,
+        data: { ...values, id: initialValues.bucket_id },
       });
     } else {
       await createBucket.mutateAsync(values);
@@ -54,7 +54,7 @@ export default function BucketForm({
   return (
     <BaseForm<BucketFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createBucket.isPending || updateBucket.isPending
       }

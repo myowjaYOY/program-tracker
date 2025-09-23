@@ -27,7 +27,7 @@ export default function PillarForm({
     setValue,
     watch,
   } = useForm<PillarFormData>({
-    resolver: zodResolver(pillarSchema),
+    resolver: zodResolver(pillarSchema) as any,
     defaultValues: {
       pillar_name: '',
       description: '',
@@ -54,7 +54,7 @@ export default function PillarForm({
   return (
     <BaseForm<PillarFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createPillar.isPending || updatePillar.isPending
       }

@@ -132,7 +132,7 @@ export default function TherapyTaskTable() {
             description: initialValues.description || '',
             therapy_id: initialValues.therapy_id || 0,
             task_delay: initialValues.task_delay || 0,
-            active_flag: initialValues.active_flag,
+            active_flag: initialValues.active_flag ?? true,
             ...(initialValues.task_id && {
               task_id: initialValues.task_id,
             }),
@@ -150,7 +150,7 @@ export default function TherapyTaskTable() {
 
   // Transform therapy tasks data to include id property and handle null dates
   const therapyTasksWithId: TherapyTaskEntity[] = (therapyTasks || []).map(
-    task => ({
+    (task: any) => ({
       ...task,
       id: task.task_id,
       created_at: task.created_at || new Date().toISOString(),

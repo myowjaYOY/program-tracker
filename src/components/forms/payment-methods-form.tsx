@@ -38,7 +38,7 @@ export default function PaymentMethodsForm({
     setValue,
     watch,
   } = useForm<PaymentMethodsFormData>({
-    resolver: zodResolver(paymentMethodsSchema),
+    resolver: zodResolver(paymentMethodsSchema) as any,
     defaultValues: {
       payment_method_name: '',
       payment_method_description: '',
@@ -67,7 +67,7 @@ export default function PaymentMethodsForm({
   return (
     <BaseForm<PaymentMethodsFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createPaymentMethods.isPending ||

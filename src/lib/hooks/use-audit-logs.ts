@@ -103,7 +103,7 @@ export function useAuditTables() {
       const tables = new Set(
         data.data?.map((log: AuditLog) => log.table_name) || []
       );
-      return Array.from(tables).sort();
+      return Array.from(tables).sort() as string[];
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -125,7 +125,7 @@ export function useAuditOperations() {
       const operations = new Set(
         data.data?.map((log: AuditLog) => log.operation) || []
       );
-      return Array.from(operations).sort();
+      return Array.from(operations).sort() as string[];
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });

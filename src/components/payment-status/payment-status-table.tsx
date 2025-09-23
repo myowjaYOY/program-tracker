@@ -78,7 +78,7 @@ export default function PaymentStatusTable() {
           payment_status_name: initialValues.payment_status_name || '',
           payment_status_description:
             initialValues.payment_status_description || '',
-          active_flag: initialValues.active_flag,
+          active_flag: initialValues.active_flag ?? true,
           ...(initialValues.payment_status_id && {
             payment_status_id: initialValues.payment_status_id,
           }),
@@ -123,11 +123,6 @@ export default function PaymentStatusTable() {
       deleteConfirmMessage="Are you sure you want to delete this payment status? This action cannot be undone."
       pageSize={25}
       pageSizeOptions={[10, 25, 50, 100]}
-      initialState={{
-        sorting: {
-          sortModel: [{ field: 'payment_status_name', sort: 'asc' }],
-        },
-      }}
     />
   );
 }

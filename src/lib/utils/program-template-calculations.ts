@@ -13,11 +13,11 @@ export function calculateProgramTemplateTotals(
   items: ProgramTemplateItems[]
 ): ProgramTemplateTotals {
   const total_cost = items.reduce((sum, item) => {
-    return sum + item.cost * item.quantity;
+    return sum + (item.item_cost ?? 0) * (item.quantity ?? 0);
   }, 0);
 
   const total_charge = items.reduce((sum, item) => {
-    return sum + item.charge * item.quantity;
+    return sum + (item.item_charge ?? 0) * (item.quantity ?? 0);
   }, 0);
 
   // Calculate margin percentage: ((total_charge - total_cost) / total_charge) * 100

@@ -29,7 +29,8 @@ export class GHLService {
   ): Promise<{ success: boolean; leadId?: number; error?: string }> {
     try {
       // Check if lead already exists
-      const { data: existingLead } = await this.supabase
+      const supabase = await this.supabase;
+      const { data: existingLead } = await supabase
         .from('leads')
         .select('lead_id')
         .eq('email', contact.email)
@@ -43,13 +44,13 @@ export class GHLService {
       }
 
       // Get default status and campaign
-      const { data: defaultStatus } = await this.supabase
+      const { data: defaultStatus } = await supabase
         .from('lead_status')
         .select('status_id')
         .eq('status_name', ghlConfig.defaultStatusName)
         .single();
 
-      const { data: defaultCampaign } = await this.supabase
+      const { data: defaultCampaign } = await supabase
         .from('campaigns')
         .select('campaign_id')
         .eq('campaign_name', ghlConfig.defaultCampaignName)
@@ -73,7 +74,7 @@ export class GHLService {
       const validatedData = leadSchema.parse(leadData);
 
       // Insert the lead
-      const { data: newLead, error } = await this.supabase
+      const { data: newLead, error } = await supabase
         .from('leads')
         .insert(validatedData)
         .select()
@@ -104,14 +105,15 @@ export class GHLService {
    * Check if a stage should trigger lead creation
    */
   shouldTriggerLeadCreation(stageName: string): boolean {
-    return shouldCreateLead(stageName, TRIGGER_STAGES);
+    return shouldCreateLead(stageName, [...TRIGGER_STAGES]);
   }
 
   /**
    * Get or create default campaign for GHL imports
    */
   async ensureDefaultCampaign(): Promise<number> {
-    const { data: existingCampaign } = await this.supabase
+    const supabase = await this.supabase;
+    const { data: existingCampaign } = await supabase
       .from('campaigns')
       .select('campaign_id')
       .eq('campaign_name', ghlConfig.defaultCampaignName)
@@ -122,7 +124,7 @@ export class GHLService {
     }
 
     // Create default campaign if it doesn't exist
-    const { data: newCampaign, error } = await this.supabase
+    const { data: newCampaign, error } = await supabase
       .from('campaigns')
       .insert({
         campaign_name: ghlConfig.defaultCampaignName,
@@ -146,7 +148,8 @@ export class GHLService {
    * Get or create default status for GHL imports
    */
   async ensureDefaultStatus(): Promise<number> {
-    const { data: existingStatus } = await this.supabase
+    const supabase = await this.supabase;
+    const { data: existingStatus } = await supabase
       .from('lead_status')
       .select('status_id')
       .eq('status_name', ghlConfig.defaultStatusName)
@@ -157,7 +160,7 @@ export class GHLService {
     }
 
     // Create default status if it doesn't exist
-    const { data: newStatus, error } = await this.supabase
+    const { data: newStatus, error } = await supabase
       .from('lead_status')
       .insert({
         status_name: ghlConfig.defaultStatusName,

@@ -78,7 +78,6 @@ export default function CoordinatorProgramsGrid({
       description: row.description,
       total_cost: row.total_cost,
       total_charge: row.total_charge,
-      margin_percentage: row.margin_percentage,
       lead_id: row.lead_id,
       start_date: row.start_date,
       active_flag: row.active_flag,

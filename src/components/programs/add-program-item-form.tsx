@@ -15,7 +15,7 @@ import {
   memberProgramItemSchema,
   MemberProgramItemFormData,
 } from '@/lib/validations/member-program-item';
-import { Therapies, TherapyType } from '@/types/database.types';
+import { Therapies } from '@/types/database.types';
 import { useTherapyTypes } from '@/lib/hooks/use-therapy-types';
 import { BaseForm } from '@/components/forms/base-form';
 
@@ -30,7 +30,7 @@ interface AddProgramItemFormProps {
 export default function AddProgramItemForm({
   therapies,
   onSave,
-  onCancel,
+  onCancel: _onCancel,
   initialValues,
   mode = 'create',
 }: AddProgramItemFormProps) {
@@ -86,7 +86,7 @@ export default function AddProgramItemForm({
   );
 
   // Reset therapy selection when therapy type changes
-  const handleTherapyTypeChange = (therapyTypeId: number) => {
+  const handleTherapyTypeChange = (_therapyTypeId: number) => {
     setValue('therapy_id', 0);
   };
 
@@ -112,7 +112,7 @@ export default function AddProgramItemForm({
       submitHandler={handleSubmit(onSubmit)}
       buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
     >
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_type_id"
           control={control}
@@ -152,7 +152,7 @@ export default function AddProgramItemForm({
         />
       </Grid>
 
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_id"
           control={control}
@@ -181,7 +181,7 @@ export default function AddProgramItemForm({
         />
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Box sx={{ width: '31%' }}>
             <Controller
@@ -256,7 +256,7 @@ export default function AddProgramItemForm({
         </Box>
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Controller
           name="instructions"
           control={control}
@@ -275,36 +275,36 @@ export default function AddProgramItemForm({
         />
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         {/* Cost Summary - Always visible */}
         <Paper sx={{ p: 2, bgcolor: 'grey.50', width: 615 }}>
           <Typography variant="subtitle2" gutterBottom>
             Cost Summary
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Unit Cost: ${selectedTherapy?.cost || 0}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Unit Chg: ${selectedTherapy?.charge || 0}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Tot Cost: $
                 {((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Tot Chg: $
                 {((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Margin %:{' '}
                 {(selectedTherapy?.charge || 0) > 0

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { bodyUpdateSchema, BodyUpdateData } from '@/lib/validations/body';
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   context: { params: { id: string } }
 ) {
   const supabase = await createClient();
@@ -72,7 +72,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   context: { params: { id: string } }
 ) {
   const supabase = await createClient();

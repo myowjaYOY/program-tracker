@@ -111,7 +111,7 @@ export default function ProgramTemplatesGrid({
   });
 
   const handleDelete = (id: string | number) => {
-    deleteTemplate.mutate(String(id));
+    deleteTemplate.mutate(Number(id));
   };
 
   const handleEdit = (_row: ProgramTemplateEntity) => {
@@ -142,7 +142,9 @@ export default function ProgramTemplatesGrid({
             program_template_name: initialValues.program_template_name || '',
             description: initialValues.description || '',
             active_flag: initialValues.active_flag ?? true,
-            program_template_id: initialValues.program_template_id,
+            ...(initialValues.program_template_id && {
+              program_template_id: initialValues.program_template_id,
+            }),
           }
         : {};
 
@@ -169,12 +171,13 @@ export default function ProgramTemplatesGrid({
 
   // Debug: Check the first template's calculated fields
   if (templatesWithId.length > 0) {
+    const firstTemplate = templatesWithId[0];
     console.log('First template in templatesWithId:', {
-      id: templatesWithId[0].id,
-      name: templatesWithId[0].program_template_name,
-      total_cost: templatesWithId[0].total_cost,
-      total_charge: templatesWithId[0].total_charge,
-      margin_percentage: templatesWithId[0].margin_percentage,
+      id: firstTemplate?.id,
+      name: firstTemplate?.program_template_name,
+      total_cost: firstTemplate?.total_cost,
+      total_charge: firstTemplate?.total_charge,
+      margin_percentage: firstTemplate?.margin_percentage,
     });
   }
 
@@ -221,11 +224,6 @@ export default function ProgramTemplatesGrid({
       autoHeight={true}
       selectedRowId={selectedTemplate?.program_template_id || null}
       showActionsColumn={false}
-      initialState={{
-        sorting: {
-          sortModel: [{ field: 'program_template_name', sort: 'asc' }],
-        },
-      }}
     />
   );
 }

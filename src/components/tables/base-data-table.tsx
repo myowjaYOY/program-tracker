@@ -54,7 +54,7 @@ export const renderDate = (params: GridRenderCellParams) => {
   // If value is a date-only string (YYYY-MM-DD), avoid UTC parsing shift
   if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [y, m, d] = v.split('-').map(Number);
-    const local = new Date(y, (m || 1) - 1, d || 1);
+    const local = new Date(y ?? 2024, (m ?? 1) - 1, d ?? 1);
     return (
       <Typography variant="body2">
         {local.toLocaleDateString('en-US')}

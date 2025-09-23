@@ -27,7 +27,7 @@ export default function BodyForm({
     setValue,
     watch,
   } = useForm<BodyFormData>({
-    resolver: zodResolver(bodySchema),
+    resolver: zodResolver(bodySchema) as any,
     defaultValues: {
       body_name: '',
       description: '',
@@ -54,7 +54,7 @@ export default function BodyForm({
   return (
     <BaseForm<BodyFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createBody.isPending || updateBody.isPending
       }

@@ -78,7 +78,6 @@ export default function MemberProgramPaymentForm({
       payment_reference: '',
       notes: '',
       ...(normalizedInitials as any),
-      member_program_id: programId,
     },
   });
 
@@ -166,7 +165,7 @@ export default function MemberProgramPaymentForm({
       }
       submitText={isEdit ? 'Update' : 'Create'}
     >
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Box
           sx={theme => ({
             display: 'grid',

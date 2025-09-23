@@ -123,9 +123,6 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
         error={error ? (error as any).message : null}
         getRowId={row => row.member_program_item_task_schedule_id}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}

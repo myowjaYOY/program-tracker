@@ -146,7 +146,7 @@ export function useDeleteMemberProgramPayment(programId: number) {
       return { prev } as { prev?: MemberProgramPayments[] };
     },
     onError: (err, _vars, context) => {
-      if (context?.prev) {
+      if (context && typeof context === 'object' && 'prev' in context && context.prev) {
         queryClient.setQueryData(
           memberProgramPaymentKeys.byProgram(programId),
           context.prev

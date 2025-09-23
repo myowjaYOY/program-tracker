@@ -392,9 +392,6 @@ export default function ReportsTable() {
             loading={isLoading}
             onEdit={handleEdit}
             showCreateButton={false}
-            showEditButton={false}
-            showDeleteButton={false}
-            showTitle={false}
             showActionsColumn={false}
           />
         </CardContent>

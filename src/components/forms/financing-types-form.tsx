@@ -39,7 +39,7 @@ export default function FinancingTypesForm({
     setValue,
     watch,
   } = useForm<FinancingTypesFormData>({
-    resolver: zodResolver(financingTypesSchema),
+    resolver: zodResolver(financingTypesSchema) as any,
     defaultValues: {
       financing_type_name: '',
       financing_type_description: '',
@@ -69,7 +69,7 @@ export default function FinancingTypesForm({
   return (
     <BaseForm<FinancingTypesFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createFinancingTypes.isPending ||

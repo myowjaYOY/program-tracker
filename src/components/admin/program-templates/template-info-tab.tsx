@@ -40,7 +40,7 @@ export default function TemplateInfoTab({
     formState: { errors, isDirty },
     reset,
   } = useForm<ProgramTemplateFormData>({
-    resolver: zodResolver(programTemplateSchema),
+    resolver: zodResolver(programTemplateSchema) as any,
     defaultValues: {
       program_template_name: template.program_template_name,
       description: template.description || '',
@@ -69,7 +69,7 @@ export default function TemplateInfoTab({
     setSaveSuccess(false);
 
     try {
-      const updatedTemplate = { ...template, ...data };
+      const updatedTemplate = { ...template, ...data, description: data.description ?? null };
       await onTemplateUpdate(updatedTemplate);
       setSaveSuccess(true);
 
@@ -241,7 +241,7 @@ export default function TemplateInfoTab({
           <Button
             variant="contained"
             color="primary"
-            onClick={handleSubmit(onSubmit)}
+            onClick={handleSubmit(onSubmit) as any}
             disabled={!isDirty || isSaving}
             startIcon={isSaving ? <CircularProgress size={16} /> : null}
             sx={{

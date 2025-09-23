@@ -67,7 +67,7 @@ export default function ProgramPaymentsTab({
 
   return (
     <Box>
-      <BaseDataTable<PaymentRow>
+      <BaseDataTable<any>
         title="Payments"
         data={rows}
         columns={columns as any}

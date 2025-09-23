@@ -46,7 +46,7 @@ export default function AddTemplateItemForm({
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ProgramTemplateItemFormData>({
-    resolver: zodResolver(programTemplateItemSchema),
+    resolver: zodResolver(programTemplateItemSchema) as any,
     defaultValues: {
       therapy_type_id: initialValues?.therapy_type_id || 0,
       therapy_id: initialValues?.therapy_id || 0,
@@ -111,10 +111,10 @@ export default function AddTemplateItemForm({
             ? 'Update'
             : 'Create'
       }
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
     >
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_type_id"
           control={control}
@@ -154,7 +154,7 @@ export default function AddTemplateItemForm({
         />
       </Grid>
 
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_id"
           control={control}
@@ -183,7 +183,7 @@ export default function AddTemplateItemForm({
         />
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Box sx={{ width: '31%' }}>
             <Controller
@@ -250,7 +250,7 @@ export default function AddTemplateItemForm({
         </Box>
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Controller
           name="instructions"
           control={control}
@@ -269,7 +269,7 @@ export default function AddTemplateItemForm({
         />
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         <Controller
           name="active_flag"
           control={control}
@@ -288,36 +288,36 @@ export default function AddTemplateItemForm({
         />
       </Grid>
 
-      <Grid item xs={12}>
+      <Grid size={12}>
         {/* Cost Summary - Always visible */}
         <Paper sx={{ p: 2, bgcolor: 'grey.50', width: 615 }}>
           <Typography variant="subtitle2" gutterBottom>
             Cost Summary
           </Typography>
           <Grid container spacing={2}>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Unit Cost: ${selectedTherapy?.cost || 0}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Unit Chg: ${selectedTherapy?.charge || 0}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Tot Cost: $
                 {((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Tot Chg: $
                 {((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
               </Typography>
             </Grid>
-            <Grid item xs={2.4}>
+            <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Margin %:{' '}
                 {(selectedTherapy?.charge || 0) > 0

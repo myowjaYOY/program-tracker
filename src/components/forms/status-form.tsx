@@ -27,7 +27,7 @@ export default function StatusForm({
     setValue,
     watch,
   } = useForm<StatusFormData>({
-    resolver: zodResolver(statusSchema),
+    resolver: zodResolver(statusSchema) as any,
     defaultValues: {
       status_name: '',
       description: '',
@@ -54,7 +54,7 @@ export default function StatusForm({
   return (
     <BaseForm<StatusFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createStatus.isPending || updateStatus.isPending
       }

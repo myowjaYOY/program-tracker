@@ -61,12 +61,20 @@ export default function ProgramForm({
         data: {
           ...values,
           description: values.description || null,
+          lead_id: values.lead_id ?? null,
+          start_date: values.start_date ?? null,
+          active_flag: values.active_flag ?? true,
+          program_status_id: values.program_status_id ?? null,
         },
       });
     } else {
       await createProgram.mutateAsync({
         ...values,
         description: values.description || null,
+        lead_id: values.lead_id ?? null,
+        start_date: values.start_date ?? null,
+        active_flag: values.active_flag ?? true,
+        program_status_id: values.program_status_id ?? null,
       });
     }
     if (onSuccess) onSuccess();

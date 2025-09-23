@@ -38,7 +38,7 @@ export default function PaymentStatusForm({
     setValue,
     watch,
   } = useForm<PaymentStatusFormData>({
-    resolver: zodResolver(paymentStatusSchema),
+    resolver: zodResolver(paymentStatusSchema) as any,
     defaultValues: {
       payment_status_name: '',
       payment_status_description: '',
@@ -67,7 +67,7 @@ export default function PaymentStatusForm({
   return (
     <BaseForm<PaymentStatusFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createPaymentStatus.isPending ||

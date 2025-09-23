@@ -30,10 +30,10 @@ export default function CoordinatorToDoTab({
     isLoading,
     error,
   } = useCoordinatorToDo({
-    memberId: memberId ?? undefined,
+    memberId: memberId ?? null,
     range,
-    start,
-    end,
+    start: start ?? null,
+    end: end ?? null,
   });
   const qc = useQueryClient();
 
@@ -183,9 +183,6 @@ export default function CoordinatorToDoTab({
           return `row-due-${diffDays}`;
         }}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}

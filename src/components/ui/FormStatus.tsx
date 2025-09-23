@@ -29,6 +29,7 @@ export default function FormStatus({
       const t = setTimeout(() => onClose?.(), autoHideMs);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [status, autoHideMs, onClose]);
 
   if (!status) return null;

@@ -77,7 +77,7 @@ export default function BucketTable() {
             description: initialValues.description || '',
             active_flag: initialValues.active_flag ?? true,
             ...(initialValues.bucket_id && {
-              bucket_id: initialValues.bucket_id,
+              bucket_id: String(initialValues.bucket_id),
             }),
           }
         : {};
@@ -88,7 +88,7 @@ export default function BucketTable() {
   };
 
   // Transform buckets data to include id property and handle null dates
-  const bucketsWithId: BucketEntity[] = (buckets || []).map(bucket => ({
+  const bucketsWithId: BucketEntity[] = (buckets || []).map((bucket: any) => ({
     ...bucket,
     id: bucket.bucket_id,
     created_at: bucket.created_at || new Date().toISOString(),

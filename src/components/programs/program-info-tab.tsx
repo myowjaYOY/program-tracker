@@ -74,6 +74,7 @@ export default function ProgramInfoTab({
     formState: { errors, isDirty },
     reset,
     getValues,
+    setValue,
   } = useForm<MemberProgramFormData>({
     resolver: zodResolver(memberProgramSchema),
     defaultValues: {
@@ -113,6 +114,10 @@ export default function ProgramInfoTab({
         ...program,
         ...data,
         description: data.description || null,
+        lead_id: data.lead_id ?? null,
+        start_date: data.start_date ?? null,
+        active_flag: data.active_flag ?? true,
+        program_status_id: data.program_status_id ?? null,
       };
       await onProgramUpdate(updatedProgram);
       setStatusMsg({ ok: true, message: 'Changes saved successfully' });
@@ -331,7 +336,7 @@ export default function ProgramInfoTab({
                   value={field.value || ''}
                   error={
                     !!errors.start_date ||
-                    (statusMsg &&
+                    !!(statusMsg &&
                       !statusMsg.ok &&
                       statusMsg.message?.toLowerCase().includes('start date'))
                   }
@@ -359,7 +364,7 @@ export default function ProgramInfoTab({
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={field.value}
+                      checked={field.value ?? false}
                       onChange={e => field.onChange(e.target.checked)}
                     />
                   }

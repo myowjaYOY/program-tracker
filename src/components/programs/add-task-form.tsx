@@ -48,7 +48,7 @@ export default function AddTaskForm({
     reset,
     formState: { errors },
   } = useForm<MemberProgramItemTaskFormData>({
-    resolver: zodResolver(memberProgramItemTaskSchema),
+    resolver: zodResolver(memberProgramItemTaskSchema) as any,
     defaultValues: {
       member_program_item_id: 0,
       task_id: 0, // This will be set to 0 for new tasks
@@ -110,7 +110,7 @@ export default function AddTaskForm({
       <DialogContent>
         <Box
           component="form"
-          onSubmit={handleSubmit(handleFormSubmit)}
+          onSubmit={handleSubmit(handleFormSubmit) as any}
           sx={{ pt: 2 }}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -222,7 +222,7 @@ export default function AddTaskForm({
       </DialogContent>
       <DialogActions sx={{ p: 3, pt: 0, justifyContent: 'flex-end' }}>
         <Button
-          onClick={handleSubmit(handleFormSubmit)}
+          onClick={handleSubmit(handleFormSubmit) as any}
           variant="contained"
           color="primary"
           disabled={loading || !selectedItemId}

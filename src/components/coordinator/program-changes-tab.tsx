@@ -112,7 +112,6 @@ export default function ProgramChangesTab({
         error={error ? (error as any).message : null}
         showCreateButton={false}
         showActionsColumn={false}
-        showTitle={false}
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}

@@ -65,7 +65,7 @@ export default function UserForm({
     setValue,
     watch,
   } = useForm<UserFormData>({
-    resolver: zodResolver(isEdit ? editSchema : userSchema),
+    resolver: zodResolver(isEdit ? editSchema : userSchema) as any,
     defaultValues: {
       email: '',
       full_name: '',
@@ -210,7 +210,6 @@ export default function UserForm({
       await updateUser.mutateAsync({
         userId: initialValues.id,
         userData: {
-          email: values.email,
           full_name: values.full_name || '',
           is_admin: values.is_admin,
           is_active: values.is_active,
@@ -241,7 +240,7 @@ export default function UserForm({
   return (
     <BaseForm<UserFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
         createUser.isPending ||

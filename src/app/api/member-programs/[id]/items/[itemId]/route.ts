@@ -141,7 +141,7 @@ async function updateMemberProgramCalculatedFields(
     let totalCost = 0;
     let totalCharge = 0;
 
-    (items || []).forEach(item => {
+    (items || []).forEach((item: any) => {
       const quantity = item.quantity || 1;
       const cost = item.item_cost || 0;
       const charge = item.item_charge || 0;

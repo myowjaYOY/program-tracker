@@ -78,7 +78,7 @@ export default function PaymentMethodsTable() {
           payment_method_name: initialValues.payment_method_name || '',
           payment_method_description:
             initialValues.payment_method_description || '',
-          active_flag: initialValues.active_flag,
+          active_flag: initialValues.active_flag ?? true,
           ...(initialValues.payment_method_id && {
             payment_method_id: initialValues.payment_method_id,
           }),
@@ -123,11 +123,6 @@ export default function PaymentMethodsTable() {
       deleteConfirmMessage="Are you sure you want to delete this payment method? This action cannot be undone."
       pageSize={25}
       pageSizeOptions={[10, 25, 50, 100]}
-      initialState={{
-        sorting: {
-          sortModel: [{ field: 'payment_method_name', sort: 'asc' }],
-        },
-      }}
     />
   );
 }

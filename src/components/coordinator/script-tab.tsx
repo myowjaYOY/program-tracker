@@ -48,10 +48,10 @@ export default function CoordinatorScriptTab({
     isLoading,
     error,
   } = useCoordinatorScript({
-    memberId: memberId ?? undefined,
+    memberId: memberId ?? null,
     range,
-    start,
-    end,
+    start: start ?? null,
+    end: end ?? null,
   });
   const qc = useQueryClient();
 
@@ -169,7 +169,7 @@ export default function CoordinatorScriptTab({
 
   return (
     <Box>
-      <BaseDataTable<Row>
+      <BaseDataTable<any>
         title=""
         data={rows as any}
         columns={cols as any}
@@ -193,9 +193,6 @@ export default function CoordinatorScriptTab({
           return `row-due-${diffDays}`;
         }}
         showCreateButton={false}
-        showEditButton={false}
-        showDeleteButton={false}
-        showTitle={false}
         showActionsColumn={false}
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}

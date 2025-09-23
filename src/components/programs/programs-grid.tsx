@@ -170,7 +170,7 @@ export default function ProgramsGrid({
   const deleteProgram = useDeleteMemberProgram();
 
   const handleDelete = (id: string | number) => {
-    deleteProgram.mutate(String(id));
+    deleteProgram.mutate(Number(id));
   };
 
   const handleEdit = (_row: MemberProgramEntity) => {
@@ -224,7 +224,6 @@ export default function ProgramsGrid({
       description: row.description,
       total_cost: row.total_cost,
       total_charge: row.total_charge,
-      margin_percentage: row.margin_percentage,
       lead_id: row.lead_id,
       start_date: row.start_date,
       active_flag: row.active_flag,

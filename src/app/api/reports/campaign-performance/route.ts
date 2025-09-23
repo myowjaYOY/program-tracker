@@ -41,13 +41,13 @@ export async function GET(_req: NextRequest) {
         // Count leads by status
         const totalLeads = leads.length;
         const wonLeads = leads.filter(
-          lead => lead.status?.status_name === 'Won'
+          (lead: any) => lead.status?.status_name === 'Won'
         ).length;
         const lostLeads = leads.filter(
-          lead => lead.status?.status_name === 'Lost'
+          (lead: any) => lead.status?.status_name === 'Lost'
         ).length;
         const noPmeLeads = leads.filter(
-          lead => lead.status?.status_name === 'No PME'
+          (lead: any) => lead.status?.status_name === 'No PME'
         ).length;
         const activeLeads = totalLeads - wonLeads - lostLeads - noPmeLeads;
 
@@ -81,7 +81,7 @@ export async function GET(_req: NextRequest) {
           wonLeads,
           conversionRate,
           roiPercentage,
-          leads: leads.map(l => ({ status: l.status?.status_name })),
+          leads: leads.map((l: any) => ({ status: l.status?.status_name })),
         });
 
         return {
@@ -89,7 +89,7 @@ export async function GET(_req: NextRequest) {
           campaign_id: campaign.campaign_id,
           campaign_name: campaign.campaign_name,
           campaign_date: campaign.campaign_date,
-          vendor_name: campaign.vendor?.vendor_name || 'Unknown',
+          vendor_name: (campaign.vendor as any)?.vendor_name || 'Unknown',
           total_leads: totalLeads,
           active_leads: activeLeads,
           won_leads: wonLeads,

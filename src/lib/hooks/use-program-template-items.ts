@@ -51,13 +51,15 @@ export function useCreateProgramTemplateItem() {
       return json.data as ProgramTemplateItems;
     },
     onSuccess: data => {
-      queryClient.invalidateQueries({
-        queryKey: programTemplateItemKeys.byTemplate(data.program_template_id),
-      });
-      // Also invalidate the program template to update calculated fields
-      queryClient.invalidateQueries({
-        queryKey: programTemplateKeys.detail(data.program_template_id),
-      });
+      if (data.program_template_id) {
+        queryClient.invalidateQueries({
+          queryKey: programTemplateItemKeys.byTemplate(data.program_template_id),
+        });
+        // Also invalidate the program template to update calculated fields
+        queryClient.invalidateQueries({
+          queryKey: programTemplateKeys.detail(data.program_template_id),
+        });
+      }
       queryClient.invalidateQueries({ queryKey: programTemplateKeys.list() });
     },
   });

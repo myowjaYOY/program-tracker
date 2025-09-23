@@ -35,7 +35,7 @@ export default function ProgramTemplateForm({
     setValue,
     watch,
   } = useForm<ProgramTemplateFormData>({
-    resolver: zodResolver(programTemplateSchema),
+    resolver: zodResolver(programTemplateSchema) as any,
     defaultValues: {
       program_template_name: '',
       description: '',
@@ -51,10 +51,10 @@ export default function ProgramTemplateForm({
     if (isEdit && initialValues?.program_template_id) {
       await updateTemplate.mutateAsync({
         id: initialValues.program_template_id,
-        data: values,
+        data: { ...values, description: values.description ?? null },
       });
     } else {
-      await createTemplate.mutateAsync(values);
+      await createTemplate.mutateAsync({ ...values, description: values.description ?? null });
     }
     if (onSuccess) onSuccess();
   };
@@ -62,7 +62,7 @@ export default function ProgramTemplateForm({
   return (
     <BaseForm<ProgramTemplateFormData>
       onSubmit={onSubmit}
-      submitHandler={handleSubmit(onSubmit)}
+      submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createTemplate.isPending || updateTemplate.isPending
       }

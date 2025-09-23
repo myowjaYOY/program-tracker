@@ -83,7 +83,8 @@ export default function FinancingTypesTable() {
           financing_type_name: initialValues.financing_type_name || '',
           financing_type_description:
             initialValues.financing_type_description || '',
-          active_flag: initialValues.active_flag,
+          active_flag: initialValues.active_flag ?? true,
+          financing_source: 'internal' as const,
           ...(initialValues.financing_type_id && {
             financing_type_id: initialValues.financing_type_id,
           }),
@@ -128,11 +129,6 @@ export default function FinancingTypesTable() {
       deleteConfirmMessage="Are you sure you want to delete this financing type? This action cannot be undone."
       pageSize={25}
       pageSizeOptions={[10, 25, 50, 100]}
-      initialState={{
-        sorting: {
-          sortModel: [{ field: 'financing_type_name', sort: 'asc' }],
-        },
-      }}
     />
   );
 }

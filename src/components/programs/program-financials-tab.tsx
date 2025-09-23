@@ -287,6 +287,7 @@ export default function ProgramFinancialsTab({
       const t = setTimeout(() => setInline(null), 4000);
       return () => clearTimeout(t);
     }
+    return undefined;
   }, [inline]);
 
   const onSubmit = async (data: MemberProgramFinancesFormData) => {
