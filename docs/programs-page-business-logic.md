@@ -2,7 +2,7 @@
 
 ### Scope
 
-This document explains the end‑to‑end business logic that powers the Programs page: Program Info, Financials, Payments, Items, and Tasks tabs. It includes frontend behaviors, validation rules, API interactions, and SQL logic that is executed on the database.
+This doc explains the end‑to‑end business logic that powers the Programs page: Program Info, Financials, Payments, Items, and Tasks tabs. It includes frontend behaviors, validation rules, API interactions, and SQL logic that is executed on the database.
 
 ## Entities and Key Fields
 
