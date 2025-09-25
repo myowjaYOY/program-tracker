@@ -20,14 +20,14 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get('end');
 
   try {
-    // Load status ids to exclude Cancelled/Completed
+    // Load status ids to exclude Cancelled/Completed/Quote
     const { data: statuses } = await supabase
       .from('program_status')
       .select('program_status_id, status_name');
     const excluded = new Set(
       (statuses || [])
         .filter((s: any) =>
-          ['cancelled', 'completed'].includes(
+          ['cancelled', 'completed', 'quote'].includes(
             (s.status_name || '').toLowerCase()
           )
         )

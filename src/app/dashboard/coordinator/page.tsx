@@ -41,11 +41,11 @@ export default function CoordinatorPage() {
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
 
-  // Members: only leads with programs not Cancelled/Completed
+  // Members: only leads with programs not Cancelled/Completed/Quote
   const memberOptions = useMemo(() => {
-    const allowed = new Set(['active', 'paused', 'quote']);
+    const excluded = new Set(['cancelled', 'completed', 'quote']);
     const filtered = (programs || []).filter((p: any) =>
-      allowed.has((p.status_name || '').toLowerCase())
+      !excluded.has((p.status_name || '').toLowerCase())
     );
     const pairs = filtered
       .filter((p: any) => !!p.lead_id)

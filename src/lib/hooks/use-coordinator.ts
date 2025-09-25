@@ -27,6 +27,9 @@ export function useCoordinatorMetrics() {
         programChangesThisWeek: number;
       };
     },
+    staleTime: 30 * 1000, // 30 seconds - shorter cache for metrics
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 }
 
@@ -43,8 +46,10 @@ export function useCoordinatorScript(params: {
   if (params.end) sp.set('end', params.end);
   const qs = sp.toString();
   const url = `/api/coordinator/script${qs ? `?${qs}` : ''}`;
+  const queryKey = coordinatorKeys.script(qs);
+  
   return useQuery({
-    queryKey: coordinatorKeys.script(qs),
+    queryKey,
     queryFn: async () => {
       const res = await fetch(url, { credentials: 'include' });
       const json = await res.json();
@@ -70,8 +75,10 @@ export function useCoordinatorToDo(params: {
   if (params.end) sp.set('end', params.end);
   const qs = sp.toString();
   const url = `/api/coordinator/todo${qs ? `?${qs}` : ''}`;
+  const queryKey = coordinatorKeys.todo(qs);
+  
   return useQuery({
-    queryKey: coordinatorKeys.todo(qs),
+    queryKey,
     queryFn: async () => {
       const res = await fetch(url, { credentials: 'include' });
       const json = await res.json();

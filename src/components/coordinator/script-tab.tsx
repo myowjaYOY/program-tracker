@@ -65,6 +65,23 @@ export default function CoordinatorScriptTab({
   } | null>(null);
 
   async function toggleComplete(row: Row): Promise<void> {
+    // Generate query key exactly the same way as the hook
+    const sp = new URLSearchParams();
+    if (memberId) sp.set('memberId', String(memberId));
+    if (range && range !== 'all') sp.set('range', range);
+    const qs = sp.toString();
+    const queryKey = coordinatorKeys.script(qs);
+
+    // Optimistic update - immediately update the UI
+    qc.setQueryData(queryKey, (oldData: any) => {
+      if (!oldData) return oldData;
+      return oldData.map((item: any) => 
+        item.member_program_item_schedule_id === row.member_program_item_schedule_id
+          ? { ...item, completed_flag: !row.completed_flag }
+          : item
+      );
+    });
+
     try {
       const url = `/api/member-programs/${row.member_program_id}/schedule/${row.member_program_item_schedule_id}`;
       const res = await fetch(url, {
@@ -73,15 +90,22 @@ export default function CoordinatorScriptTab({
         credentials: 'include',
         body: JSON.stringify({ completed_flag: !row.completed_flag }),
       });
-      if (!res.ok) return;
-      qc.invalidateQueries({
-        queryKey: coordinatorKeys.script(
-          new URLSearchParams(
-            memberId ? { memberId: String(memberId), range } : { range }
-          ).toString()
-        ),
-      });
-    } catch {}
+      
+      if (!res.ok) {
+        // Revert optimistic update on error
+        qc.invalidateQueries({ queryKey });
+        return;
+      }
+      
+      // Ensure data is fresh after successful update
+      await qc.invalidateQueries({ queryKey });
+      
+      // Also invalidate metrics to update the cards
+      qc.invalidateQueries({ queryKey: coordinatorKeys.metrics() });
+    } catch {
+      // Revert optimistic update on error
+      qc.invalidateQueries({ queryKey });
+    }
   }
 
   const handleOpenNotesModal = (leadId: number, memberName: string) => {

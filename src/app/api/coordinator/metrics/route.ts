@@ -123,6 +123,7 @@ export async function GET(_req: NextRequest) {
     }
 
     // Program changes this week (use audit view)
+    // Exclude Script and Todo completion changes as they are routine operational activity
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - today.getDay());
     weekStart.setHours(0, 0, 0, 0);
@@ -138,7 +139,9 @@ export async function GET(_req: NextRequest) {
       .from('vw_audit_member_changes')
       .select('*', { count: 'exact', head: true })
       .gte('changed_at', weekStartStr)
-      .lt('changed_at', nextDayStr);
+      .lt('changed_at', nextDayStr)
+      .not('source', 'in', '(Script,To Do)')
+      .not('change_description', 'ilike', '%completed_flag%');
 
     return NextResponse.json({
       data: {
