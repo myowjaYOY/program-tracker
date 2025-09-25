@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { GridColDef } from '@mui/x-data-grid';
+import { Box, IconButton, Chip, Tooltip } from '@mui/material';
 import BaseDataTable, {
   commonColumns,
   renderDate,
@@ -10,6 +11,8 @@ import LeadForm from '@/components/forms/lead-form';
 import { useLeads, useDeleteLead } from '@/lib/hooks/use-leads';
 import { Leads } from '@/types/database.types';
 import { LeadFormData } from '@/lib/validations/lead';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import { LeadNotesModal } from '@/components/notes';
 
 // Extend Leads to satisfy BaseEntity interface
 interface LeadEntity extends Omit<Leads, 'created_at' | 'updated_at'> {
@@ -18,15 +21,64 @@ interface LeadEntity extends Omit<Leads, 'created_at' | 'updated_at'> {
   updated_at: string;
   status_name?: string; // Add status name for display
   campaign_name?: string; // Add campaign name for display
+  note_count?: number; // Add note count for display
 }
 
 // Lead-specific columns
 const leadColumns: GridColDef[] = [
   {
-    field: 'lead_id',
-    headerName: 'ID',
+    field: 'notes',
+    headerName: 'Note',
     width: 80,
-    type: 'number',
+    sortable: false,
+    renderCell: (params) => {
+      const row = params.row as any;
+      const noteCount = row.note_count || 0;
+      const leadName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || `Lead #${row.lead_id}`;
+      const leadId = row.lead_id;
+      
+      if (!leadId) return null;
+      
+      return (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Tooltip title={`View/Add Notes for ${leadName}`}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                // This will be handled by the component
+                (window as any).openLeadNotesModal?.(leadId, leadName);
+              }}
+              sx={{ 
+                color: noteCount > 0 ? 'primary.main' : 'text.secondary',
+                '&:hover': { 
+                  backgroundColor: 'primary.50',
+                  color: 'primary.main'
+                }
+              }}
+            >
+              <EditNoteIcon fontSize="small" />
+              {noteCount > 0 && (
+                <Chip
+                  label={noteCount}
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    height: 16,
+                    minWidth: 16,
+                    fontSize: '0.7rem',
+                    '& .MuiChip-label': {
+                      px: 0.5,
+                    },
+                  }}
+                />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      );
+    },
   },
   {
     field: 'first_name',
@@ -81,6 +133,13 @@ export default function LeadTable() {
   const { data: leads, isLoading, error } = useLeads();
   const deleteLead = useDeleteLead();
 
+  // Notes modal state
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
   const handleDelete = (id: string | number) => {
     deleteLead.mutate(String(id));
   };
@@ -89,6 +148,24 @@ export default function LeadTable() {
     // The edit functionality is handled by the BaseDataTable component
     // which will open the form modal with the row data
   };
+
+  const handleOpenNotesModal = (leadId: number, leadName: string) => {
+    setSelectedLead({ id: leadId, name: leadName });
+    setIsNotesModalOpen(true);
+  };
+
+  const handleCloseNotesModal = () => {
+    setIsNotesModalOpen(false);
+    setSelectedLead(null);
+  };
+
+  // Make the modal handler available to the column renderer
+  React.useEffect(() => {
+    (window as any).openLeadNotesModal = handleOpenNotesModal;
+    return () => {
+      delete (window as any).openLeadNotesModal;
+    };
+  }, []);
 
   const renderLeadForm = ({
     open,
@@ -130,24 +207,36 @@ export default function LeadTable() {
   }));
 
   return (
-    <BaseDataTable<LeadEntity>
-      title="Leads"
-      data={leadsWithId}
-      columns={leadColumns}
-      loading={isLoading}
-      error={error?.message || null}
-      getRowId={row => row.lead_id}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-      renderForm={renderLeadForm}
-      createButtonText="Add Lead"
-      editButtonText="Edit Lead"
-      deleteButtonText="Delete Lead"
-      deleteConfirmMessage="Are you sure you want to delete this lead? This action cannot be undone."
-      pageSize={25}
-      pageSizeOptions={[10, 25, 50, 100]}
-      autoHeight={false}
-      gridHeight="calc(100vh - 120px)"
-    />
+    <>
+      <BaseDataTable<LeadEntity>
+        title="Leads"
+        data={leadsWithId}
+        columns={leadColumns}
+        loading={isLoading}
+        error={error?.message || null}
+        getRowId={row => row.lead_id}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        renderForm={renderLeadForm}
+        createButtonText="Add Lead"
+        editButtonText="Edit Lead"
+        deleteButtonText="Delete Lead"
+        deleteConfirmMessage="Are you sure you want to delete this lead? This action cannot be undone."
+        pageSize={25}
+        pageSizeOptions={[10, 25, 50, 100]}
+        autoHeight={false}
+        gridHeight="calc(100vh - 120px)"
+      />
+
+      {/* Lead Notes Modal */}
+      {selectedLead && (
+        <LeadNotesModal
+          open={isNotesModalOpen}
+          onClose={handleCloseNotesModal}
+          leadId={selectedLead.id}
+          leadName={selectedLead.name}
+        />
+      )}
+    </>
   );
 }

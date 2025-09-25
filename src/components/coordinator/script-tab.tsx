@@ -1,16 +1,18 @@
 'use client';
 
-import React from 'react';
-import { Box, IconButton, Chip } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, IconButton, Chip, Tooltip } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 import {
   useCoordinatorScript,
   coordinatorKeys,
 } from '@/lib/hooks/use-coordinator';
 import { useQueryClient } from '@tanstack/react-query';
+import { LeadNotesModal } from '@/components/notes';
 
 interface CoordinatorScriptTabProps {
   memberId?: number | null;
@@ -55,6 +57,13 @@ export default function CoordinatorScriptTab({
   });
   const qc = useQueryClient();
 
+  // Notes modal state
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
   async function toggleComplete(row: Row): Promise<void> {
     try {
       const url = `/api/member-programs/${row.member_program_id}/schedule/${row.member_program_item_schedule_id}`;
@@ -75,6 +84,24 @@ export default function CoordinatorScriptTab({
     } catch {}
   }
 
+  const handleOpenNotesModal = (leadId: number, memberName: string) => {
+    setSelectedLead({ id: leadId, name: memberName });
+    setIsNotesModalOpen(true);
+  };
+
+  const handleCloseNotesModal = () => {
+    setIsNotesModalOpen(false);
+    setSelectedLead(null);
+    // Invalidate script query to refresh note counts
+    qc.invalidateQueries({
+      queryKey: coordinatorKeys.script(
+        new URLSearchParams(
+          memberId ? { memberId: String(memberId), range } : { range }
+        ).toString()
+      ),
+    });
+  };
+
   const rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
     id: r.member_program_item_schedule_id,
@@ -85,6 +112,57 @@ export default function CoordinatorScriptTab({
   }));
 
   const cols: GridColDef<Row>[] = [
+    {
+      field: 'notes',
+      headerName: 'Note',
+      width: 80,
+      sortable: false,
+      renderCell: (params) => {
+        const row = params.row as any;
+        const noteCount = row.note_count || 0;
+        const memberName = row.member_name || `Lead #${row.lead_id}`;
+        const leadId = row.lead_id;
+        
+        if (!leadId) return null;
+        
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Tooltip title={`View/Add Notes for ${memberName}`}>
+              <IconButton
+                size="small"
+                onClick={() => handleOpenNotesModal(leadId, memberName)}
+                sx={{ 
+                  color: noteCount > 0 ? 'primary.main' : 'text.secondary',
+                  '&:hover': { 
+                    backgroundColor: 'primary.50',
+                    color: 'primary.main'
+                  }
+                }}
+              >
+                <EditNoteIcon fontSize="small" />
+                {noteCount > 0 && (
+                  <Chip
+                    label={noteCount}
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -4,
+                      height: 16,
+                      minWidth: 16,
+                      fontSize: '0.7rem',
+                      '& .MuiChip-label': {
+                        px: 0.5,
+                      },
+                    }}
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        );
+      },
+    },
     { field: 'member_name', headerName: 'Member', width: 200 },
     {
       field: 'scheduled_date',
@@ -198,6 +276,16 @@ export default function CoordinatorScriptTab({
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
       />
+
+      {/* Lead Notes Modal */}
+      {selectedLead && (
+        <LeadNotesModal
+          open={isNotesModalOpen}
+          onClose={handleCloseNotesModal}
+          leadId={selectedLead.id}
+          leadName={selectedLead.name}
+        />
+      )}
     </Box>
   );
 }

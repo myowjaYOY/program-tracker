@@ -161,6 +161,25 @@ export async function GET(req: NextRequest) {
       })
     );
 
+    // Get note counts for each lead
+    const leadIds = Array.from(new Set(validPrograms.map((p: any) => p.lead_id).filter(Boolean)));
+    let noteCounts: Record<number, number> = {};
+    if (leadIds.length > 0) {
+      const { data: notesData, error: notesError } = await supabase
+        .from('lead_notes')
+        .select('lead_id')
+        .in('lead_id', leadIds);
+      
+      if (notesError) {
+        console.error('Error fetching note counts:', notesError);
+      }
+      
+      // Count notes per lead
+      (notesData || []).forEach((note: any) => {
+        noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
+      });
+    }
+
     // Enrich rows with therapy labels and audit email lookup
     const userIds = Array.from(
       new Set([
@@ -178,37 +197,41 @@ export async function GET(req: NextRequest) {
     }
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    const enriched = (scheduleRows || []).map((r: any) => ({
-      ...r,
-      therapy_name:
-        idToTherapy[String(r.member_program_item_id)]?.therapy_name || null,
-      therapy_type_name:
-        idToTherapy[String(r.member_program_item_id)]?.therapy_type_name ||
-        null,
-      member_program_id:
-        idToTherapy[String(r.member_program_item_id)]?.member_program_id ||
-        null,
-      program_status_name: idToTherapy[String(r.member_program_item_id)]
-        ?.member_program_id
-        ? programIdToStatusName.get(
-            idToTherapy[String(r.member_program_item_id)]!
-              .member_program_id as number
-          ) || null
-        : null,
-      member_name: idToTherapy[String(r.member_program_item_id)]
-        ?.member_program_id
-        ? programIdToMemberName.get(
-            idToTherapy[String(r.member_program_item_id)]!
-              .member_program_id as number
-          ) || null
-        : null,
-      created_by_email: r.created_by
-        ? userMap.get(r.created_by)?.email || null
-        : null,
-      updated_by_email: r.updated_by
-        ? userMap.get(r.updated_by)?.email || null
-        : null,
-    }));
+    // Create lead ID to program mapping for note counts
+    const programIdToLeadId = new Map<number, number>(
+      validPrograms.map((p: any) => [p.member_program_id as number, p.lead_id as number])
+    );
+
+    const enriched = (scheduleRows || []).map((r: any) => {
+      const programId = idToTherapy[String(r.member_program_item_id)]?.member_program_id;
+      const leadId = programId ? programIdToLeadId.get(programId) : null;
+      
+      return {
+        ...r,
+        therapy_name:
+          idToTherapy[String(r.member_program_item_id)]?.therapy_name || null,
+        therapy_type_name:
+          idToTherapy[String(r.member_program_item_id)]?.therapy_type_name ||
+          null,
+        member_program_id:
+          idToTherapy[String(r.member_program_item_id)]?.member_program_id ||
+          null,
+        lead_id: leadId,
+        note_count: leadId ? (noteCounts[leadId] || 0) : 0,
+        program_status_name: programId
+          ? programIdToStatusName.get(programId) || null
+          : null,
+        member_name: programId
+          ? programIdToMemberName.get(programId) || null
+          : null,
+        created_by_email: r.created_by
+          ? userMap.get(r.created_by)?.email || null
+          : null,
+        updated_by_email: r.updated_by
+          ? userMap.get(r.updated_by)?.email || null
+          : null,
+      };
+    });
 
     return NextResponse.json({ data: enriched });
   } catch (e: any) {

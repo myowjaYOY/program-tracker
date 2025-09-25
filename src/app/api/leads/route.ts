@@ -21,12 +21,32 @@ export async function GET(_req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  // Get note counts for each lead
+  const leadIds = (data || []).map((lead: any) => lead.lead_id).filter(Boolean);
+  let noteCounts: Record<number, number> = {};
+  if (leadIds.length > 0) {
+    const { data: notesData, error: notesError } = await supabase
+      .from('lead_notes')
+      .select('lead_id')
+      .in('lead_id', leadIds);
+    
+    if (notesError) {
+      console.error('Error fetching note counts:', notesError);
+    }
+    
+    // Count notes per lead
+    (notesData || []).forEach((note: any) => {
+      noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
+    });
+  }
+
   const mapped = (data || []).map(lead => ({
     ...lead,
     created_by_email: lead.created_user?.email || null,
     updated_by_email: lead.updated_user?.email || null,
     campaign_name: lead.campaign?.campaign_name || null,
     status_name: lead.status?.status_name || null,
+    note_count: noteCounts[lead.lead_id] || 0,
   }));
   return NextResponse.json({ data: mapped }, { status: 200 });
 }

@@ -111,17 +111,20 @@ export default function AuditHistoryDialog({
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell>Event At</TableCell>
                   <TableCell>Operation</TableCell>
-                  <TableCell>Column</TableCell>
-                  <TableCell>Old Value</TableCell>
-                  <TableCell>New Value</TableCell>
                   <TableCell>Changed By</TableCell>
-                  <TableCell>Changed At</TableCell>
+                  <TableCell>Member</TableCell>
+                  <TableCell>Program</TableCell>
+                  <TableCell>Summary</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.data.map(log => (
                   <TableRow key={log.id}>
+                    <TableCell>
+                      {new Date(log.event_at).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={log.operation}
@@ -129,38 +132,27 @@ export default function AuditHistoryDialog({
                         color={getOperationColor(log.operation) as any}
                       />
                     </TableCell>
-                    <TableCell>{log.column_name || '-'}</TableCell>
                     <TableCell>
-                      <Box
-                        sx={{
-                          maxWidth: 200,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={formatValue(log.old_value)}
-                      >
-                        {formatValue(log.old_value)}
-                      </Box>
+                      {log.changed_by_email || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {log.related_member_name || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {log.related_program_name || '-'}
                     </TableCell>
                     <TableCell>
                       <Box
                         sx={{
-                          maxWidth: 200,
+                          maxWidth: 300,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                         }}
-                        title={formatValue(log.new_value)}
+                        title={log.summary || '-'}
                       >
-                        {formatValue(log.new_value)}
+                        {log.summary || '-'}
                       </Box>
-                    </TableCell>
-                    <TableCell>
-                      {log.changed_by_name || log.changed_by_email || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(log.changed_at).toLocaleString()}
                     </TableCell>
                   </TableRow>
                 ))}

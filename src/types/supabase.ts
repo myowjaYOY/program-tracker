@@ -10,7 +10,6 @@ export type Enums<T extends keyof Database['public']['Enums']> =
   Database['public']['Enums'][T];
 
 // Specific table type helpers
-export type AuditLogs = Tables<'audit_logs'>;
 export type Bodies = Tables<'bodies'>;
 export type Buckets = Tables<'buckets'>;
 export type Campaigns = Tables<'campaigns'>;
@@ -31,7 +30,6 @@ export type Users = Tables<'users'>;
 export type Vendors = Tables<'vendors'>;
 
 // Insert type helpers
-export type InsertAuditLogs = InsertTables<'audit_logs'>;
 export type InsertBodies = InsertTables<'bodies'>;
 export type InsertBuckets = InsertTables<'buckets'>;
 export type InsertCampaigns = InsertTables<'campaigns'>;
@@ -54,7 +52,6 @@ export type InsertUsers = InsertTables<'users'>;
 export type InsertVendors = InsertTables<'vendors'>;
 
 // Update type helpers
-export type UpdateAuditLogs = UpdateTables<'audit_logs'>;
 export type UpdateBodies = UpdateTables<'bodies'>;
 export type UpdateBuckets = UpdateTables<'buckets'>;
 export type UpdateCampaigns = UpdateTables<'campaigns'>;

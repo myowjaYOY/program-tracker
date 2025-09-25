@@ -21,6 +21,9 @@ export function useLeads() {
       if (!res.ok) throw new Error(json.error || 'Failed to fetch leads');
       return json.data as Leads[];
     },
+    staleTime: 30 * 1000, // 30 seconds - shorter cache for note counts
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 }
 

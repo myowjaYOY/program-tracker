@@ -379,7 +379,7 @@ export default function ProgramInfoTab({
               render={({ field }) => (
                 <TextField
                   {...field}
-                  label="Description"
+                  label="Member Goals"
                   fullWidth
                   multiline
                   rows={6}

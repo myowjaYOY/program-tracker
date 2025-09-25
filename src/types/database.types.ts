@@ -16,18 +16,6 @@ export type Json =
 export type ScheduleType = 'Therapy' | 'Task';
 
 // Individual table interfaces
-export interface AuditLogs {
-  id: number;
-  table_name: string;
-  record_id: number;
-  operation: string;
-  old_value: Json | null;
-  new_value: Json | null;
-  column_name: string | null;
-  changed_by: string | null;
-  changed_at: string | null;
-  changed_fields: Json | null;
-}
 
 export interface Bodies {
   body_id: number;
@@ -503,11 +491,6 @@ export interface FinancingTypes {
 export interface Database {
   public: {
     Tables: {
-      audit_logs: {
-        Row: AuditLogs;
-        Insert: Omit<AuditLogs, 'id'> & { id?: number };
-        Update: Partial<Omit<AuditLogs, 'id'>>;
-      };
       bodies: {
         Row: Bodies;
         Insert: Omit<Bodies, 'body_id'> & { body_id?: number };

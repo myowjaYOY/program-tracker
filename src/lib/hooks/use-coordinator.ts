@@ -51,6 +51,9 @@ export function useCoordinatorScript(params: {
       if (!res.ok) throw new Error(json.error || 'Failed to fetch script');
       return json.data || [];
     },
+    staleTime: 30 * 1000, // 30 seconds - shorter cache for note counts
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 }
 
@@ -75,6 +78,9 @@ export function useCoordinatorToDo(params: {
       if (!res.ok) throw new Error(json.error || 'Failed to fetch todo');
       return json.data || [];
     },
+    staleTime: 30 * 1000, // 30 seconds - shorter cache for note counts
+    gcTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 }
 

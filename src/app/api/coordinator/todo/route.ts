@@ -173,6 +173,25 @@ export async function GET(req: NextRequest) {
     }
     const userMap = new Map(users.map(u => [u.id, u]));
 
+    // Get note counts for each lead
+    const leadIds = Array.from(new Set(validPrograms.map((p: any) => p.lead_id).filter(Boolean)));
+    let noteCounts: Record<number, number> = {};
+    if (leadIds.length > 0) {
+      const { data: notesData, error: notesError } = await supabase
+        .from('lead_notes')
+        .select('lead_id')
+        .in('lead_id', leadIds);
+      
+      if (notesError) {
+        console.error('Error fetching note counts:', notesError);
+      }
+      
+      // Count notes per lead
+      (notesData || []).forEach((note: any) => {
+        noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
+      });
+    }
+
     // Build scheduleId -> program status name mapping
     const statusIdToName = new Map<number, string>(
       (statuses || []).map((s: any) => [
@@ -207,6 +226,11 @@ export async function GET(req: NextRequest) {
       ])
     );
 
+    // Create lead ID to program mapping for note counts
+    const programIdToLeadId = new Map<number, number>(
+      validPrograms.map((p: any) => [p.member_program_id as number, p.lead_id as number])
+    );
+
     const enriched = (data || []).map((r: any) => {
       const programId =
         schedIdToProgramId.get(r.member_program_item_schedule_id as number) ||
@@ -214,9 +238,13 @@ export async function GET(req: NextRequest) {
       const programStatusName = programId
         ? programIdToStatusName.get(programId) || null
         : null;
+      const leadId = programId ? programIdToLeadId.get(programId) : null;
+      
       return {
         ...r,
         member_program_id: programId,
+        lead_id: leadId,
+        note_count: leadId ? (noteCounts[leadId] || 0) : 0,
         program_status_name: programStatusName,
         member_name: programId
           ? programIdToMemberName.get(programId) || null

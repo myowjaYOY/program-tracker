@@ -2,17 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 
 export interface AuditLog {
   id: number;
+  event_at: string;
   table_name: string;
-  record_id: number;
   operation: string;
-  old_value: any;
-  new_value: any;
-  column_name: string | null;
   changed_by: string | null;
-  changed_at: string;
-  changed_fields: any;
   changed_by_email: string | null;
-  changed_by_name: string | null;
+  related_member_id: number | null;
+  related_member_name: string | null;
+  related_program_id: number | null;
+  related_program_name: string | null;
+  summary: string | null;
+  context: any;
+  changes: any; // JSON array of column changes
 }
 
 export interface AuditLogsResponse {
@@ -25,7 +26,8 @@ export interface AuditLogsFilters {
   changed_by?: string;
   start_date?: string;
   end_date?: string;
-  record_id?: string;
+  related_member_id?: string;
+  related_program_id?: string;
 }
 
 // Query keys

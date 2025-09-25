@@ -96,10 +96,10 @@ export default function AuditReportTable() {
 
   const columns: GridColDef[] = [
     {
-      field: 'id',
-      headerName: 'ID',
-      width: 80,
-      type: 'number',
+      field: 'event_at',
+      headerName: 'Changed At',
+      width: 180,
+      renderCell: renderDateTime,
     },
     {
       field: 'table_name',
@@ -115,12 +115,6 @@ export default function AuditReportTable() {
       ),
     },
     {
-      field: 'record_id',
-      headerName: 'Record ID',
-      width: 100,
-      type: 'number',
-    },
-    {
       field: 'operation',
       headerName: 'Operation',
       width: 100,
@@ -133,36 +127,31 @@ export default function AuditReportTable() {
       ),
     },
     {
-      field: 'column_name',
-      headerName: 'Column',
-      width: 150,
+      field: 'changed_by_email',
+      headerName: 'Changed By',
+      width: 200,
       renderCell: params => params.value || '-',
     },
     {
-      field: 'changed_by_name',
-      headerName: 'Changed By',
-      width: 150,
-      renderCell: params => params.value || params.row.changed_by_email || '-',
+      field: 'related_member_name',
+      headerName: 'Member',
+      width: 200,
+      renderCell: params => params.value || '-',
     },
     {
-      field: 'changed_at',
-      headerName: 'Changed At',
-      width: 180,
-      renderCell: renderDateTime,
+      field: 'related_program_name',
+      headerName: 'Program',
+      width: 200,
+      renderCell: params => params.value || '-',
     },
     {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 100,
+      field: 'summary',
+      headerName: 'Summary',
+      width: 300,
       renderCell: params => (
-        <Tooltip title="View Details">
-          <IconButton
-            size="small"
-            onClick={() => handleViewDetails(params.row)}
-          >
-            <ViewIcon />
-          </IconButton>
-        </Tooltip>
+        <Typography variant="body2" noWrap>
+          {params.value || '-'}
+        </Typography>
       ),
     },
   ];
@@ -256,10 +245,23 @@ export default function AuditReportTable() {
               <TextField
                 fullWidth
                 size="small"
-                label="Record ID"
-                value={filters.record_id || ''}
+                label="Member ID"
+                value={filters.related_member_id || ''}
                 onChange={e =>
-                  handleFilterChange('record_id', e.target.value || undefined)
+                  handleFilterChange('related_member_id', e.target.value || undefined)
+                }
+                type="number"
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Program ID"
+                value={filters.related_program_id || ''}
+                onChange={e =>
+                  handleFilterChange('related_program_id', e.target.value || undefined)
                 }
                 type="number"
               />
@@ -385,18 +387,18 @@ export default function AuditReportTable() {
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Table
+                    Event At
                   </Typography>
                   <Typography variant="body1">
-                    {selectedLog.table_name}
+                    {new Date(selectedLog.event_at).toLocaleString()}
                   </Typography>
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Record ID
+                    Table
                   </Typography>
                   <Typography variant="body1">
-                    {selectedLog.record_id}
+                    {selectedLog.table_name}
                   </Typography>
                 </Grid>
                 <Grid size={6}>
@@ -414,62 +416,68 @@ export default function AuditReportTable() {
                     Changed By
                   </Typography>
                   <Typography variant="body1">
-                    {selectedLog.changed_by_name ||
-                      selectedLog.changed_by_email ||
-                      '-'}
+                    {selectedLog.changed_by_email || '-'}
                   </Typography>
                 </Grid>
                 <Grid size={6}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    Changed At
+                    Member
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(selectedLog.changed_at).toLocaleString()}
+                    {selectedLog.related_member_name || '-'}
                   </Typography>
                 </Grid>
-                {selectedLog.column_name && (
-                  <Grid size={6}>
+                <Grid size={6}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Program
+                  </Typography>
+                  <Typography variant="body1">
+                    {selectedLog.related_program_name || '-'}
+                  </Typography>
+                </Grid>
+                {selectedLog.summary && (
+                  <Grid size={12}>
                     <Typography variant="subtitle2" color="text.secondary">
-                      Column
+                      Summary
                     </Typography>
                     <Typography variant="body1">
-                      {selectedLog.column_name}
+                      {selectedLog.summary}
                     </Typography>
                   </Grid>
                 )}
               </Grid>
 
-              {/* Old Value */}
-              {selectedLog.old_value && (
+              {/* Context */}
+              {selectedLog.context && (
                 <Box sx={{ mb: 2 }}>
                   <Typography
                     variant="subtitle2"
                     color="text.secondary"
                     gutterBottom
                   >
-                    Old Value
+                    Context
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
                     <pre style={{ margin: 0, fontSize: '0.875rem' }}>
-                      {JSON.stringify(selectedLog.old_value, null, 2)}
+                      {JSON.stringify(selectedLog.context, null, 2)}
                     </pre>
                   </Paper>
                 </Box>
               )}
 
-              {/* New Value */}
-              {selectedLog.new_value && (
+              {/* Changes */}
+              {selectedLog.changes && (
                 <Box>
                   <Typography
                     variant="subtitle2"
                     color="text.secondary"
                     gutterBottom
                   >
-                    New Value
+                    Changes
                   </Typography>
                   <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
                     <pre style={{ margin: 0, fontSize: '0.875rem' }}>
-                      {JSON.stringify(selectedLog.new_value, null, 2)}
+                      {JSON.stringify(selectedLog.changes, null, 2)}
                     </pre>
                   </Paper>
                 </Box>

@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Box, Chip, IconButton } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Chip, IconButton, Tooltip } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import {
@@ -11,6 +11,8 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import EditNoteIcon from '@mui/icons-material/EditNote';
+import { LeadNotesModal } from '@/components/notes';
 
 interface CoordinatorToDoTabProps {
   memberId?: number | null;
@@ -36,6 +38,31 @@ export default function CoordinatorToDoTab({
     end: end ?? null,
   });
   const qc = useQueryClient();
+
+  // Notes modal state
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
+  const handleOpenNotesModal = (leadId: number, memberName: string) => {
+    setSelectedLead({ id: leadId, name: memberName });
+    setIsNotesModalOpen(true);
+  };
+
+  const handleCloseNotesModal = () => {
+    setIsNotesModalOpen(false);
+    setSelectedLead(null);
+    // Invalidate todo query to refresh note counts
+    qc.invalidateQueries({
+      queryKey: coordinatorKeys.todo(
+        new URLSearchParams(
+          memberId ? { memberId: String(memberId), range } : { range }
+        ).toString()
+      ),
+    });
+  };
 
   async function toggleComplete(row: any): Promise<void> {
     try {
@@ -79,6 +106,57 @@ export default function CoordinatorToDoTab({
   });
 
   const cols: GridColDef[] = [
+    {
+      field: 'notes',
+      headerName: 'Note',
+      width: 80,
+      sortable: false,
+      renderCell: (params) => {
+        const row = params.row as any;
+        const noteCount = row.note_count || 0;
+        const memberName = row.member_name || `Lead #${row.lead_id}`;
+        const leadId = row.lead_id;
+        
+        if (!leadId) return null;
+        
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Tooltip title={`View/Add Notes for ${memberName}`}>
+              <IconButton
+                size="small"
+                onClick={() => handleOpenNotesModal(leadId, memberName)}
+                sx={{ 
+                  color: noteCount > 0 ? 'primary.main' : 'text.secondary',
+                  '&:hover': { 
+                    backgroundColor: 'primary.50',
+                    color: 'primary.main'
+                  }
+                }}
+              >
+                <EditNoteIcon fontSize="small" />
+                {noteCount > 0 && (
+                  <Chip
+                    label={noteCount}
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -4,
+                      height: 16,
+                      minWidth: 16,
+                      fontSize: '0.7rem',
+                      '& .MuiChip-label': {
+                        px: 0.5,
+                      },
+                    }}
+                  />
+                )}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        );
+      },
+    },
     { field: 'member_name', headerName: 'Member', width: 200 },
     {
       field: 'due_date',
@@ -188,6 +266,16 @@ export default function CoordinatorToDoTab({
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
       />
+
+      {/* Lead Notes Modal */}
+      {selectedLead && (
+        <LeadNotesModal
+          open={isNotesModalOpen}
+          onClose={handleCloseNotesModal}
+          leadId={selectedLead.id}
+          leadName={selectedLead.name}
+        />
+      )}
     </Box>
   );
 }
