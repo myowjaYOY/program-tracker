@@ -1,0 +1,75 @@
+PROGRAM QUOTE TEMPLATE STRUCTURE
+================================
+
+Copy this structure into Microsoft Word and add bookmarks where indicated.
+
+PROGRAM QUOTE
+============
+
+Member Information:
+------------------
+Name: [MEMBER_NAME]
+Email: [MEMBER_EMAIL]
+Phone: [MEMBER_PHONE]
+Address: [MEMBER_ADDRESS]
+
+Program Details:
+---------------
+Program: [PROGRAM_NAME]
+Description: [PROGRAM_DESCRIPTION]
+Start Date: [PROGRAM_START_DATE]
+Duration: [PROGRAM_DURATION]
+
+Financial Summary:
+-----------------
+Finance Charges: [FINANCE_CHARGES]
+Taxes: [TAXES]
+Discounts: [DISCOUNTS]
+Total Investment: [FINAL_TOTAL_PRICE]
+Margin: [MARGIN]
+
+Payment Schedule:
+----------------
+[PAYMENT_SCHEDULE]
+
+Payment Summary:
+---------------
+Total Payments: [TOTAL_PAYMENTS]
+Paid Payments: [PAID_PAYMENTS]
+Pending Payments: [PENDING_PAYMENTS]
+
+Document Information:
+--------------------
+Generated: [GENERATED_DATE]
+
+================================
+BOOKMARK INSTRUCTIONS:
+================================
+
+1. In Microsoft Word, select the text between brackets (e.g., [MEMBER_NAME])
+2. Go to Insert → Bookmark
+3. Type the bookmark name (e.g., MEMBER_NAME) - WITHOUT the brackets
+4. Click Add
+5. Repeat for all placeholders
+
+Required Bookmarks:
+- MEMBER_NAME
+- MEMBER_EMAIL
+- MEMBER_PHONE
+- MEMBER_ADDRESS
+- PROGRAM_NAME
+- PROGRAM_DESCRIPTION
+- PROGRAM_START_DATE
+- PROGRAM_DURATION
+- FINANCE_CHARGES
+- TAXES
+- DISCOUNTS
+- FINAL_TOTAL_PRICE
+- MARGIN
+- PAYMENT_SCHEDULE
+- TOTAL_PAYMENTS
+- PAID_PAYMENTS
+- PENDING_PAYMENTS
+- GENERATED_DATE
+
+Save the document as: quote-template.docx

@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { LeadNoteFormData } from '@/lib/validations/lead-notes';
+import { BaseEntity } from '@/types/common';
 
-export interface LeadNote {
+export interface LeadNote extends BaseEntity {
   note_id: number;
   lead_id: number;
   note_type: 'PME' | 'Other' | 'Win' | 'Challenge';
   note: string;
-  created_at: string;
   created_by: string | null;
   created_by_email: string | null;
   created_by_name: string | null;

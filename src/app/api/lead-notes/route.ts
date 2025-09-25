@@ -56,9 +56,12 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    // Enrich notes with user email information
+    // Enrich notes with user email information and BaseEntity fields
     const enrichedNotes = (notes || []).map((note: any) => ({
       ...note,
+      id: note.note_id.toString(), // BaseEntity requires string id
+      active_flag: true, // BaseEntity requires active_flag
+      updated_at: note.created_at, // BaseEntity requires updated_at (using created_at as fallback)
       created_by_email: userMap.get(note.created_by)?.email || null,
       created_by_name: userMap.get(note.created_by)?.full_name || null,
     }));
@@ -123,7 +126,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ data: newNote }, { status: 201 });
+    // Enrich the new note with BaseEntity fields
+    const enrichedNote = {
+      ...newNote,
+      id: newNote.note_id.toString(), // BaseEntity requires string id
+      active_flag: true, // BaseEntity requires active_flag
+      updated_at: newNote.created_at, // BaseEntity requires updated_at (using created_at as fallback)
+      created_by_email: null, // Will be populated on next fetch
+      created_by_name: null, // Will be populated on next fetch
+    };
+
+    return NextResponse.json({ data: enrichedNote }, { status: 201 });
   } catch (error) {
     console.error('Lead notes API error:', error);
     return NextResponse.json(

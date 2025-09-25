@@ -34,6 +34,9 @@ import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
+import { downloadQuoteFromTemplate } from '@/lib/utils/generate-quote-template';
+import { loadTemplate, TEMPLATE_PATHS } from '@/lib/utils/template-loader';
+import { toast } from 'sonner';
 
 interface ProgramInfoTabProps {
   program: MemberPrograms;
@@ -57,6 +60,7 @@ export default function ProgramInfoTab({
     null
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: leads = [] } = useActiveLeads();
@@ -210,6 +214,72 @@ export default function ProgramInfoTab({
     // No confirm needed → save directly
     await performSave(data);
   };
+
+  const handleGenerateQuote = async () => {
+    try {
+      setIsGeneratingQuote(true);
+      
+      // Get the current lead data
+      const currentLead = leads.find(lead => lead.lead_id === program.lead_id);
+      if (!currentLead) {
+        throw new Error('Lead information not found');
+      }
+
+      // Check if financial data exists
+      if (!finances) {
+        throw new Error('Program financial information not found. Please ensure the program has financial data before generating a quote.');
+      }
+
+      // Prepare quote data
+      const quoteData = {
+        member: {
+          name: `${currentLead.first_name || ''} ${currentLead.last_name || ''}`.trim(),
+          email: currentLead.email || '',
+          phone: currentLead.phone || '',
+          address: '', // Address field not available in Leads table
+        },
+        program: {
+          name: program.program_template_name || 'Program',
+          description: program.description || 'No description available',
+          startDate: program.start_date ? new Date(program.start_date).toLocaleDateString() : 'Not set',
+          duration: 'Program duration not specified',
+        },
+        financials: {
+          financeCharges: finances?.finance_charges || 0,
+          taxes: finances?.taxes || 0,
+          discounts: finances?.discounts || 0,
+          finalTotalPrice: finances?.final_total_price || 0,
+          margin: finances?.margin || 0,
+        },
+        payments: (payments || []).map(payment => ({
+          paymentId: payment.member_program_payment_id,
+          amount: payment.payment_amount || 0,
+          dueDate: payment.payment_due_date ? new Date(payment.payment_due_date).toLocaleDateString() : 'Not set',
+          ...(payment.payment_date && { paymentDate: new Date(payment.payment_date).toLocaleDateString() }),
+        })),
+        generatedDate: new Date().toLocaleDateString(),
+      };
+
+      // Load the template (with fallback)
+      let templateBuffer: ArrayBuffer;
+      try {
+        templateBuffer = await loadTemplate(TEMPLATE_PATHS.QUOTE);
+      } catch (templateError) {
+        throw new Error(`Template not found. Please ensure ${TEMPLATE_PATHS.QUOTE} exists in the public/templates directory. ${templateError instanceof Error ? templateError.message : ''}`);
+      }
+      
+      // Generate and download the document from template
+      await downloadQuoteFromTemplate(quoteData, templateBuffer);
+      toast.success('Quote document generated successfully!');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to generate quote: ${errorMessage}`);
+      console.error('Quote generation error:', error);
+    } finally {
+      setIsGeneratingQuote(false);
+    }
+  };
+
 
   return (
     <Box>
@@ -398,16 +468,46 @@ export default function ProgramInfoTab({
           </Box>
         </Box>
 
-        {/* Save Button and Status */}
+        {/* Buttons Row */}
         <Box
           sx={{
             mt: 3,
             display: 'flex',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          {/* Right-side status + actions (aligned right like other screens) */}
+          {/* Left side: Quote and Contract Buttons */}
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button
+              variant="outlined"
+              disabled={program.status_name?.toLowerCase() !== 'quote' || isGeneratingQuote}
+              sx={{ 
+                minWidth: 100,
+                borderRadius: 0,
+              }}
+              onClick={handleGenerateQuote}
+              startIcon={isGeneratingQuote ? <CircularProgress size={16} /> : undefined}
+            >
+              {isGeneratingQuote ? 'Generating...' : 'Quote'}
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={program.status_name?.toLowerCase() !== 'quote'}
+              sx={{ 
+                minWidth: 100,
+                borderRadius: 0,
+              }}
+              onClick={() => {
+                // TODO: Implement Contract functionality
+                console.log('Contract button clicked');
+              }}
+            >
+              Contract
+            </Button>
+          </Box>
+
+          {/* Right side: Status + Generate Schedule + Save Buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <FormStatus status={statusMsg} onClose={() => setStatusMsg(null)} />
             {/* Generate Schedule Button */}
@@ -497,7 +597,7 @@ export default function ProgramInfoTab({
                 'Generate Schedule'
               )}
             </Button>
-            {/* Save Button (far right) */}
+            {/* Save Button */}
             <Button
               variant="contained"
               color="primary"
