@@ -59,7 +59,6 @@ const mainNav = [
     icon: <CoordinatorIcon />,
     path: '/dashboard/coordinator',
   },
-  { label: 'Reports', icon: <ReportsIcon />, path: '/dashboard/reports' },
   {
     label: 'Audit Report',
     icon: <AuditIcon />,
@@ -70,6 +69,7 @@ const mainNav = [
 const marketingNav = [
   { label: 'Campaigns', icon: <EventsIcon />, path: '/dashboard/campaigns' },
   { label: 'Leads', icon: <LeadsIcon />, path: '/dashboard/leads' },
+  { label: 'Reports', icon: <ReportsIcon />, path: '/dashboard/reports' },
 ];
 
 const salesNav = [

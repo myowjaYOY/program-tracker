@@ -61,11 +61,7 @@ export default function LoginForm() {
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Form submit event triggered');
-    handleSubmit(onSubmit)(e);
-  };
+  const handleFormSubmit = handleSubmit(onSubmit);
 
   return (
     <Box

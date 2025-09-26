@@ -25,12 +25,6 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'AssignmentTurnedIn',
   },
   {
-    path: '/dashboard/reports',
-    label: 'Reports',
-    section: 'main',
-    icon: 'BarChart',
-  },
-  {
     path: '/dashboard/audit-report',
     label: 'Audit Report',
     section: 'main',
@@ -49,6 +43,12 @@ export const MENU_ITEMS: MenuItem[] = [
     label: 'Leads',
     section: 'marketing',
     icon: 'GroupAdd',
+  },
+  {
+    path: '/dashboard/reports',
+    label: 'Reports',
+    section: 'marketing',
+    icon: 'BarChart',
   },
 
   // Sales
