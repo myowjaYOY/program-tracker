@@ -109,7 +109,6 @@ export default function ProgramFinancialsTab({
     defaultValues: {
       member_program_id: program.member_program_id,
       finance_charges: 0,
-      taxes: 0,
       discounts: 0,
       final_total_price: 0,
       margin: 0,
@@ -134,13 +133,11 @@ export default function ProgramFinancialsTab({
   );
   const originalFinanceChargesRef = React.useRef<number>(0);
   const originalDiscountsRef = React.useRef<number>(0);
-  const originalTaxesRef = React.useRef<number>(0);
 
   // Local display states for currency inputs to allow free typing
   const [discountsInput, setDiscountsInput] = React.useState<string>('$0.00');
   const [financeChargesInput, setFinanceChargesInput] =
     React.useState<string>('$0.00');
-  const [taxesInput, setTaxesInput] = React.useState<string>('$0.00');
 
   const formatCurrencyInline = (n: number): string =>
     `$${Number(n || 0).toFixed(2)}`;
@@ -213,6 +210,7 @@ export default function ProgramFinancialsTab({
       totalCost: Number(program.total_cost || 0),
       financeCharges: Number(watchedValues.finance_charges || 0),
       discounts: Number(watchedValues.discounts || 0),
+      taxes: Number(existingFinances?.taxes || 0),
     });
 
   // Load existing data when available
@@ -221,7 +219,6 @@ export default function ProgramFinancialsTab({
       reset({
         member_program_id: program.member_program_id,
         finance_charges: existingFinances.finance_charges || 0,
-        taxes: existingFinances.taxes || 0,
         discounts: existingFinances.discounts || 0,
         final_total_price: existingFinances.final_total_price || 0,
         margin: existingFinances.margin || 0,
@@ -231,14 +228,12 @@ export default function ProgramFinancialsTab({
       setFinanceChargesInput(
         formatCurrencyInline(existingFinances.finance_charges || 0)
       );
-      setTaxesInput(formatCurrencyInline(existingFinances.taxes || 0));
       originalFinancingTypeIdRef.current =
         existingFinances.financing_type_id || undefined;
       originalFinanceChargesRef.current = Number(
         existingFinances.finance_charges || 0
       );
       originalDiscountsRef.current = Number(existingFinances.discounts || 0);
-      originalTaxesRef.current = Number(existingFinances.taxes || 0);
       // No local baseline; banner will compare against last-saved finances
     }
     // Reset unsaved flag when (re)loading data for this program
@@ -251,8 +246,7 @@ export default function ProgramFinancialsTab({
     const currentMargin = getValues('margin');
     const baseInputsDirty = !!(
       dirtyFields.finance_charges ||
-      dirtyFields.discounts ||
-      dirtyFields.taxes
+      dirtyFields.discounts
     );
     const markDirty = hasInitializedDerived.current && baseInputsDirty;
     if (currentFinal !== derivedProgramPrice) {
@@ -271,7 +265,6 @@ export default function ProgramFinancialsTab({
     derivedMargin,
     dirtyFields.finance_charges,
     dirtyFields.discounts,
-    dirtyFields.taxes,
     getValues,
     setValue,
   ]);
@@ -300,7 +293,6 @@ export default function ProgramFinancialsTab({
 
       const payload = {
         finance_charges: Number(data.finance_charges || 0),
-        taxes: Number(data.taxes || 0),
         discounts: Number(data.discounts || 0),
         final_total_price: Number(data.final_total_price || 0),
         margin: Number(data.margin || 0),
@@ -353,7 +345,6 @@ export default function ProgramFinancialsTab({
       originalFinancingTypeIdRef.current = safeFinancingTypeId || undefined;
       originalFinanceChargesRef.current = Number(payload.finance_charges || 0);
       originalDiscountsRef.current = Number(payload.discounts || 0);
-      originalTaxesRef.current = Number(payload.taxes || 0);
       setBaselineVersion(v => v + 1);
 
       onFinancesUpdate?.(data);
@@ -386,15 +377,12 @@ export default function ProgramFinancialsTab({
     const fcBase = roundToCents(originalFinanceChargesRef.current);
     const discCurr = roundToCents(Number(watchedValues.discounts || 0));
     const discBase = roundToCents(originalDiscountsRef.current);
-    const taxCurr = roundToCents(Number(watchedValues.taxes || 0));
-    const taxBase = roundToCents(originalTaxesRef.current);
 
     const financeChargesChanged = fcBase !== fcCurr;
     const discountsChanged = discBase !== discCurr;
-    const taxesChanged = taxBase !== taxCurr;
 
     const changed =
-      typeChanged || financeChargesChanged || discountsChanged || taxesChanged;
+      typeChanged || financeChargesChanged || discountsChanged;
     onUnsavedChangesChange?.(changed);
   }, [
     isLoadingFinances,
@@ -403,7 +391,6 @@ export default function ProgramFinancialsTab({
     financingTypeSelected,
     watchedValues.finance_charges,
     watchedValues.discounts,
-    watchedValues.taxes,
     baselineVersion,
     onUnsavedChangesChange,
   ]);
@@ -417,19 +404,15 @@ export default function ProgramFinancialsTab({
     const fcBase = roundToCents(originalFinanceChargesRef.current);
     const discCurr = roundToCents(Number(watchedValues.discounts || 0));
     const discBase = roundToCents(originalDiscountsRef.current);
-    const taxCurr = roundToCents(Number(watchedValues.taxes || 0));
-    const taxBase = roundToCents(originalTaxesRef.current);
     return (
       typeChanged ||
       fcBase !== fcCurr ||
-      discBase !== discCurr ||
-      taxBase !== taxCurr
+      discBase !== discCurr
     );
   }, [
     financingTypeSelected,
     watchedValues.finance_charges,
     watchedValues.discounts,
-    watchedValues.taxes,
     baselineVersion,
   ]);
 
@@ -680,33 +663,17 @@ export default function ProgramFinancialsTab({
                 disabled
                 value={formatCurrency(Number(derivedProgramPrice || 0))}
                 InputProps={{ readOnly: true }}
-                helperText="Does Not Include Taxes"
+                helperText="Includes Taxes"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <Controller
-                name="taxes"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    label="Taxes"
-                    fullWidth
-                    error={!!errors.taxes}
-                    helperText={errors.taxes?.message}
-                    value={taxesInput}
-                    onFocus={() => setTaxesInput(String(field.value ?? ''))}
-                    onChange={e => {
-                      const raw = sanitizeNumeric(e.target.value);
-                      setTaxesInput(raw);
-                      const num = raw === '' ? 0 : parseFloat(raw);
-                      field.onChange(Number.isNaN(num) ? 0 : num);
-                    }}
-                    onBlur={() =>
-                      setTaxesInput(formatCurrencyInline(field.value || 0))
-                    }
-                    disabled={isLocked}
-                  />
-                )}
+              <TextField
+                label="Taxes"
+                fullWidth
+                disabled
+                value={formatCurrency(Number(existingFinances?.taxes || 0))}
+                InputProps={{ readOnly: true }}
+                helperText="Calculated from taxable items (8.25%)"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>

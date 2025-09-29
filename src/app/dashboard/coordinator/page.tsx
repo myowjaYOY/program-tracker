@@ -24,6 +24,7 @@ import { useMemberPrograms } from '@/lib/hooks/use-member-programs';
 import CoordinatorScriptTab from '@/components/coordinator/script-tab';
 import CoordinatorToDoTab from '@/components/coordinator/todo-tab';
 import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
+import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
 import { MemberPrograms } from '@/types/database.types';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 
@@ -41,6 +42,7 @@ export default function CoordinatorPage() {
   >('all');
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
+
 
   // Members: only leads with programs not Cancelled/Completed/Quote
   const memberOptions = useMemo(() => {
@@ -280,66 +282,68 @@ export default function CoordinatorPage() {
           </Card>
         </Grid>
         <Grid size={3}>
-          <Card
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              borderTop: theme => `4px solid ${theme.palette.info.main}`,
-              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: theme => theme.shadows[4],
-              },
-            }}
-          >
-            <CardContent sx={{ flexGrow: 1, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <Typography
-                    color="textSecondary"
-                    variant="body2"
-                    sx={{ fontWeight: 500 }}
-                  >
-                    Program Changes (This Week)
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    component="div"
-                    sx={{
-                      fontWeight: 'bold',
-                      color: 'info.main',
-                      mt: 1,
-                    }}
-                  >
-                    {metrics?.programChangesThisWeek ?? 0}
-                  </Typography>
-                </Box>
+          <ProgramChangesHoverTooltip>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.info.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
                 <Box
                   sx={{
-                    color: 'info.main',
-                    opacity: 0.8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
                   }}
                 >
-                  <AutoGraphIcon sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Program Changes (This Week)
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'info.main',
+                        mt: 1,
+                      }}
+                    >
+                      {metrics?.programChangesThisWeek ?? 0}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'info.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <AutoGraphIcon sx={{ fontSize: 40 }} />
+                  </Box>
                 </Box>
-              </Box>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: '0.875rem' }}
-              >
-                Program modifications this week
-              </Typography>
-            </CardContent>
-          </Card>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  Program modifications this week
+                </Typography>
+              </CardContent>
+            </Card>
+          </ProgramChangesHoverTooltip>
         </Grid>
       </Grid>
 

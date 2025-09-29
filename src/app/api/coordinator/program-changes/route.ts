@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-// GET /api/coordinator/program-changes?range=today|week|month|all|custom&start=&end=
-// Returns rows from vw_audit_logs_with_program_context; only date filters apply
+// GET /api/coordinator/program-changes?range=today|week|month|all|custom&start=&end=&unique_only=true&limit=7
+// Returns rows from vw_audit_member_changes; supports unique grouping and limiting
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get('start');
   const end = searchParams.get('end');
   const sourcesParam = searchParams.get('sources');
+  const uniqueOnly = searchParams.get('unique_only') === 'true';
+  const limitParam = searchParams.get('limit');
+  const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
   try {
     let query = supabase
@@ -86,7 +89,43 @@ export async function GET(req: NextRequest) {
         { status: 500 }
       );
 
-    const rows = (data as any[]) || [];
+    let rows = (data as any[]) || [];
+
+    // Handle unique grouping if requested
+    if (uniqueOnly) {
+      // Group by member_id + program_id, take most recent change per program
+      const grouped = new Map<string, any>();
+      
+      rows.forEach(row => {
+        if (row.member_id && row.program_id) {
+          const key = `${row.member_id}-${row.program_id}`;
+          const existing = grouped.get(key);
+          
+          if (!existing || new Date(row.changed_at) > new Date(existing.changed_at)) {
+            grouped.set(key, row);
+          }
+        }
+      });
+      
+      rows = Array.from(grouped.values());
+    }
+
+    // Apply limit if specified
+    if (limit && limit > 0) {
+      rows = rows.slice(0, limit);
+    }
+
+    // For unique_only mode, return simplified structure
+    if (uniqueOnly) {
+      const simplified = rows.map(r => ({
+        member_name: r.member_name,
+        program_name: r.program_name,
+        changed_at: r.changed_at,
+      }));
+      return NextResponse.json({ data: simplified });
+    }
+
+    // For full mode, enrich with user data as before
     const changedByIds = Array.from(
       new Set(rows.map(r => r.changed_by).filter(Boolean))
     );

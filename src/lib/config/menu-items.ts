@@ -24,13 +24,6 @@ export const MENU_ITEMS: MenuItem[] = [
     section: 'main',
     icon: 'AssignmentTurnedIn',
   },
-  {
-    path: '/dashboard/audit-report',
-    label: 'Audit Report',
-    section: 'main',
-    icon: 'History',
-  },
-
   // Marketing
   {
     path: '/dashboard/campaigns',
@@ -66,6 +59,12 @@ export const MENU_ITEMS: MenuItem[] = [
   },
 
   // Admin (alphabetical)
+  {
+    path: '/dashboard/audit-report',
+    label: 'Audit Report',
+    section: 'admin',
+    icon: 'History',
+  },
   {
     path: '/dashboard/admin/program-templates',
     label: 'Program Templates',

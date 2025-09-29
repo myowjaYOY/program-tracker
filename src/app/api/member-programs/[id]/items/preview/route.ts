@@ -75,7 +75,7 @@ export async function POST(
   const { data: items, error: itemsErr } = await supabase
     .from('member_program_items')
     .select(
-      'member_program_item_id, therapy_id, quantity, item_cost, item_charge'
+      'member_program_item_id, therapy_id, quantity, item_cost, item_charge, therapies(taxable)'
     )
     .eq('member_program_id', id);
   if (itemsErr) {
@@ -94,6 +94,7 @@ export async function POST(
       quantity: number;
       item_cost: number;
       item_charge: number;
+      taxable: boolean;
     }
   >();
   const therapyNeeded = new Set<number>();
@@ -104,6 +105,7 @@ export async function POST(
       quantity: Number(it.quantity || 0),
       item_cost: Number(it.item_cost || 0),
       item_charge: Number(it.item_charge || 0),
+      taxable: (it.therapies as any)?.taxable === true,
     });
   }
   for (const ch of body.changes || []) {
@@ -112,11 +114,11 @@ export async function POST(
     }
   }
 
-  const therapyMap = new Map<number, { cost: number; charge: number }>();
+  const therapyMap = new Map<number, { cost: number; charge: number; taxable: boolean }>();
   if (therapyNeeded.size > 0) {
     const { data: therapies, error: thErr } = await supabase
       .from('therapies')
-      .select('therapy_id, cost, charge')
+      .select('therapy_id, cost, charge, taxable')
       .in('therapy_id', Array.from(therapyNeeded));
     if (thErr) {
       return NextResponse.json(
@@ -128,6 +130,7 @@ export async function POST(
       therapyMap.set(t.therapy_id as number, {
         cost: Number(t.cost || 0),
         charge: Number(t.charge || 0),
+        taxable: t.taxable === true,
       });
     }
   }
@@ -153,6 +156,7 @@ export async function POST(
         next.therapy_id = ch.therapy_id;
         next.item_cost = t.cost;
         next.item_charge = t.charge;
+        next.taxable = t.taxable;
       }
       working.set(ch.itemId, next);
     } else if (ch.type === 'add') {
@@ -171,6 +175,7 @@ export async function POST(
         quantity: Math.max(0, Number(ch.quantity || 0)),
         item_cost: t.cost,
         item_charge: t.charge,
+        taxable: t.taxable,
       });
     }
   }
@@ -178,11 +183,21 @@ export async function POST(
   // Totals
   let projectedCharge = 0;
   let projectedCost = 0;
+  let calculatedTaxes = 0;
   working.forEach(v => {
-    projectedCharge += Number(v.item_charge || 0) * Number(v.quantity || 0);
-    projectedCost += Number(v.item_cost || 0) * Number(v.quantity || 0);
+    const quantity = Number(v.quantity || 0);
+    const itemCharge = Number(v.item_charge || 0);
+    const itemCost = Number(v.item_cost || 0);
+    
+    projectedCharge += itemCharge * quantity;
+    projectedCost += itemCost * quantity;
+    
+    // Calculate taxes for taxable items (8.25% rate)
+    if (v.taxable) {
+      calculatedTaxes += itemCharge * quantity * 0.0825;
+    }
   });
-  const projectedPrice = projectedCharge + financeCharges + discounts;
+  const projectedPrice = projectedCharge + financeCharges + discounts + calculatedTaxes;
   const projectedMargin =
     lockedPrice > 0 ? ((lockedPrice - projectedCost) / lockedPrice) * 100 : 0;
 

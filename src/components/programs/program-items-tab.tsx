@@ -57,6 +57,7 @@ interface ProgramItemWithTherapy extends MemberProgramItems {
     charge: number | null;
     therapy_type_id: number | null;
     active_flag: boolean;
+    taxable: boolean;
     therapytype: {
       therapy_type_name: string;
     };
@@ -231,9 +232,10 @@ export default function ProgramItemsTab({
     bucket_name: item.therapies?.buckets?.bucket_name || 'N/A',
     therapy_cost: item.therapies?.cost || 0,
     therapy_charge: item.therapies?.charge || 0,
+    therapy_taxable: (item.therapies as any)?.taxable || false,
     total_cost: (item.item_cost || 0) * (item.quantity || 1),
     total_charge: (item.item_charge || 0) * (item.quantity || 1),
-  })) as ProgramItemWithTherapy[];
+  })) as unknown as ProgramItemWithTherapy[];
 
   // Apply stagedChanges locally to what the grid displays while in edit mode
   const visibleItems = React.useMemo(() => {
@@ -281,6 +283,7 @@ export default function ProgramItemsTab({
             next.bucket_name = t.bucket_name || 'N/A';
             next.therapy_cost = Number(t.cost || 0);
             next.therapy_charge = Number(t.charge || 0);
+            next.therapy_taxable = t.taxable || false;
           }
         }
         next.total_cost =
@@ -317,11 +320,12 @@ export default function ProgramItemsTab({
             therapytype: { therapy_type_name: t.therapy_type_name || 'N/A' },
             buckets: { bucket_name: t.bucket_name || 'N/A' },
           },
-          therapy_type_name: t.therapy_type_name || 'N/A',
-          therapy_name: t.therapy_name,
-          bucket_name: t.bucket_name || 'N/A',
-          therapy_cost: Number(t.cost || 0),
-          therapy_charge: Number(t.charge || 0),
+        therapy_type_name: t.therapy_type_name || 'N/A',
+        therapy_name: t.therapy_name,
+        bucket_name: t.bucket_name || 'N/A',
+        therapy_cost: Number(t.cost || 0),
+        therapy_charge: Number(t.charge || 0),
+        therapy_taxable: t.taxable || false,
           total_cost: Number(t.cost || 0) * quantity,
           total_charge: Number(t.charge || 0) * quantity,
         };
@@ -515,6 +519,20 @@ export default function ProgramItemsTab({
       width: 100,
       type: 'number',
       renderCell: params => formatCurrency(Number(params.value || 0)),
+    },
+    {
+      field: 'therapy_taxable',
+      headerName: 'Taxable',
+      width: 80,
+      type: 'boolean',
+      renderCell: (params: any) => (
+        <Chip
+          label={params.value ? 'Yes' : 'No'}
+          color={params.value ? 'primary' : 'default'}
+          size="small"
+          variant="outlined"
+        />
+      ),
     },
     {
       field: 'actions',

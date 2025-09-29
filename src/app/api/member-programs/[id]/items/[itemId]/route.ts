@@ -28,7 +28,7 @@ export async function PUT(
     if (body.therapy_id) {
       const { data: therapyData, error: therapyError } = await supabase
         .from('therapies')
-        .select('cost, charge')
+        .select('cost, charge, taxable')
         .eq('therapy_id', body.therapy_id)
         .single();
 
@@ -120,14 +120,17 @@ async function updateMemberProgramCalculatedFields(
   memberProgramId: number
 ) {
   try {
-    // Get all items for this member program
+    // Get all items for this member program with therapy data
     const { data: items, error: itemsError } = await supabase
       .from('member_program_items')
       .select(
         `
         quantity,
         item_cost,
-        item_charge
+        item_charge,
+        therapies(
+          taxable
+        )
       `
       )
       .eq('member_program_id', memberProgramId)
@@ -140,14 +143,21 @@ async function updateMemberProgramCalculatedFields(
     // Calculate totals
     let totalCost = 0;
     let totalCharge = 0;
+    let calculatedTaxes = 0;
 
     (items || []).forEach((item: any) => {
       const quantity = item.quantity || 1;
       const cost = item.item_cost || 0;
       const charge = item.item_charge || 0;
+      const isTaxable = item.therapies?.taxable === true;
 
       totalCost += cost * quantity;
       totalCharge += charge * quantity;
+      
+      // Calculate taxes for taxable items (8.25% rate)
+      if (isTaxable) {
+        calculatedTaxes += charge * quantity * 0.0825;
+      }
     });
 
     // Update the member program
@@ -162,7 +172,7 @@ async function updateMemberProgramCalculatedFields(
       .select();
 
     // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
-    // Program Price = totalCharge + max(0, finance_charges) + discounts
+    // Program Price = totalCharge + max(0, finance_charges) + discounts + taxes
     // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
     let financeCharges = 0;
     let discounts = 0;
@@ -177,7 +187,7 @@ async function updateMemberProgramCalculatedFields(
     }
     const positiveFinance = Math.max(0, financeCharges);
     const negativeFinanceFee = Math.max(0, -financeCharges);
-    const finalTotal = totalCharge + positiveFinance + discounts;
+    const finalTotal = totalCharge + positiveFinance + discounts + calculatedTaxes;
     const margin =
       finalTotal > 0
         ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100
@@ -197,6 +207,8 @@ async function updateMemberProgramCalculatedFields(
         .from('member_program_finances')
         .insert({
           member_program_id: memberProgramId,
+          taxes: calculatedTaxes,
+          final_total_price: finalTotal,
           margin: margin,
           created_by: (await supabase.auth.getUser()).data.user?.id,
           updated_by: (await supabase.auth.getUser()).data.user?.id,
@@ -208,6 +220,7 @@ async function updateMemberProgramCalculatedFields(
         await supabase
           .from('member_program_finances')
           .update({
+            taxes: calculatedTaxes,
             final_total_price: finalTotal,
             margin: margin,
             updated_by: (await supabase.auth.getUser()).data.user?.id,

@@ -1,14 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Box, Chip, IconButton } from '@mui/material';
+import { Box, Chip } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
 import { useProgramToDo, useUpdateToDo } from '@/lib/hooks/use-program-todo';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 
 interface ProgramToDoTabProps {
   program: MemberPrograms;
@@ -83,33 +81,16 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
       ),
     },
     {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      sortable: false,
-      renderCell: params => (
-        <Box>
-          <IconButton
-            size="small"
-            color={params.row.completed_flag ? 'success' : 'primary'}
-            disabled={update.isPending || readOnly}
-            onClick={() => {
-              if (!readOnly)
-                update.mutate({
-                  taskScheduleId:
-                    params.row.member_program_item_task_schedule_id,
-                  completed_flag: !params.row.completed_flag,
-                });
-            }}
-          >
-            {params.row.completed_flag ? (
-              <CheckCircleOutlineIcon />
-            ) : (
-              <RadioButtonUncheckedIcon />
-            )}
-          </IconButton>
-        </Box>
-      ),
+      field: 'updated_at',
+      headerName: 'Updated Date',
+      width: 140,
+      renderCell: renderDate as any,
+    },
+    {
+      field: 'updated_by_full_name',
+      headerName: 'Updated By',
+      width: 150,
+      renderCell: (params: any) => params.value || '-',
     },
   ];
 

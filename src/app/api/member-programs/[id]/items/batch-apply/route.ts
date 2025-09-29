@@ -111,7 +111,7 @@ export async function POST(
       if (typeof ch.therapy_id === 'number') {
         const { data: t, error: thErr } = await supabase
           .from('therapies')
-          .select('cost, charge')
+          .select('cost, charge, taxable')
           .eq('therapy_id', ch.therapy_id)
           .single();
         if (thErr || !t)
@@ -139,7 +139,7 @@ export async function POST(
     } else if (ch.type === 'add') {
       const { data: t, error: thErr } = await supabase
         .from('therapies')
-        .select('therapy_id, cost, charge')
+        .select('therapy_id, cost, charge, taxable')
         .eq('therapy_id', ch.therapy_id)
         .single();
       if (thErr || !t)
@@ -213,7 +213,14 @@ export async function POST(
   // Recompute totals after applying
   const { data: postItems, error: postErr } = await supabase
     .from('member_program_items')
-    .select('item_cost, item_charge, quantity')
+    .select(`
+      item_cost, 
+      item_charge, 
+      quantity,
+      therapies(
+        taxable
+      )
+    `)
     .eq('member_program_id', id);
   if (postErr) {
     console.error('batch-apply post load items error:', postErr);
@@ -224,11 +231,22 @@ export async function POST(
   }
   let charge = 0;
   let cost = 0;
+  let calculatedTaxes = 0;
   for (const r of postItems || []) {
-    charge += Number(r.item_charge || 0) * Number(r.quantity || 0);
-    cost += Number(r.item_cost || 0) * Number(r.quantity || 0);
+    const quantity = Number(r.quantity || 0);
+    const itemCharge = Number(r.item_charge || 0);
+    const itemCost = Number(r.item_cost || 0);
+    const isTaxable = (r.therapies as any)?.taxable === true;
+    
+    charge += itemCharge * quantity;
+    cost += itemCost * quantity;
+    
+    // Calculate taxes for taxable items (8.25% rate)
+    if (isTaxable) {
+      calculatedTaxes += itemCharge * quantity * 0.0825;
+    }
   }
-  const projectedPrice = charge + financeCharges + discounts;
+  const projectedPrice = charge + financeCharges + discounts + calculatedTaxes;
   const projectedMargin =
     lockedPrice > 0 ? ((lockedPrice - cost) / lockedPrice) * 100 : 0;
   const priceDeltaCents = toCents(projectedPrice) - toCents(lockedPrice);

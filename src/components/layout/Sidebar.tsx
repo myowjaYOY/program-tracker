@@ -59,11 +59,6 @@ const mainNav = [
     icon: <CoordinatorIcon />,
     path: '/dashboard/coordinator',
   },
-  {
-    label: 'Audit Report',
-    icon: <AuditIcon />,
-    path: '/dashboard/audit-report',
-  },
 ];
 
 const marketingNav = [
@@ -79,6 +74,11 @@ const salesNav = [
 
 // Admin navigation with nested Lookup submenu
 const adminNav = [
+  {
+    label: 'Audit Report',
+    icon: <AuditIcon />,
+    path: '/dashboard/audit-report',
+  },
   {
     label: 'Program Templates',
     icon: <DocumentsIcon />,
@@ -693,7 +693,7 @@ export default function Sidebar({ user }: SidebarProps) {
             {user.email?.split('@')[0] || 'User'}
           </Typography>
           <Typography fontSize={12} color="text.secondary">
-            ACCOUNTADMIN
+            {userPermissions?.isAdmin ? 'ADMIN' : 'USER'}
           </Typography>
         </Box>
         <IconButton onClick={handleUserMenuClick}>
