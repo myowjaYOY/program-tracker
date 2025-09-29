@@ -107,19 +107,19 @@ export default function ReportsPage() {
 
     const totalCampaigns = campaignPerformance.length;
     const activeCampaigns = campaignPerformance.filter(
-      c => c.campaign_status === 'Active'
+      (c: any) => c.campaign_status === 'Active'
     ).length;
     const overallConversionRate =
-      campaignPerformance.reduce((sum, c) => sum + c.conversion_rate, 0) /
+      campaignPerformance.reduce((sum: number, c: any) => sum + c.conversion_rate, 0) /
       totalCampaigns;
     const totalCampaignSpend = campaignPerformance.reduce(
-      (sum, c) => sum + (c.ad_spend || 0) + (c.food_cost || 0),
+      (sum: number, c: any) => sum + (c.ad_spend || 0) + (c.food_cost || 0),
       0
     );
 
     // Find referrals campaign specifically
     const referralsCampaign = campaignPerformance.find(
-      c => c.campaign_name === 'Referrals'
+      (c: any) => c.campaign_name === 'Referrals'
     );
     const referralsConversionRate = referralsCampaign
       ? referralsCampaign.conversion_rate
@@ -346,7 +346,7 @@ export default function ReportsPage() {
         ) : (
           <>
             <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -408,7 +408,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -470,7 +470,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -532,7 +532,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -594,7 +594,7 @@ export default function ReportsPage() {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} sm={6} md={2.4}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <Card
                 sx={{
                   height: '100%',
@@ -682,7 +682,7 @@ export default function ReportsPage() {
 
       <TabPanel value={tabValue} index={1}>
         <Grid container spacing={3}>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Card
               sx={{
                 height: '100%',
@@ -744,7 +744,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Card
               sx={{
                 height: '100%',
@@ -811,7 +811,7 @@ export default function ReportsPage() {
 
       <TabPanel value={tabValue} index={2}>
         <Grid container spacing={3}>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Card
               sx={{
                 height: '100%',
@@ -873,7 +873,7 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Card
               sx={{
                 height: '100%',

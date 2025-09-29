@@ -182,7 +182,7 @@ export default function AddProgramWizard({
         program_status_id: quoteStatus?.program_status_id || 1, // Default to "Quote" or fallback to first status
         selected_template_ids: data.selected_template_ids,
         // The database function will handle copying costs, charges, and margin from the templates
-      });
+      } as any);
 
       toast.success('Program created successfully!');
       handleClose();

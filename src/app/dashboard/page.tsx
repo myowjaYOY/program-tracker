@@ -81,7 +81,7 @@ export default function DashboardPage() {
       {/* Metrics Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {metricCards.map((card, index) => (
-          <Grid item xs={3} key={index}>
+          <Grid size={3} key={index}>
             <Card
               sx={{
                 height: '100%',

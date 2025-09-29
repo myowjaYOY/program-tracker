@@ -93,7 +93,7 @@ export default function CoordinatorPage() {
 
       {/* Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid item xs={3}>
+        <Grid size={3}>
           <Card
             sx={{
               height: '100%',
@@ -155,7 +155,7 @@ export default function CoordinatorPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={3}>
           <Card
             sx={{
               height: '100%',
@@ -217,7 +217,7 @@ export default function CoordinatorPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={3}>
           <Card
             sx={{
               height: '100%',
@@ -279,7 +279,7 @@ export default function CoordinatorPage() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={3}>
+        <Grid size={3}>
           <Card
             sx={{
               height: '100%',
