@@ -140,6 +140,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   getDetailPanelHeight?: (row: T) => number;
   // Custom height override
   gridHeight?: string | number;
+  // Initial sort model
+  sortModel?: Array<{ field: string; sort: 'asc' | 'desc' }>;
 }
 
 export default function BaseDataTable<T extends BaseEntity>({
@@ -169,6 +171,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   renderDetailPanel,
   getDetailPanelHeight,
   gridHeight,
+  sortModel,
 }: BaseDataTableProps<T>) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
@@ -347,7 +350,9 @@ export default function BaseDataTable<T extends BaseEntity>({
             pagination: {
               paginationModel: { page: 0, pageSize },
             },
+            ...(sortModel && { sorting: { sortModel } }),
           }}
+          {...(sortModel && { initialSortModel: sortModel })}
           pageSizeOptions={pageSizeOptions}
           {...(onRowClick && {
             onRowClick: (params: any) => onRowClick(params.row),

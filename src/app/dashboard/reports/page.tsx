@@ -19,8 +19,18 @@ import {
   Timeline as TimelineIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
+  Campaign as CampaignIcon,
+  TrendingUp as TrendingUpIcon,
+  People as PeopleIcon,
+  AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
-import ReportsTable from '@/components/reports/reports-table';
+import { useQuery } from '@tanstack/react-query';
+import BaseDataTable, {
+  commonColumns,
+  renderDate,
+  renderCurrency,
+} from '@/components/tables/base-data-table';
+import { GridColDef } from '@mui/x-data-grid';
 
 // Tab Panel component
 interface TabPanelProps {
@@ -53,8 +63,174 @@ function a11yProps(index: number) {
   };
 }
 
+// Interface for campaign performance data
+interface CampaignPerformanceData {
+  id: string;
+  campaign_id: number;
+  campaign_name: string;
+  campaign_date: string;
+  vendor_name: string;
+  total_leads: number;
+  active_leads: number;
+  won_leads: number;
+  lost_leads: number;
+  no_pme_leads: number;
+  conversion_rate: number;
+  campaign_status: 'Active' | 'Closed' | 'Mixed';
+  ad_spend: number | null;
+  food_cost: number | null;
+  cost_per_lead: number;
+  roi_percentage: number;
+}
+
 export default function ReportsPage() {
   const [tabValue, setTabValue] = useState(0);
+
+  // Fetch campaign performance data
+  const { data: campaignPerformance = [], isLoading, error } = useQuery({
+    queryKey: ['campaign-performance'],
+    queryFn: async () => {
+      const response = await fetch('/api/reports/campaign-performance', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch campaign performance: ${response.status}`);
+      }
+      const result = await response.json();
+      return result.data || [];
+    },
+  });
+
+  // Calculate summary statistics
+  const summaryStats = React.useMemo(() => {
+    if (!campaignPerformance.length) return null;
+
+    const totalCampaigns = campaignPerformance.length;
+    const activeCampaigns = campaignPerformance.filter(
+      c => c.campaign_status === 'Active'
+    ).length;
+    const overallConversionRate =
+      campaignPerformance.reduce((sum, c) => sum + c.conversion_rate, 0) /
+      totalCampaigns;
+    const totalCampaignSpend = campaignPerformance.reduce(
+      (sum, c) => sum + (c.ad_spend || 0) + (c.food_cost || 0),
+      0
+    );
+
+    // Find referrals campaign specifically
+    const referralsCampaign = campaignPerformance.find(
+      c => c.campaign_name === 'Referrals'
+    );
+    const referralsConversionRate = referralsCampaign
+      ? referralsCampaign.conversion_rate
+      : 0;
+
+    return {
+      totalCampaigns,
+      activeCampaigns,
+      overallConversionRate,
+      totalCampaignSpend,
+      referralsConversionRate,
+    };
+  }, [campaignPerformance]);
+
+  // Campaign performance columns
+  const campaignColumns: GridColDef[] = [
+    {
+      field: 'campaign_name',
+      headerName: 'Campaign',
+      width: 200,
+      flex: 1,
+    },
+    {
+      field: 'campaign_date',
+      headerName: 'Date',
+      width: 120,
+      renderCell: renderDate,
+    },
+    {
+      field: 'vendor_name',
+      headerName: 'Vendor',
+      width: 150,
+    },
+    {
+      field: 'campaign_status',
+      headerName: 'Status',
+      width: 120,
+      type: 'singleSelect',
+      valueOptions: ['Active', 'Closed', 'Mixed'],
+    },
+    {
+      field: 'total_leads',
+      headerName: 'Total Leads',
+      width: 120,
+      type: 'number',
+    },
+    {
+      field: 'active_leads',
+      headerName: 'Active',
+      width: 100,
+      type: 'number',
+    },
+    {
+      field: 'won_leads',
+      headerName: 'Won',
+      width: 100,
+      type: 'number',
+      renderCell: params => (
+        <Box sx={{ color: 'success.main', fontWeight: 'bold' }}>
+          {params.value}
+        </Box>
+      ),
+    },
+    {
+      field: 'lost_leads',
+      headerName: 'Lost',
+      width: 100,
+      type: 'number',
+      renderCell: params => {
+        const lostLeads = params.row.lost_leads || 0;
+        const noPmeLeads = params.row.no_pme_leads || 0;
+        const totalLost = lostLeads + noPmeLeads;
+        return totalLost;
+      },
+    },
+    {
+      field: 'conversion_rate',
+      headerName: 'Conversion %',
+      width: 130,
+      type: 'number',
+      renderCell: params => {
+        const value = params.value;
+        if (value === 0) return '0.0%';
+        if (value != null && value !== undefined && !isNaN(value)) {
+          return `${Number(value).toFixed(1)}%`;
+        }
+        return '-';
+      },
+    },
+    {
+      field: 'cost_per_lead',
+      headerName: 'Cost/Lead',
+      width: 120,
+      type: 'number',
+      renderCell: renderCurrency,
+    },
+    {
+      field: 'roi_percentage',
+      headerName: 'ROI %',
+      width: 100,
+      type: 'number',
+      renderCell: params => {
+        const value = params.value;
+        if (value === 0) return '0.0%';
+        if (value != null && value !== undefined && !isNaN(value)) {
+          return `${Number(value).toFixed(1)}%`;
+        }
+        return '-';
+      },
+    },
+  ];
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -149,77 +325,617 @@ export default function ReportsPage() {
 
       {/* Tab Content */}
       <TabPanel value={tabValue} index={0}>
-        <ReportsTable />
+        {error ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="error">
+              Error: {error.message}
+            </Typography>
+          </Box>
+        ) : isLoading ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="text.secondary">
+              Loading campaign data...
+            </Typography>
+          </Box>
+        ) : !campaignPerformance.length ? (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography variant="h6" color="text.secondary">
+              No campaign data available
+            </Typography>
+          </Box>
+        ) : (
+          <>
+            <Grid container spacing={3}>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: theme => `4px solid ${theme.palette.primary.main}`,
+                  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme => theme.shadows[4],
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{ fontWeight: 500 }}
+                      >
+                        Total Campaigns
+                      </Typography>
+                      <Typography
+                        variant="h3"
+                        component="div"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: 'primary.main',
+                          mt: 1,
+                        }}
+                      >
+                        {summaryStats?.totalCampaigns || 0}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        color: 'primary.main',
+                        opacity: 0.8,
+                      }}
+                    >
+                      <CampaignIcon sx={{ fontSize: 40 }} />
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Total number of campaigns
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: theme => `4px solid ${theme.palette.success.main}`,
+                  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme => theme.shadows[4],
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{ fontWeight: 500 }}
+                      >
+                        Active Campaigns
+                      </Typography>
+                      <Typography
+                        variant="h3"
+                        component="div"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: 'success.main',
+                          mt: 1,
+                        }}
+                      >
+                        {summaryStats?.activeCampaigns || 0}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        color: 'success.main',
+                        opacity: 0.8,
+                      }}
+                    >
+                      <TrendingUpIcon sx={{ fontSize: 40 }} />
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Currently active campaigns
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: theme => `4px solid ${theme.palette.info.main}`,
+                  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme => theme.shadows[4],
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{ fontWeight: 500 }}
+                      >
+                        Overall Conversion
+                      </Typography>
+                      <Typography
+                        variant="h3"
+                        component="div"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: 'info.main',
+                          mt: 1,
+                        }}
+                      >
+                        {summaryStats?.overallConversionRate.toFixed(1) || 0}%
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        color: 'info.main',
+                        opacity: 0.8,
+                      }}
+                    >
+                      <PeopleIcon sx={{ fontSize: 40 }} />
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Average conversion rate
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: theme => `4px solid ${theme.palette.warning.main}`,
+                  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme => theme.shadows[4],
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{ fontWeight: 500 }}
+                      >
+                        Referrals Conversion
+                      </Typography>
+                      <Typography
+                        variant="h3"
+                        component="div"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: 'warning.main',
+                          mt: 1,
+                        }}
+                      >
+                        {summaryStats?.referralsConversionRate.toFixed(1) || 0}%
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        color: 'warning.main',
+                        opacity: 0.8,
+                      }}
+                    >
+                      <PeopleIcon sx={{ fontSize: 40 }} />
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Referrals campaign conversion
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} md={2.4}>
+              <Card
+                sx={{
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: theme => `4px solid ${theme.palette.error.main}`,
+                  transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: theme => theme.shadows[4],
+                  },
+                }}
+              >
+                <CardContent sx={{ flexGrow: 1, p: 3, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      mb: 2,
+                    }}
+                  >
+                    <Box>
+                      <Typography
+                        color="textSecondary"
+                        variant="body2"
+                        sx={{ fontWeight: 500 }}
+                      >
+                        Total Campaign Spend
+                      </Typography>
+                      <Typography
+                        variant="h3"
+                        component="div"
+                        sx={{
+                          fontWeight: 'bold',
+                          color: 'error.main',
+                          mt: 1,
+                        }}
+                      >
+                        ${Math.round(summaryStats?.totalCampaignSpend || 0).toLocaleString()}
+                      </Typography>
+                    </Box>
+                    <Box
+                      sx={{
+                        color: 'error.main',
+                        opacity: 0.8,
+                      }}
+                    >
+                      <MoneyIcon sx={{ fontSize: 40 }} />
+                    </Box>
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Total advertising spend
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          {/* Campaign Performance Table */}
+          <Card sx={{ mt: 3 }}>
+            <CardHeader
+              title="Campaign Performance Details"
+              subheader="Detailed analysis of each campaign's performance metrics"
+            />
+            <CardContent>
+              <BaseDataTable<CampaignPerformanceData>
+                title=""
+                data={campaignPerformance}
+                columns={campaignColumns}
+                loading={isLoading}
+                onEdit={() => {}}
+                showCreateButton={false}
+                showActionsColumn={false}
+              />
+            </CardContent>
+          </Card>
+          </>
+        )}
       </TabPanel>
 
       <TabPanel value={tabValue} index={1}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-            gap: 3,
-          }}
-        >
-          <Card>
-            <CardHeader
-              title="Lead Conversion Funnel"
-              subheader="Track lead progression through stages"
-            />
-            <CardContent>
-              <Typography variant="body1" color="text.secondary">
-                Visualize how leads move through your sales funnel and identify
-                bottlenecks.
-              </Typography>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader
-              title="Lead Source Analysis"
-              subheader="Which sources generate the best leads"
-            />
-            <CardContent>
-              <Typography variant="body1" color="text.secondary">
-                Analyze lead quality and conversion rates by source to optimize
-                your marketing efforts.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
+        <Grid container spacing={3}>
+          <Grid item xs={6}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.primary.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Lead Conversion Funnel
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'primary.main',
+                        mt: 1,
+                      }}
+                    >
+                      Track Progress
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'primary.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <PieChartIcon sx={{ fontSize: 40 }} />
+                  </Box>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  Visualize how leads move through your sales funnel and identify bottlenecks.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.success.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Lead Source Analysis
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'success.main',
+                        mt: 1,
+                      }}
+                    >
+                      Source Quality
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'success.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <BarChartIcon sx={{ fontSize: 40 }} />
+                  </Box>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  Analyze lead quality and conversion rates by source to optimize your marketing efforts.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-            gap: 3,
-          }}
-        >
-          <Card>
-            <CardHeader
-              title="Revenue Trends"
-              subheader="Monthly and quarterly revenue analysis"
-            />
-            <CardContent>
-              <Typography variant="body1" color="text.secondary">
-                Track revenue growth, seasonal patterns, and forecast future
-                performance.
-              </Typography>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader
-              title="Customer Lifetime Value"
-              subheader="Long-term customer value analysis"
-            />
-            <CardContent>
-              <Typography variant="body1" color="text.secondary">
-                Understand customer retention and long-term value to inform
-                business strategy.
-              </Typography>
-            </CardContent>
-          </Card>
-        </Box>
+        <Grid container spacing={3}>
+          <Grid item xs={6}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.info.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Revenue Trends
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'info.main',
+                        mt: 1,
+                      }}
+                    >
+                      Growth Analysis
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'info.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <TimelineIcon sx={{ fontSize: 40 }} />
+                  </Box>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  Track revenue growth, seasonal patterns, and forecast future performance.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={6}>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.warning.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Customer Lifetime Value
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'warning.main',
+                        mt: 1,
+                      }}
+                    >
+                      Long-term Value
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'warning.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <BarChartIcon sx={{ fontSize: 40 }} />
+                  </Box>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontSize: '0.875rem' }}
+                >
+                  Understand customer retention and long-term value to inform business strategy.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
       </TabPanel>
     </Box>
   );

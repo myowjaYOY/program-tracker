@@ -777,6 +777,7 @@ export default function ProgramItemsTab({
         pageSize={5}
         pageSizeOptions={[5, 10, 25]}
         autoHeight={true}
+        sortModel={[{ field: 'therapy_name', sort: 'asc' }]}
       />
 
       {/* Add Item Modal */}

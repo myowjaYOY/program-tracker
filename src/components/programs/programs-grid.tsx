@@ -267,6 +267,7 @@ export default function ProgramsGrid({
       autoHeight={true}
       selectedRowId={selectedProgram?.member_program_id || null}
       showActionsColumn={false}
+      sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
     />
   );
 }

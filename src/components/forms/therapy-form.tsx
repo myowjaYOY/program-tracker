@@ -43,6 +43,7 @@ export default function TherapyForm({
       cost: initialValues?.cost || 0,
       charge: initialValues?.charge || 0,
       active_flag: initialValues?.active_flag ?? true,
+      taxable: initialValues?.taxable ?? false,
     },
   });
 
@@ -176,6 +177,16 @@ export default function TherapyForm({
           />
         }
         label="Active"
+      />
+      <FormControlLabel
+        control={
+          <Switch
+            color="primary"
+            checked={!!watch('taxable')}
+            onChange={(_, checked) => setValue('taxable', checked)}
+          />
+        }
+        label="Taxable"
       />
     </BaseForm>
   );

@@ -245,6 +245,7 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
         getRowId={row => row.member_program_item_task_id}
         showCreateButton={false}
         showActionsColumn={false}
+        sortModel={[{ field: 'task_name', sort: 'asc' }]}
       />
 
       {/* Edit Task Modal */}

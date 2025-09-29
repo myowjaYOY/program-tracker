@@ -515,7 +515,7 @@ export default function Sidebar({ user }: SidebarProps) {
               <React.Fragment key={item.label}>
                 {item.submenu ? (
                   // Submenu item (like Lookup)
-                  <ListItem disablePadding>
+                  (<ListItem disablePadding>
                     <ListItemButton
                       onClick={e => {
                         e.preventDefault();
@@ -558,10 +558,10 @@ export default function Sidebar({ user }: SidebarProps) {
                         <ExpandMore fontSize="small" />
                       )}
                     </ListItemButton>
-                  </ListItem>
+                  </ListItem>)
                 ) : (
                   // Regular menu item
-                  <ListItem disablePadding>
+                  (<ListItem disablePadding>
                     <ListItemButton
                       selected={pathname === item.path}
                       onClick={() => router.push(item.path)}
@@ -599,7 +599,7 @@ export default function Sidebar({ user }: SidebarProps) {
                         }}
                       />
                     </ListItemButton>
-                  </ListItem>
+                  </ListItem>)
                 )}
 
                 {/* Render submenu items if this is a submenu */}

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { GridColDef } from '@mui/x-data-grid';
+import { Chip } from '@mui/material';
 import BaseDataTable, {
   commonColumns,
 } from '@/components/tables/base-data-table';
@@ -18,12 +19,6 @@ interface TherapyEntity extends Omit<Therapies, 'created_at' | 'updated_at'> {
 }
 
 const therapyColumns: GridColDef[] = [
-  {
-    field: 'therapy_id',
-    headerName: 'ID',
-    width: 80,
-    type: 'number',
-  },
   {
     field: 'therapy_name',
     headerName: 'Therapy Name',
@@ -82,6 +77,19 @@ const therapyColumns: GridColDef[] = [
       }).format(Number(value));
     },
   },
+  {
+    field: 'taxable',
+    headerName: 'Taxable',
+    width: 100,
+    type: 'boolean',
+    renderCell: (params: any) => (
+      <Chip 
+        label={params.value ? 'Yes' : 'No'} 
+        color={params.value ? 'success' : 'default'} 
+        size="small" 
+      />
+    ),
+  },
   commonColumns.activeFlag,
   commonColumns.createdAt,
   commonColumns.createdBy,
@@ -123,6 +131,7 @@ export default function TherapyTable() {
             cost: initialValues.cost || 0,
             charge: initialValues.charge || 0,
             active_flag: initialValues.active_flag ?? true,
+            taxable: initialValues.taxable ?? false,
             ...(initialValues.therapy_id && {
               therapy_id: initialValues.therapy_id,
             }),
@@ -135,6 +144,7 @@ export default function TherapyTable() {
             cost: 0,
             charge: 0,
             active_flag: true,
+            taxable: false,
           };
     return (
       <TherapyForm initialValues={formData} onSuccess={onClose} mode={mode} />
@@ -175,6 +185,7 @@ export default function TherapyTable() {
       deleteConfirmMessage="Are you sure you want to delete this therapy? This action cannot be undone."
       pageSize={25}
       pageSizeOptions={[10, 25, 50, 100]}
+      sortModel={[{ field: 'therapy_name', sort: 'asc' }]}
     />
   );
 }

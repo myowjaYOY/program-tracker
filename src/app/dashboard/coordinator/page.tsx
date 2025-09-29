@@ -11,6 +11,7 @@ import {
   MenuItem,
   TextField,
   Divider,
+  Grid,
 } from '@mui/material';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
@@ -90,116 +91,257 @@ export default function CoordinatorPage() {
         </Typography>
       </Box>
 
-      <Card>
-        <CardContent sx={{ py: 2 }}>
-          {/* Summary Cards */}
-          <Box
+      {/* Summary Cards */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={3}>
+          <Card
             sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: 'repeat(4, 1fr)',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: theme => `4px solid ${theme.palette.error.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme => theme.shadows[4],
               },
-              gap: 2,
-              mb: 3,
-              alignItems: 'center',
             }}
           >
-            <Card
-              sx={{
-                borderTop: theme => `4px solid ${theme.palette.error.main}`,
-              }}
-            >
-              <CardContent>
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    Late Tasks
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 'bold',
+                      color: 'error.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metrics?.lateTasks ?? 0}
+                  </Typography>
+                </Box>
                 <Box
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    color: 'error.main',
+                    opacity: 0.8,
                   }}
                 >
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Late Tasks
-                    </Typography>
-                    <Typography variant="h4" color="error.main">
-                      {metrics?.lateTasks ?? 0}
-                    </Typography>
-                  </Box>
-                  <NotificationsActiveIcon
-                    color="error"
-                    sx={{ fontSize: 36 }}
-                  />
+                  <NotificationsActiveIcon sx={{ fontSize: 40 }} />
                 </Box>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: '0.875rem' }}
+              >
+                Overdue tasks requiring attention
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={3}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: theme => `4px solid ${theme.palette.primary.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    Tasks Due Today
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 'bold',
+                      color: 'primary.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metrics?.tasksDueToday ?? 0}
+                  </Typography>
+                </Box>
                 <Box
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    color: 'primary.main',
+                    opacity: 0.8,
                   }}
                 >
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Tasks Due Today
-                    </Typography>
-                    <Typography variant="h4" color="primary.main">
-                      {metrics?.tasksDueToday ?? 0}
-                    </Typography>
-                  </Box>
-                  <TodayIcon color="primary" sx={{ fontSize: 36 }} />
+                  <TodayIcon sx={{ fontSize: 40 }} />
                 </Box>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: '0.875rem' }}
+              >
+                Tasks scheduled for today
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={3}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: theme => `4px solid ${theme.palette.secondary.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    Appointments Today
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 'bold',
+                      color: 'secondary.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metrics?.apptsDueToday ?? 0}
+                  </Typography>
+                </Box>
                 <Box
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    color: 'secondary.main',
+                    opacity: 0.8,
                   }}
                 >
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Appointments Today
-                    </Typography>
-                    <Typography variant="h4" color="secondary.main">
-                      {metrics?.apptsDueToday ?? 0}
-                    </Typography>
-                  </Box>
-                  <EventAvailableIcon color="secondary" sx={{ fontSize: 36 }} />
+                  <EventAvailableIcon sx={{ fontSize: 40 }} />
                 </Box>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: '0.875rem' }}
+              >
+                Appointments scheduled for today
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={3}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: theme => `4px solid ${theme.palette.info.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    Program Changes (This Week)
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 'bold',
+                      color: 'info.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metrics?.programChangesThisWeek ?? 0}
+                  </Typography>
+                </Box>
                 <Box
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    color: 'info.main',
+                    opacity: 0.8,
                   }}
                 >
-                  <Box>
-                    <Typography color="textSecondary" variant="body2">
-                      Program Changes (This Week)
-                    </Typography>
-                    <Typography variant="h4">
-                      {metrics?.programChangesThisWeek ?? 0}
-                    </Typography>
-                  </Box>
-                  <AutoGraphIcon sx={{ fontSize: 36 }} />
+                  <AutoGraphIcon sx={{ fontSize: 40 }} />
                 </Box>
-              </CardContent>
-            </Card>
-          </Box>
-        </CardContent>
-      </Card>
+              </Box>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ fontSize: '0.875rem' }}
+              >
+                Program modifications this week
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
       {/* Filters + Tabs section (separate card to visually associate with grids) */}
       <Card sx={{ mt: 3 }}>

@@ -17,6 +17,11 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Checkbox,
+  ListItemText,
+  Chip,
+  Card,
+  CardContent,
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +38,7 @@ const step1Schema = z.object({
 });
 
 const step2Schema = z.object({
-  source_template_id: z.number().min(1, 'Please select a program template'),
+  selected_template_ids: z.array(z.number()).min(1, 'Please select at least one program template'),
 });
 
 const step3Schema = z.object({
@@ -59,6 +64,9 @@ export default function AddProgramWizard({
 }: AddProgramWizardProps) {
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [selectedTemplates, setSelectedTemplates] = useState<number[]>([]);
+  const [totalCost, setTotalCost] = useState(0);
+  const [totalCharge, setTotalCharge] = useState(0);
 
   const { data: allLeads = [] } = useLeads();
   const { data: allProgramTemplates = [] } = useProgramTemplates();
@@ -95,7 +103,7 @@ export default function AddProgramWizard({
     mode: 'onChange',
     defaultValues: {
       lead_id: 0,
-      source_template_id: 0,
+      selected_template_ids: [],
       program_template_name: '',
       description: '',
     },
@@ -106,14 +114,31 @@ export default function AddProgramWizard({
     if (open) {
       reset({
         lead_id: 0,
-        source_template_id: 0,
+        selected_template_ids: [],
         program_template_name: '',
         description: '',
       });
       setActiveStep(0);
       setCompletedSteps(new Set());
+      setSelectedTemplates([]);
+      setTotalCost(0);
+      setTotalCharge(0);
     }
   }, [open, reset]);
+
+  // Calculate totals when selected templates change
+  React.useEffect(() => {
+    const totals = selectedTemplates.reduce((acc, templateId) => {
+      const template = programTemplates.find(t => t.program_template_id === templateId);
+      return {
+        cost: acc.cost + (template?.total_cost || 0),
+        charge: acc.charge + (template?.total_charge || 0)
+      };
+    }, { cost: 0, charge: 0 });
+    
+    setTotalCost(totals.cost);
+    setTotalCharge(totals.charge);
+  }, [selectedTemplates, programTemplates]);
 
   const handleNext = async () => {
     let isValidStep = false;
@@ -121,7 +146,7 @@ export default function AddProgramWizard({
     if (activeStep === 0) {
       isValidStep = await trigger(['lead_id']);
     } else if (activeStep === 1) {
-      isValidStep = await trigger(['source_template_id']);
+      isValidStep = await trigger(['selected_template_ids']);
     } else if (activeStep === 2) {
       isValidStep = await trigger(['program_template_name']);
     }
@@ -155,8 +180,8 @@ export default function AddProgramWizard({
         lead_id: data.lead_id,
         start_date: null, // Start date is blank by default
         program_status_id: quoteStatus?.program_status_id || 1, // Default to "Quote" or fallback to first status
-        source_template_id: data.source_template_id,
-        // The database function will handle copying costs, charges, and margin from the template
+        selected_template_ids: data.selected_template_ids,
+        // The database function will handle copying costs, charges, and margin from the templates
       });
 
       toast.success('Program created successfully!');
@@ -223,81 +248,97 @@ export default function AddProgramWizard({
         return (
           <Box sx={{ py: 2 }}>
             <Typography variant="h6" gutterBottom>
-              Select Program Template
+              Select Program Templates
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose the program template that will be used as the basis for
-              this program.
+              Choose one or more program templates to combine into this program.
             </Typography>
 
             <Controller
-              key={`source_template_id_${activeStep}`}
-              name="source_template_id"
+              key={`selected_template_ids_${activeStep}`}
+              name="selected_template_ids"
               control={control}
               render={({ field }) => {
                 return (
-                  <FormControl fullWidth error={!!errors.source_template_id}>
-                    <InputLabel>Program Template</InputLabel>
+                  <FormControl fullWidth error={!!errors.selected_template_ids}>
+                    <InputLabel>Program Templates</InputLabel>
                     <Select
-                      label="Program Template"
-                      value={field.value ? String(field.value) : ''}
+                      multiple
+                      label="Program Templates"
+                      value={field.value || []}
                       onChange={e => {
-                        const value = e.target.value;
-                        field.onChange(value === '' ? 0 : Number(value));
-                        // Auto-populate program name and description from template
-                        if (value !== '') {
-                          const selectedTemplate = programTemplates.find(
-                            t => t.program_template_id === Number(value)
-                          );
-                          if (selectedTemplate) {
-                            setValue(
-                              'program_template_name',
-                              selectedTemplate.program_template_name || ''
-                            );
-                            setValue(
-                              'description',
-                              selectedTemplate.description || ''
-                            );
-                          }
-                        }
+                        const value = e.target.value as number[];
+                        field.onChange(value);
+                        setSelectedTemplates(value);
                       }}
                       onBlur={field.onBlur}
                       name={field.name}
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(selected as number[]).map((value) => {
+                            const template = programTemplates.find(t => t.program_template_id === value);
+                            return (
+                              <Chip 
+                                key={value} 
+                                label={template?.program_template_name || `Template ${value}`}
+                                size="small"
+                              />
+                            );
+                          })}
+                        </Box>
+                      )}
                     >
-                      <MenuItem value="">
-                        <em>Select a program template</em>
-                      </MenuItem>
                       {programTemplates.map(template => (
                         <MenuItem
                           key={template.program_template_id}
                           value={template.program_template_id}
                         >
-                          {template.program_template_name}
-                          {template.description && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ ml: 1 }}
-                            >
-                              - {template.description}
-                            </Typography>
-                          )}
+                          <Checkbox
+                            checked={(field.value || []).indexOf(template.program_template_id) > -1}
+                          />
+                          <ListItemText
+                            primary={`${template.program_template_name} - $${(template.total_charge || 0).toFixed(2)}`}
+                            secondary={template.description}
+                          />
                         </MenuItem>
                       ))}
                     </Select>
-                    {errors.source_template_id && (
+                    {errors.selected_template_ids && (
                       <Typography
                         variant="caption"
                         color="error"
                         sx={{ mt: 1, display: 'block' }}
                       >
-                        {errors.source_template_id.message}
+                        {errors.selected_template_ids.message}
                       </Typography>
                     )}
                   </FormControl>
                 );
               }}
             />
+
+            {/* Cost Summary */}
+            {selectedTemplates.length > 0 && (
+              <Card sx={{ mt: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Cost Summary
+                  </Typography>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body2">Total Cost:</Typography>
+                    <Typography variant="body2" fontWeight="bold">
+                      ${totalCost.toFixed(2)}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="body2">Total Charge:</Typography>
+                    <Typography variant="body2" fontWeight="bold" color="primary">
+                      ${totalCharge.toFixed(2)}
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
           </Box>
         );
 

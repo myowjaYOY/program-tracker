@@ -362,6 +362,7 @@ export interface Therapies {
   therapy_type_id: number | null;
   bucket_id: number | null;
   active_flag: boolean;
+  taxable: boolean;
   created_at: string | null;
   created_by: string | null;
   updated_at: string | null;

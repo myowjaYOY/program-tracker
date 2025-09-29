@@ -224,6 +224,7 @@ export default function ProgramTemplatesGrid({
       autoHeight={true}
       selectedRowId={selectedTemplate?.program_template_id || null}
       showActionsColumn={false}
+      sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
     />
   );
 }

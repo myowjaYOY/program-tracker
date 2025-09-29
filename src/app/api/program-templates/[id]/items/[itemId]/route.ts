@@ -87,14 +87,10 @@ export async function DELETE(
 
   try {
     const { id, itemId } = await context.params;
-    console.log(`DELETE request for template ${id}, item ${itemId}`);
 
     const { error } = await supabase
       .from('program_template_items')
-      .update({
-        active_flag: false,
-        updated_by: session.user.id,
-      })
+      .delete()
       .eq('program_template_items_id', parseInt(itemId))
       .eq('program_template_id', parseInt(id));
 
@@ -106,9 +102,7 @@ export async function DELETE(
       );
     }
 
-    console.log(
-      `Successfully deleted item ${itemId}, now updating template ${id} calculated fields`
-    );
+
     // Update the program template's calculated fields
     await updateTemplateCalculatedFields(supabase, parseInt(id));
 
@@ -127,8 +121,6 @@ async function updateTemplateCalculatedFields(
   templateId: number
 ) {
   try {
-    console.log(`Updating calculated fields for template ${templateId}`);
-
     // Get all items for this template with therapy data
     const { data: items, error: itemsError } = await supabase
       .from('program_template_items')
@@ -146,21 +138,16 @@ async function updateTemplateCalculatedFields(
       return;
     }
 
-    console.log(
-      `Found ${items?.length || 0} active items for template ${templateId}:`,
-      items
-    );
 
     // Transform items to match the expected format for calculation
     const transformedItems = (items || []).map((item: any) => ({
       quantity: item.quantity || 1,
-      cost: item.therapies?.cost || 0,
-      charge: item.therapies?.charge || 0,
+      item_cost: item.therapies?.cost || 0,
+      item_charge: item.therapies?.charge || 0,
     }));
 
     // Calculate totals using our utility function
     const totals = calculateProgramTemplateTotals(transformedItems);
-    console.log(`Calculated totals for template ${templateId}:`, totals);
 
     // Update the template
     const { data: updateData, error: updateError } = await supabase
@@ -181,11 +168,6 @@ async function updateTemplateCalculatedFields(
         totals,
         updateData,
       });
-    } else {
-      console.log(
-        `Successfully updated template ${templateId} calculated fields:`,
-        updateData
-      );
     }
   } catch (error) {
     console.error('Error in updateTemplateCalculatedFields:', error);

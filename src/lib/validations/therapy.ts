@@ -8,6 +8,7 @@ export const therapySchema = z.object({
   cost: z.number().min(0, 'Cost must be a positive number'),
   charge: z.number().min(0, 'Charge must be a positive number'),
   active_flag: z.boolean(),
+  taxable: z.boolean(),
 });
 
 export const therapyUpdateSchema = therapySchema.partial();

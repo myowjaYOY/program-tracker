@@ -95,9 +95,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // Validate required fields for using the database function
-    if (!body.lead_id || !body.source_template_id) {
+    if (!body.lead_id || !body.selected_template_ids || !Array.isArray(body.selected_template_ids) || body.selected_template_ids.length === 0) {
       return NextResponse.json(
-        { error: 'Lead ID and source template ID are required' },
+        { error: 'Lead ID and at least one template ID are required' },
         { status: 400 }
       );
     }
@@ -116,17 +116,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate that template exists
-    const { data: templateExists, error: templateError } = await supabase
+    // Validate that all templates exist
+    const { data: templatesExist, error: templateError } = await supabase
       .from('program_template')
       .select('program_template_id')
-      .eq('program_template_id', body.source_template_id)
-      .single();
+      .in('program_template_id', body.selected_template_ids);
 
-    if (templateError || !templateExists) {
+    if (templateError || !templatesExist || templatesExist.length !== body.selected_template_ids.length) {
       return NextResponse.json(
         {
-          error: `Program template with ID ${body.source_template_id} does not exist`,
+          error: 'One or more selected templates do not exist',
         },
         { status: 400 }
       );
@@ -137,7 +136,9 @@ export async function POST(req: NextRequest) {
       'create_member_program_from_template',
       {
         p_lead_id: body.lead_id,
-        p_template_id: body.source_template_id,
+        p_template_ids: body.selected_template_ids,
+        p_program_name: body.program_template_name,
+        p_description: body.description || '',
         p_start_date: body.start_date || null,
       }
     );
@@ -152,32 +153,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update the created program with custom name and description if provided
-    if (body.program_template_name || body.description) {
-      const updateData: any = {
-        updated_by: session.user.id,
-      };
-
-      if (body.program_template_name) {
-        updateData.program_template_name = body.program_template_name;
-      }
-
-      if (body.description !== undefined) {
-        updateData.description = body.description;
-      }
-
-      if (body.program_status_id) {
-        updateData.program_status_id = body.program_status_id;
-      }
-
+    // Update program status if provided (name and description are now handled by the database function)
+    if (body.program_status_id) {
       const { error: updateError } = await supabase
         .from('member_programs')
-        .update(updateData)
+        .update({ 
+          program_status_id: body.program_status_id,
+          updated_by: session.user.id 
+        })
         .eq('member_program_id', newProgramId);
 
       if (updateError) {
         return NextResponse.json(
-          { error: 'Failed to update member program details' },
+          { error: 'Failed to update member program status' },
           { status: 500 }
         );
       }

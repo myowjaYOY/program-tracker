@@ -149,8 +149,8 @@ async function updateTemplateCalculatedFields(
     // Transform items to match the expected format for calculation
     const transformedItems = (items || []).map((item: any) => ({
       quantity: item.quantity || 1,
-      cost: item.therapies?.cost || 0,
-      charge: item.therapies?.charge || 0,
+      item_cost: item.therapies?.cost || 0,
+      item_charge: item.therapies?.charge || 0,
     }));
 
     // Calculate totals using our utility function
@@ -175,11 +175,6 @@ async function updateTemplateCalculatedFields(
         totals,
         updateData,
       });
-    } else {
-      console.log(
-        `Successfully updated template ${templateId} calculated fields:`,
-        updateData
-      );
     }
   } catch (error) {
     console.error('Error in updateTemplateCalculatedFields:', error);

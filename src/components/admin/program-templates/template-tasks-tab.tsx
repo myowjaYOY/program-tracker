@@ -104,6 +104,7 @@ export default function TemplateTasksTab({ template }: TemplateTasksTabProps) {
         showCreateButton={false}
         showActionsColumn={false}
         autoHeight
+        sortModel={[{ field: 'task_name', sort: 'asc' }]}
       />
     </Box>
   );

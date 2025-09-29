@@ -88,6 +88,7 @@ export default function TemplateItemsTab({
     total_charge: ((item as any).therapies?.charge || 0) * (item.quantity || 1),
   }));
 
+
   const handleAddItem = async (formData: {
     therapy_type_id?: number;
     therapy_id: number;
@@ -109,27 +110,19 @@ export default function TemplateItemsTab({
   };
 
   const handleDeleteItem = async (item: ProgramTemplateItems) => {
-    console.log('Delete button clicked for item:', item);
-    console.log('Template ID:', template.program_template_id);
-    console.log('Item ID:', item.program_template_items_id);
-
     if (
       window.confirm(
         'Are you sure you want to remove this item from the template?'
       )
     ) {
-      console.log('User confirmed deletion, calling API...');
       try {
         await deleteItem.mutateAsync({
           templateId: template.program_template_id,
           itemId: item.program_template_items_id,
         });
-        console.log('Delete API call completed successfully');
       } catch (error) {
         console.error('Error deleting template item:', error);
       }
-    } else {
-      console.log('User cancelled deletion');
     }
   };
 
@@ -290,6 +283,7 @@ export default function TemplateItemsTab({
         pageSize={5}
         pageSizeOptions={[5, 10, 25]}
         autoHeight={true}
+        sortModel={[{ field: 'therapy_name', sort: 'asc' }]}
       />
 
       {/* Add Item Modal */}
