@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict eUB9AbDMbqByKFubIf9ubyxePqdxli34znaGTNPf0BzUYZEdpJ5jj1GqncEdb2K
+\restrict HXy1aZTXyMq53elNl58n2ykBcCGCSccgRx0xGvbi4Z6kqoAz0eB0dPyutVBXPSj
 
 -- Dumped from database version 15.8
 -- Dumped by pg_dump version 17.6
@@ -1130,10 +1130,10 @@ $$;
 ALTER FUNCTION public.compute_program_total_pause_days(p_program_id integer) OWNER TO postgres;
 
 --
--- Name: create_member_program_from_template(integer, integer, date); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: create_member_program_from_template(integer, integer[], text, text, date); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date DEFAULT CURRENT_DATE) RETURNS integer
+CREATE FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date DEFAULT CURRENT_DATE) RETURNS integer
     LANGUAGE plpgsql
     AS $$
 DECLARE
@@ -1142,71 +1142,86 @@ DECLARE
     therapy_task RECORD;
     new_member_program_item_id INTEGER;
     calculated_margin NUMERIC(5,2);
+    total_program_cost NUMERIC(9,2) := 0;
+    total_program_charge NUMERIC(9,2) := 0;
+    therapy_aggregate RECORD;
+    calculated_taxes NUMERIC(10,2) := 0.00;
+    item_tax NUMERIC(10,2);
+    final_total_price NUMERIC(10,2);
 BEGIN
-    -- Create the member program (removed margin_percentage since column no longer exists)
+    -- Calculate aggregated costs and charges from all templates
+    SELECT 
+        SUM(total_cost) as total_cost,
+        SUM(total_charge) as total_charge
+    INTO total_program_cost, total_program_charge
+    FROM program_template 
+    WHERE program_template_id = ANY(p_template_ids);
+    
+    -- Create the member program with user-provided name and description
     INSERT INTO member_programs (
         lead_id, program_template_name, description, start_date,
         total_cost, total_charge, source_template_id, program_status_id
     )
-    SELECT 
-        p_lead_id, program_template_name, description, p_start_date,
-        total_cost, total_charge, program_template_id, 1 -- Active status
-    FROM program_template 
-    WHERE program_template_id = p_template_id
+    VALUES (
+        p_lead_id, 
+        p_program_name,
+        p_description,
+        p_start_date,
+        total_program_cost, 
+        total_program_charge, 
+        p_template_ids[1],
+        1
+    )
     RETURNING member_program_id INTO new_member_program_id;
     
-    -- Calculate initial margin from template data
+    -- Calculate initial margin from aggregated data
     SELECT 
         CASE 
-            WHEN total_charge > 0 THEN ((total_charge - total_cost) / total_charge) * 100
+            WHEN total_program_charge > 0 THEN ((total_program_charge - total_program_cost) / total_program_charge) * 100
             ELSE 0
         END
-    INTO calculated_margin
-    FROM program_template 
-    WHERE program_template_id = p_template_id;
+    INTO calculated_margin;
     
-    -- Create initial finances record with calculated margin
-    INSERT INTO member_program_finances (
-        member_program_id,
-        finance_charges,
-        taxes,
-        discounts,
-        final_total_price,
-        margin,
-        financing_type_id
-    ) VALUES (
-        new_member_program_id,
-        0.00, -- Default finance charges
-        0.00, -- Default taxes
-        0.00, -- Default discounts
-        (SELECT total_charge FROM program_template WHERE program_template_id = p_template_id), -- Initial final total price
-        calculated_margin, -- Calculated margin from template
-        NULL -- No financing type initially
-    );
-    
-    -- Copy template items to member program items
-    FOR template_item IN 
-        SELECT pti.*, t.cost, t.charge 
-        FROM program_template_items pti
-        JOIN therapies t ON pti.therapy_id = t.therapy_id
-        WHERE pti.program_template_id = p_template_id
-        AND pti.active_flag = TRUE
+    -- Simplified aggregation without tax calculation first
+    FOR therapy_aggregate IN 
+        SELECT 
+            therapy_id,
+            SUM(quantity) as total_quantity,
+            MAX(item_cost) as item_cost,
+            MAX(item_charge) as item_charge,
+            MIN(days_from_start) as min_days_from_start,
+            AVG(days_between) as avg_days_between,
+            (array_agg(instructions ORDER BY program_template_items_id DESC))[1] as last_instructions
+        FROM (
+            SELECT pti.program_template_items_id, pti.therapy_id, pti.quantity, t.cost as item_cost, t.charge as item_charge,
+                   pti.days_from_start, pti.days_between, pti.instructions
+            FROM program_template_items pti
+            JOIN therapies t ON pti.therapy_id = t.therapy_id
+            WHERE pti.program_template_id = ANY(p_template_ids)
+            AND pti.active_flag = TRUE
+        ) aggregated_items
+        GROUP BY therapy_id
     LOOP
-        -- Insert the member program item
+        -- Insert the aggregated member program item
         INSERT INTO member_program_items (
             member_program_id, therapy_id, quantity,
             item_cost, item_charge, days_from_start, days_between, instructions
         ) VALUES (
-            new_member_program_id, template_item.therapy_id, template_item.quantity,
-            template_item.cost, template_item.charge, 
-            template_item.days_from_start, template_item.days_between, template_item.instructions
+            new_member_program_id, 
+            therapy_aggregate.therapy_id, 
+            therapy_aggregate.total_quantity,
+            therapy_aggregate.item_cost, 
+            therapy_aggregate.item_charge, 
+            therapy_aggregate.min_days_from_start, 
+            therapy_aggregate.avg_days_between, 
+            therapy_aggregate.last_instructions
         ) RETURNING member_program_item_id INTO new_member_program_item_id;
         
         -- Copy therapy tasks for this therapy to member program item tasks
         FOR therapy_task IN 
             SELECT tt.*
             FROM therapy_tasks tt
-            WHERE tt.therapy_id = template_item.therapy_id
+            WHERE tt.therapy_id = therapy_aggregate.therapy_id
             AND tt.active_flag = TRUE
         LOOP
             INSERT INTO member_program_item_tasks (
@@ -1220,12 +1235,46 @@ BEGIN
         END LOOP;
     END LOOP;
     
+    -- Calculate taxes separately after items are created
+    SELECT COALESCE(SUM(
+        CASE 
+            WHEN t.taxable = true THEN mpi.item_charge * mpi.quantity * 0.0825
+            ELSE 0
+        END
+    ), 0)
+    INTO calculated_taxes
+    FROM member_program_items mpi
+    JOIN therapies t ON mpi.therapy_id = t.therapy_id
+    WHERE mpi.member_program_id = new_member_program_id;
+    
+    -- Calculate final total price including taxes
+    final_total_price := total_program_charge + calculated_taxes;
+    
+    -- Create initial finances record with calculated margin and taxes
+    INSERT INTO member_program_finances (
+        member_program_id,
+        finance_charges,
+        taxes,
+        discounts,
+        final_total_price,
+        margin,
+        financing_type_id
+    ) VALUES (
+        new_member_program_id,
+        0.00, -- Default finance charges
+        calculated_taxes, -- Calculated taxes from template items
+        0.00, -- Default discounts
+        final_total_price, -- Final total price including taxes
+        calculated_margin, -- Calculated margin from template
+        NULL -- No financing type initially
+    );
+    
     RETURN new_member_program_id;
 END;
 $$;
 
 
-ALTER FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date) OWNER TO postgres;
+ALTER FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date) OWNER TO postgres;
 
 --
 -- Name: example_create_member_program(); Type: FUNCTION; Schema: public; Owner: postgres
@@ -2053,6 +2102,86 @@ ALTER SEQUENCE public.financing_types_financing_type_id_seq OWNED BY public.fina
 
 
 --
+-- Name: lead_notes; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.lead_notes (
+    note_id integer NOT NULL,
+    lead_id integer NOT NULL,
+    note_type character varying(20) NOT NULL,
+    note text NOT NULL,
+    created_at timestamp with time zone DEFAULT now(),
+    created_by uuid,
+    CONSTRAINT lead_notes_note_type_check CHECK (((note_type)::text = ANY ((ARRAY['PME'::character varying, 'Other'::character varying, 'Win'::character varying, 'Challenge'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.lead_notes OWNER TO postgres;
+
+--
+-- Name: TABLE lead_notes; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.lead_notes IS 'Immutable notes associated with leads/members. Notes cannot be updated, only added.';
+
+
+--
+-- Name: COLUMN lead_notes.note_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.note_id IS 'Unique identifier for the note (auto-generated)';
+
+
+--
+-- Name: COLUMN lead_notes.lead_id; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.lead_id IS 'Foreign key to leads table - will cascade delete if lead is deleted';
+
+
+--
+-- Name: COLUMN lead_notes.note_type; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.note_type IS 'Type of note: PME, Other, Win, or Challenge';
+
+
+--
+-- Name: COLUMN lead_notes.note; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.note IS 'The actual note content';
+
+
+--
+-- Name: COLUMN lead_notes.created_at; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.created_at IS 'When the note was created (immutable)';
+
+
+--
+-- Name: COLUMN lead_notes.created_by; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.lead_notes.created_by IS 'User who created the note';
+
+
+--
+-- Name: lead_notes_note_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.lead_notes ALTER COLUMN note_id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.lead_notes_note_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: leads; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -2793,7 +2922,8 @@ CREATE TABLE public.therapies (
     created_at timestamp with time zone DEFAULT now(),
     created_by uuid DEFAULT auth.uid(),
     updated_at timestamp with time zone DEFAULT now(),
-    updated_by uuid DEFAULT auth.uid()
+    updated_by uuid DEFAULT auth.uid(),
+    taxable boolean DEFAULT false NOT NULL
 );
 
 
@@ -3318,54 +3448,24 @@ ALTER TABLE ONLY public.vendors ALTER COLUMN vendor_id SET DEFAULT nextval('publ
 --
 
 COPY public.audit_event_changes (event_id, column_name, old_value, new_value) FROM stdin;
-145	program_status_id	1	6
-155	financing_type_id	1	2
-166	financing_type_id	2	3
-183	description	"We are just testing the trigger for update"	"We are just testing the trigger for update AGAIN with new code"
-183	program_template_name	"James Test Still 3"	"James Test JUST 3"
-184	description	"We are just testing the trigger for update AGAIN with new code"	"We are just testing the trigger for update ONE More Time"
-184	program_template_name	"James Test JUST 3"	"James Test 3 One more time"
-185	margin	80.03	85.29
-185	finance_charges	0.00	225.00
-185	final_total_price	630.00	855.00
-185	financing_type_id	3	2
-198	notes	null	"Will pay Friday"
-198	payment_method_id	null	6
-198	payment_reference	null	""
-198	payment_status_id	1	3
-199	notes	null	"Will pay Friday"
-199	payment_method_id	null	6
-199	payment_reference	null	""
-199	payment_status_id	1	3
-200	notes	"Will pay Friday"	"Just testing the Save firing"
-200	payment_method_id	6	2
-200	payment_status_id	3	4
-201	notes	"Will pay Friday"	"Just testing the Save firing"
-201	payment_method_id	6	2
-201	payment_status_id	3	4
-202	quantity	10	11
-202	days_between	5	10
-203	total_cost	125.80	138.38
-203	total_charge	630.00	693.00
-204	margin	85.29	84.93
-204	final_total_price	855.00	918.00
-205	task_delay	-8	-14
-206	quantity	11	10
-207	total_cost	138.38	125.80
-207	total_charge	693.00	630.00
-208	margin	84.93	85.29
-208	final_total_price	918.00	855.00
-209	program_status_id	6	1
-210	completed_flag	false	true
-211	completed_flag	false	true
-212	completed_flag	false	true
-213	completed_flag	false	true
-214	completed_flag	false	true
-215	completed_flag	false	true
-216	completed_flag	false	true
-235	charge	373.00	374.00
-235	updated_at	"2025-04-28T20:25:18.925523+00:00"	"2025-09-24T01:25:42.994323+00:00"
-235	updated_by	null	"a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a"
+265	program_status_id	1	6
+343	days_from_start	7	8
+345	taxes	0.00	7.59
+345	margin	62.27	62.40
+345	final_total_price	2214.70	2222.29
+346	quantity	1	2
+347	total_cost	835.65	1034.65
+347	total_charge	2214.70	3209.70
+348	margin	62.40	67.84
+348	final_total_price	2222.29	3217.29
+349	quantity	2	1
+350	total_cost	1034.65	835.65
+350	total_charge	3209.70	2214.70
+351	margin	67.84	62.40
+351	final_total_price	3217.29	2222.29
+357	program_status_id	1	6
+363	program_status_id	1	6
+370	program_status_id	1	6
 \.
 
 
@@ -3374,238 +3474,375 @@ COPY public.audit_event_changes (event_id, column_name, old_value, new_value) FR
 --
 
 COPY public.audit_events (event_id, table_name, record_id, record_pk, operation, actor_user_id, event_at, scope, related_member_id, related_program_id, summary, context, old_row, new_row) FROM stdin;
-1	campaigns	3	\N	UPDATE	\N	2025-09-03 17:19:52.632295+00	support	\N	\N	Legacy UPDATE on campaigns	\N	{"updated_at": "2025-05-05T17:53:29.13972+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a"}	{"updated_at": "2025-09-03T17:19:52.632295+00:00", "updated_by": null}
-2	campaigns	24	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 637.00, "food_cost": 750.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 24, "description": "Spring Creek BBQ", "campaign_date": "2024-10-22", "campaign_name": "S 10/22", "confirmed_count": 18}
-3	campaigns	25	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 408.00, "food_cost": 550.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 25, "description": "Spring Creek BBQ", "campaign_date": "2024-10-29", "campaign_name": "S 10/29", "confirmed_count": 31}
-4	campaigns	26	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 557.00, "food_cost": 650.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 26, "description": "Lomonte's", "campaign_date": "2024-11-12", "campaign_name": "S 11/12", "confirmed_count": 34}
-5	campaigns	27	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 1100.00, "food_cost": 875.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 27, "description": "Lomonte's", "campaign_date": "2024-11-19", "campaign_name": "S 11/19", "confirmed_count": 41}
-6	campaigns	28	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 832.00, "food_cost": 450.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 28, "description": "Spring Creek BBQ", "campaign_date": "2024-12-12", "campaign_name": "S 12/12", "confirmed_count": 13}
-7	campaigns	29	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 665.00, "food_cost": 575.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 29, "description": "Lomonte's", "campaign_date": "2025-01-07", "campaign_name": "S 01/07", "confirmed_count": 29}
-8	campaigns	30	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 742.00, "food_cost": 1400.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 30, "description": "Lupe Tortilla", "campaign_date": "2025-01-14", "campaign_name": "S01/14", "confirmed_count": 33}
-9	campaigns	31	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 637.00, "food_cost": null, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 31, "description": "Demio", "campaign_date": "2025-01-15", "campaign_name": "W 1/15", "confirmed_count": 107}
-10	campaigns	32	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 750.00, "food_cost": null, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 32, "description": "Demio", "campaign_date": "2025-01-22", "campaign_name": "W 1/22", "confirmed_count": 155}
-11	campaigns	33	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 748.00, "food_cost": 750.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 33, "description": "Spring Creek BBQ", "campaign_date": "2025-01-28", "campaign_name": "S 01/28", "confirmed_count": 42}
-12	campaigns	34	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 750.00, "food_cost": null, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 34, "description": "Demio", "campaign_date": "2025-01-29", "campaign_name": "W 1/29", "confirmed_count": 184}
-13	campaigns	35	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.00, "food_cost": 898.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 35, "description": "Spring Creek BBQ", "campaign_date": "2025-02-04", "campaign_name": "S 02/04 ", "confirmed_count": 31}
-14	campaigns	36	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 745.00, "food_cost": 646.61, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 36, "description": "Spring Creek BBQ", "campaign_date": "2025-02-11", "campaign_name": "S 02/11", "confirmed_count": 23}
-15	campaigns	37	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 494.00, "food_cost": 577.12, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 37, "description": "Hasta La Pasta ", "campaign_date": "2025-03-04", "campaign_name": "S 03/04", "confirmed_count": 11}
-16	campaigns	38	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 496.00, "food_cost": 260.38, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 38, "description": "Los Tios ", "campaign_date": "2025-03-18", "campaign_name": "S 03/18", "confirmed_count": 8}
-17	campaigns	39	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.35, "food_cost": 400.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 39, "description": "Spring Creek BBQ", "campaign_date": "2025-04-01", "campaign_name": "S 04/01", "confirmed_count": 17}
-18	campaigns	40	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.67, "food_cost": 175.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 40, "description": "Spring Creek BBQ Richmond", "campaign_date": "2025-04-15", "campaign_name": "S 04/15", "confirmed_count": 12}
-19	campaigns	41	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.78, "food_cost": 200.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 41, "description": "Spring Creek BBQ Katy ", "campaign_date": "2025-04-22", "campaign_name": "S 04/22", "confirmed_count": 12}
-20	campaigns	42	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.17, "food_cost": 463.59, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 42, "description": "Spring Creek BBQ Richmond", "campaign_date": "2025-04-29", "campaign_name": "S 04/29", "confirmed_count": 14}
-21	campaigns	43	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.00, "food_cost": 320.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 43, "description": "Beck's Prime Katy", "campaign_date": "2025-05-06", "campaign_name": "S 05/06", "confirmed_count": 10}
-22	campaigns	44	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.00, "food_cost": 350.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 44, "description": "Spring Creek BBQ Katy ", "campaign_date": "2025-05-13", "campaign_name": "S 05/13", "confirmed_count": 19}
-23	campaigns	45	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.00, "food_cost": 285.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 45, "description": "Spring Creek BBQ Katy ", "campaign_date": "2025-05-20", "campaign_name": "S 05/20", "confirmed_count": 28}
-24	campaigns	46	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.00, "food_cost": 245.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 46, "description": "Spring Creek BBQ Katy ", "campaign_date": "2025-05-27", "campaign_name": "S 05/27", "confirmed_count": 12}
-25	campaigns	47	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 223.86, "food_cost": 420.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 47, "description": "Lomonte's", "campaign_date": "2025-06-03", "campaign_name": "S 06/03", "confirmed_count": 15}
-26	campaigns	48	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 499.38, "food_cost": 590.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 48, "description": "Lomonte's", "campaign_date": "2025-06-10", "campaign_name": "S 06/10", "confirmed_count": 14}
-27	campaigns	49	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 997.00, "food_cost": 510.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 49, "description": "Spring Creek Richmond ", "campaign_date": "2025-06-17", "campaign_name": "S 06/17", "confirmed_count": 22}
-28	campaigns	50	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 999.00, "food_cost": 500.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 50, "description": "Lomonte's", "campaign_date": "2025-06-24", "campaign_name": "S 06/24", "confirmed_count": 19}
-29	campaigns	51	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 998.76, "food_cost": 775.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 51, "description": "Lomonte's", "campaign_date": "2025-07-15", "campaign_name": "S 07/15", "confirmed_count": 33}
-30	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:23.95109+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 250.98, "updated_at": "2025-09-04T03:36:18.00266+00:00", "total_charge": 1257.00}	{"total_cost": 225.82, "updated_at": "2025-09-04T03:36:23.95109+00:00", "total_charge": 1131.00}
-31	campaigns	52	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 999.00, "food_cost": 752.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 52, "description": "Lomonte's", "campaign_date": "2025-07-01", "campaign_name": "S 07/01", "confirmed_count": 17}
-32	campaigns	53	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 687.86, "food_cost": 1000.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 53, "description": "Lomonte's ", "campaign_date": "2025-07-22", "campaign_name": "S 07/22 ", "confirmed_count": 31}
-33	campaigns	54	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 990.75, "food_cost": 700.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 54, "description": "Spring Creek BBQ Richmond", "campaign_date": "2025-07-29", "campaign_name": "S 07/29", "confirmed_count": 31}
-34	campaigns	55	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 750.00, "food_cost": 758.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 55, "description": "Lomonte's", "campaign_date": "2025-08-05", "campaign_name": "S 08/05", "confirmed_count": 17}
-35	campaigns	56	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 750.00, "food_cost": 550.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 56, "description": "Lomonte's", "campaign_date": "2025-08-12", "campaign_name": "S 08/12", "confirmed_count": 22}
-36	campaigns	57	\N	INSERT	\N	2025-09-03 17:26:47.55908+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 750.00, "food_cost": 550.00, "vendor_id": 3, "created_at": "2025-09-03T17:26:47.55908+00:00", "created_by": null, "updated_at": "2025-09-03T17:26:47.55908+00:00", "updated_by": null, "active_flag": true, "campaign_id": 57, "description": "Lomonte's", "campaign_date": "2025-08-26", "campaign_name": "S 08/26", "confirmed_count": 24}
-37	campaigns	3	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 637.00, "food_cost": 751.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-09-03T17:19:52.632295+00:00", "updated_by": null, "active_flag": true, "campaign_id": 3, "description": "Spring Creek BBQ", "campaign_date": "2024-10-22", "campaign_name": "S 10/22", "confirmed_count": 18}	\N
-38	campaigns	4	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 408.00, "food_cost": 550.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-07-03T19:58:16.005999+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": false, "campaign_id": 4, "description": "Spring Creek BBQ", "campaign_date": "2024-10-29", "campaign_name": "S 10/29", "confirmed_count": 31}	\N
-39	campaigns	5	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 557.00, "food_cost": 650.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 5, "description": "Lomonte's", "campaign_date": "2024-11-12", "campaign_name": "S 11/12", "confirmed_count": 34}	\N
-40	campaigns	6	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 1100.00, "food_cost": 875.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 6, "description": "Lomonte's", "campaign_date": "2024-11-19", "campaign_name": "S 11/19", "confirmed_count": 41}	\N
-41	campaigns	7	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 832.00, "food_cost": 450.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 7, "description": "Spring Creek BBQ", "campaign_date": "2024-12-12", "campaign_name": "S 12/12", "confirmed_count": 13}	\N
-42	campaigns	8	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 665.00, "food_cost": 575.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 8, "description": "Lomonte's", "campaign_date": "2025-01-07", "campaign_name": "S 01/07", "confirmed_count": 29}	\N
-43	campaigns	9	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 742.00, "food_cost": 1400.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 9, "description": "Lupe Tortilla", "campaign_date": "2025-01-14", "campaign_name": "S01/14", "confirmed_count": 33}	\N
-44	campaigns	10	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 637.00, "food_cost": 0.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 10, "description": "Demio", "campaign_date": "2025-01-15", "campaign_name": "W 1/15", "confirmed_count": 107}	\N
-45	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:34:13.272446+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 898.10, "updated_at": "2025-09-09T18:29:18.163098+00:00", "total_charge": 4496.00}	{"total_cost": 982.08, "updated_at": "2025-09-09T18:34:13.272446+00:00", "total_charge": 4916.00}
-46	campaigns	12	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 748.00, "food_cost": 750.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 12, "description": "Spring Creek BBQ", "campaign_date": "2025-01-28", "campaign_name": "S 01/28", "confirmed_count": 42}	\N
-47	campaigns	13	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 750.00, "food_cost": 0.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 13, "description": "Demio", "campaign_date": "2025-01-29", "campaign_name": "W 1/29", "confirmed_count": 184}	\N
-48	campaigns	14	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 1.00, "food_cost": 1.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-05-05T18:00:20.847546+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "campaign_id": 14, "description": "Spring Creek Dinner Seminar - Katy", "campaign_date": "2025-05-06", "campaign_name": "S 05/06/25", "confirmed_count": 10}	\N
-49	campaigns	16	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 493.00, "food_cost": 577.12, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-05-05T17:52:24.402217+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "campaign_id": 16, "description": "Hasta La Pasta ", "campaign_date": "2025-03-04", "campaign_name": "S 03/04", "confirmed_count": 11}	\N
-50	campaigns	17	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 496.00, "food_cost": 260.38, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 17, "description": "Los Tios ", "campaign_date": "2025-03-18", "campaign_name": "S 03/18", "confirmed_count": 8}	\N
-51	campaigns	19	\N	DELETE	\N	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 499.67, "food_cost": 175.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-04-28T19:57:15.342462+00:00", "updated_by": null, "active_flag": true, "campaign_id": 19, "description": "Spring Creek BBQ Richmond", "campaign_date": "2025-04-15", "campaign_name": "S 04/15", "confirmed_count": 12}	\N
-52	campaigns	20	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 17:27:46.358385+00	support	\N	\N	Legacy DELETE on campaigns	\N	{"ad_spend": 499.78, "food_cost": 200.00, "vendor_id": 3, "created_at": "2025-04-28T19:57:15.342462+00:00", "created_by": null, "updated_at": "2025-05-05T17:56:03.089782+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "campaign_id": 20, "description": "Spring Creek BBQ Katy ", "campaign_date": "2025-04-22", "campaign_name": "S 04/22", "confirmed_count": 12}	\N
-53	campaigns	58	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 17:31:06.966783+00	support	\N	\N	Legacy INSERT on campaigns	\N	\N	{"ad_spend": 0.00, "food_cost": 0.00, "vendor_id": 4, "created_at": "2025-09-03T17:31:06.966783+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-03T17:31:06.966783+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "campaign_id": 58, "description": "This for all leads that come to us via referrals. ", "campaign_date": "2024-10-01", "campaign_name": "Referrals", "confirmed_count": 0}
-54	program_status	6	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 01:50:01.220511+00	support	\N	\N	Legacy INSERT on program_status	\N	\N	{"created_at": "2025-09-09T01:50:01.220511+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-09T01:50:01.220511+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This should be the first status a program is set to until the customer decides to participate", "status_name": "Quote", "program_status_id": 6}
-55	program_status	7	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 22:32:39.918114+00	support	\N	\N	Legacy INSERT on program_status	\N	\N	{"created_at": "2025-09-15T22:32:39.918114+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-15T22:32:39.918114+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": false, "description": "Draft Mode.  Financial changes can only happen when this state is set", "status_name": "Draft", "program_status_id": 7}
-56	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:04.036591+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 200.66, "updated_at": "2025-06-25T21:58:45.33466+00:00", "total_charge": 1005.00, "margin_percentage": 80.03}	{"total_cost": 250.98, "updated_at": "2025-09-04T03:36:04.036591+00:00", "total_charge": 1257.00, "margin_percentage": 400.84}
-57	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:04.210996+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T03:36:04.036591+00:00"}	{"updated_at": "2025-09-04T03:36:04.210996+00:00"}
-58	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:05.186942+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 250.98, "updated_at": "2025-09-04T03:36:04.210996+00:00", "total_charge": 1257.00, "margin_percentage": 400.84}	{"total_cost": 276.14, "updated_at": "2025-09-04T03:36:05.186942+00:00", "total_charge": 1383.00, "margin_percentage": 400.83}
-59	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:18.00266+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 276.14, "updated_at": "2025-09-04T03:36:05.186942+00:00", "total_charge": 1383.00, "margin_percentage": 400.83}	{"total_cost": 250.98, "updated_at": "2025-09-04T03:36:18.00266+00:00", "total_charge": 1257.00, "margin_percentage": 400.84}
-60	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:55:11.426854+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 225.82, "updated_at": "2025-09-04T03:36:23.95109+00:00", "total_charge": 1131.00, "margin_percentage": 400.84}	{"total_cost": 309.80, "updated_at": "2025-09-04T03:55:11.426854+00:00", "total_charge": 1551.00, "margin_percentage": 400.65}
-61	program_template	8	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 18:28:32.456833+00	support	\N	\N	Legacy INSERT on program_template	\N	\N	{"created_at": "2025-09-04T18:28:32.456833+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "total_cost": 0.00, "updated_at": "2025-09-04T18:28:32.456833+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Test", "total_charge": 0.00, "margin_percentage": 0.00, "program_template_id": 8, "program_template_name": "Just Test one more time"}
-62	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 19:12:16.198093+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T03:55:11.426854+00:00", "description": "Use this to test member programs"}	{"updated_at": "2025-09-04T19:12:16.198093+00:00", "description": "Use this to test member programs. Just testing again"}
-63	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 19:19:20.88535+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T19:12:16.198093+00:00", "description": "Use this to test member programs. Just testing again"}	{"updated_at": "2025-09-04T19:19:20.88535+00:00", "description": "Use this to test member programs. Just testing again. one more time"}
-64	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 21:48:26.211622+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T19:19:20.88535+00:00", "description": "Use this to test member programs. Just testing again. one more time"}	{"updated_at": "2025-09-04T21:48:26.211622+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test"}
-120	program_template_items	43	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:44:17.647025+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T19:36:01.343082+00:00"}	{"updated_at": "2025-09-05T20:44:17.647025+00:00"}
-65	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 21:48:50.412939+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T21:48:26.211622+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test"}	{"updated_at": "2025-09-04T21:48:50.412939+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test. Another test"}
-66	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 21:50:00.277049+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T21:48:50.412939+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test. Another test"}	{"updated_at": "2025-09-04T21:50:00.277049+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test. Another test. and another"}
-67	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 21:57:28.375565+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T21:50:00.277049+00:00", "description": "Use this to test member programs. Just testing again. one more time. Timing test. Another test. and another"}	{"updated_at": "2025-09-04T21:57:28.375565+00:00", "description": "Use this to test member programs. Just testing again. one more time. "}
-68	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 22:08:27.315196+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T21:57:28.375565+00:00", "description": "Use this to test member programs. Just testing again. one more time. "}	{"updated_at": "2025-09-04T22:08:27.315196+00:00", "description": "Use this to test member programs. Just testing again. one more time. Save and watch for grid update."}
-69	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:01:54.772409+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 309.80, "updated_at": "2025-09-04T22:08:27.315196+00:00", "total_charge": 1551.00, "margin_percentage": 400.65}	{"total_cost": 374.10, "updated_at": "2025-09-05T02:01:54.772409+00:00", "total_charge": 1873.00, "margin_percentage": 400.67}
-70	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:02:51.997938+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 374.10, "updated_at": "2025-09-05T02:01:54.772409+00:00", "total_charge": 1873.00, "margin_percentage": 400.67}	{"total_cost": 427.98, "updated_at": "2025-09-05T02:02:51.997938+00:00", "total_charge": 2143.00, "margin_percentage": 400.72}
-71	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:03:28.270701+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 427.98, "updated_at": "2025-09-05T02:02:51.997938+00:00", "total_charge": 2143.00}	{"total_cost": 402.82, "updated_at": "2025-09-05T02:03:28.270701+00:00", "total_charge": 2017.00}
-72	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:35:46.967139+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 402.82, "updated_at": "2025-09-05T02:03:28.270701+00:00", "total_charge": 2017.00, "margin_percentage": 400.72}	{"total_cost": 435.62, "updated_at": "2025-09-05T02:35:46.967139+00:00", "total_charge": 2181.00, "margin_percentage": 400.67}
-73	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:36:49.726401+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 435.62, "updated_at": "2025-09-05T02:35:46.967139+00:00", "total_charge": 2181.00, "margin_percentage": 400.67}	{"total_cost": 534.62, "updated_at": "2025-09-05T02:36:49.726401+00:00", "total_charge": 2676.00, "margin_percentage": 400.54}
-74	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:38:50.111837+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 534.62, "updated_at": "2025-09-05T02:36:49.726401+00:00", "total_charge": 2676.00, "margin_percentage": 400.54}	{"total_cost": 609.17, "updated_at": "2025-09-05T02:38:50.111837+00:00", "total_charge": 3049.00, "margin_percentage": 400.52}
-75	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 19:36:01.840817+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 609.17, "updated_at": "2025-09-05T02:38:50.111837+00:00", "total_charge": 3049.00, "margin_percentage": 400.52}	{"total_cost": 750.59, "updated_at": "2025-09-05T19:36:01.840817+00:00", "total_charge": 3757.00, "margin_percentage": 400.54}
-76	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:14:42.553192+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 750.59, "updated_at": "2025-09-05T19:36:01.840817+00:00", "total_charge": 3757.00, "margin_percentage": 400.54}	{"total_cost": 513.15, "updated_at": "2025-09-05T20:14:42.553192+00:00", "total_charge": 2569.00, "margin_percentage": 400.60}
-77	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:18:15.097072+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 513.15, "updated_at": "2025-09-05T20:14:42.553192+00:00", "total_charge": 2569.00}	{"total_cost": 459.27, "updated_at": "2025-09-05T20:18:15.097072+00:00", "total_charge": 2299.00}
-78	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:24:35.450934+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 459.27, "updated_at": "2025-09-05T20:18:15.097072+00:00", "total_charge": 2299.00, "margin_percentage": 400.60}	{"total_cost": 394.97, "updated_at": "2025-09-05T20:24:35.450934+00:00", "total_charge": 1977.00, "margin_percentage": 400.50}
-79	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:29:57.143974+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 394.97, "updated_at": "2025-09-05T20:24:35.450934+00:00", "total_charge": 1977.00, "margin_percentage": 400.50}	{"total_cost": 295.97, "updated_at": "2025-09-05T20:29:57.143974+00:00", "total_charge": 1482.00, "margin_percentage": 80.00}
-80	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:32:56.561966+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 295.97, "updated_at": "2025-09-05T20:29:57.143974+00:00", "total_charge": 1482.00}	{"total_cost": 421.97, "updated_at": "2025-09-05T20:32:56.561966+00:00", "total_charge": 2114.00}
-81	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:33:29.927942+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 421.97, "updated_at": "2025-09-05T20:32:56.561966+00:00", "total_charge": 2114.00}	{"total_cost": 295.97, "updated_at": "2025-09-05T20:33:29.927942+00:00", "total_charge": 1482.00}
-82	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:44:18.155488+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-05T20:33:29.927942+00:00"}	{"updated_at": "2025-09-05T20:44:18.155488+00:00"}
-83	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:45:03.109706+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 295.97, "updated_at": "2025-09-05T20:44:18.155488+00:00", "total_charge": 1482.00}	{"total_cost": 861.65, "updated_at": "2025-09-05T20:45:03.109706+00:00", "total_charge": 4314.00}
-84	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:48:31.27427+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 861.65, "updated_at": "2025-09-05T20:45:03.109706+00:00", "total_charge": 4314.00}	{"total_cost": 884.05, "updated_at": "2025-09-05T20:48:31.27427+00:00", "total_charge": 4426.00}
-85	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:09:36.12767+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 884.05, "updated_at": "2025-09-05T20:48:31.27427+00:00", "total_charge": 4426.00}	{"total_cost": 1075.05, "updated_at": "2025-09-05T21:09:36.12767+00:00", "total_charge": 5382.00}
-86	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:11:04.200832+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 1075.05, "updated_at": "2025-09-05T21:09:36.12767+00:00", "total_charge": 5382.00}	{"total_cost": 1052.65, "updated_at": "2025-09-05T21:11:04.200832+00:00", "total_charge": 5270.00}
-87	program_template	8	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 02:06:22.574674+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-04T18:28:32.456833+00:00", "active_flag": true}	{"updated_at": "2025-09-09T02:06:22.574674+00:00", "active_flag": false}
-88	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:28:54.24976+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 1052.65, "updated_at": "2025-09-05T21:11:04.200832+00:00", "total_charge": 5270.00}	{"total_cost": 978.10, "updated_at": "2025-09-09T18:28:54.24976+00:00", "total_charge": 4897.00}
-89	program_template	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:29:18.163098+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 978.10, "updated_at": "2025-09-09T18:28:54.24976+00:00", "total_charge": 4897.00}	{"total_cost": 898.10, "updated_at": "2025-09-09T18:29:18.163098+00:00", "total_charge": 4496.00}
-90	program_template	2	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:46:50.556055+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 101.00, "updated_at": "2025-06-26T00:02:41.889553+00:00", "total_charge": 1010.00, "margin_percentage": 2.00}	{"total_cost": 212.13, "updated_at": "2025-09-09T18:46:50.556055+00:00", "total_charge": 1062.00, "margin_percentage": 80.00}
-91	program_template	2	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:16.300572+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 212.13, "updated_at": "2025-09-09T18:46:50.556055+00:00", "total_charge": 1062.00}	{"total_cost": 308.58, "updated_at": "2025-09-09T18:47:16.300572+00:00", "total_charge": 1545.00}
-92	program_template	2	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:43.784095+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 308.58, "updated_at": "2025-09-09T18:47:16.300572+00:00", "total_charge": 1545.00}	{"total_cost": 555.51, "updated_at": "2025-09-09T18:47:43.784095+00:00", "total_charge": 2781.00}
-93	program_template	2	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:51:26.019611+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 555.51, "updated_at": "2025-09-09T18:47:43.784095+00:00", "total_charge": 2781.00}	{"total_cost": 343.38, "updated_at": "2025-09-09T18:51:26.019611+00:00", "total_charge": 1719.00}
-94	program_template	9	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 20:49:35.265323+00	support	\N	\N	Legacy INSERT on program_template	\N	\N	{"created_at": "2025-09-09T20:49:35.265323+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "total_cost": 0.00, "updated_at": "2025-09-09T20:49:35.265323+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing Copy of tasks", "total_charge": 0.00, "margin_percentage": 0.00, "program_template_id": 9, "program_template_name": "James Test Template"}
-95	program_template	9	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:01.00705+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 0.00, "updated_at": "2025-09-09T20:49:35.265323+00:00", "total_charge": 0.00, "margin_percentage": 0.00}	{"total_cost": 25.16, "updated_at": "2025-09-09T22:01:01.00705+00:00", "total_charge": 126.00, "margin_percentage": 80.00}
-96	program_template	9	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:22.745897+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"total_cost": 25.16, "updated_at": "2025-09-09T22:01:01.00705+00:00", "total_charge": 126.00}	{"total_cost": 216.16, "updated_at": "2025-09-09T22:01:22.745897+00:00", "total_charge": 1082.00}
-97	program_template	9	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 00:14:06.763818+00	support	\N	\N	Legacy UPDATE on program_template	\N	{"updated_at": "2025-09-09T22:01:22.745897+00:00", "program_template_name": "James Test Template"}	{"updated_at": "2025-09-17T00:14:06.763818+00:00", "program_template_name": "James Test Template Saving Test"}
-98	program_template_items	34	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:03.56584+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-04T03:36:03.56584+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-04T03:36:03.56584+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 7, "instructions": "testo", "days_from_start": 7, "program_template_id": 1, "program_template_items_id": 34}
-99	program_template_items	35	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:03.642763+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-04T03:36:03.642763+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-04T03:36:03.642763+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 7, "instructions": "testo", "days_from_start": 7, "program_template_id": 1, "program_template_items_id": 35}
-100	program_template_items	36	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:04.701572+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-04T03:36:04.701572+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-04T03:36:04.701572+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 7, "instructions": "testo", "days_from_start": 7, "program_template_id": 1, "program_template_items_id": 36}
-101	program_template_items	34	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:17.586327+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-04T03:36:03.56584+00:00", "active_flag": true}	{"updated_at": "2025-09-04T03:36:17.586327+00:00", "active_flag": false}
-102	program_template_items	35	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:23.497958+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-04T03:36:03.642763+00:00", "active_flag": true}	{"updated_at": "2025-09-04T03:36:23.497958+00:00", "active_flag": false}
-103	program_template_items	37	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:55:10.882538+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 1, "created_at": "2025-09-04T03:55:10.882538+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 13, "updated_at": "2025-09-04T03:55:10.882538+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 1, "program_template_items_id": 37}
-104	program_template_items	38	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:01:54.330976+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-05T02:01:54.330976+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 14, "updated_at": "2025-09-05T02:01:54.330976+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 19, "instructions": "Testing", "days_from_start": 2, "program_template_id": 1, "program_template_items_id": 38}
-105	program_template_items	39	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:02:51.556102+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-05T02:02:51.556102+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 38, "updated_at": "2025-09-05T02:02:51.556102+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 2, "instructions": "One more save test", "days_from_start": 2, "program_template_id": 1, "program_template_items_id": 39}
-106	program_template_items	36	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:03:27.604598+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-04T03:36:04.701572+00:00", "active_flag": true}	{"updated_at": "2025-09-05T02:03:27.604598+00:00", "active_flag": false}
-107	program_template_items	40	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:35:46.36578+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 1, "created_at": "2025-09-05T02:35:46.36578+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 41, "updated_at": "2025-09-05T02:35:46.36578+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 14, "program_template_id": 1, "program_template_items_id": 40}
-108	program_template_items	41	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:36:49.256529+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 1, "created_at": "2025-09-05T02:36:49.256529+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 78, "updated_at": "2025-09-05T02:36:49.256529+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "test placment in grid", "days_from_start": 30, "program_template_id": 1, "program_template_items_id": 41}
-109	program_template_items	42	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:38:49.658188+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 1, "created_at": "2025-09-05T02:38:49.658188+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 5, "updated_at": "2025-09-05T02:38:49.658188+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "sort order test", "days_from_start": 5, "program_template_id": 1, "program_template_items_id": 42}
-110	program_template_items	43	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 19:36:01.343082+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-05T19:36:01.343082+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 11, "updated_at": "2025-09-05T19:36:01.343082+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 3, "instructions": "This is now all set and I can move on to edit\\n", "days_from_start": 3, "program_template_id": 1, "program_template_items_id": 43}
-111	program_template_items	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:05:17.53633+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-05-05T00:53:46.446857+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:05:17.53633+00:00", "active_flag": false}
-112	program_template_items	33	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:05:40.910112+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-06-11T01:28:51.600717+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:05:40.910112+00:00", "active_flag": false}
-113	program_template_items	37	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:08:38.67552+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-04T03:55:10.882538+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:08:38.67552+00:00", "active_flag": false}
-114	program_template_items	40	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:14:41.821054+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T02:35:46.36578+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:14:41.821054+00:00", "active_flag": false}
-115	program_template_items	39	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:18:14.443386+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T02:02:51.556102+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:18:14.443386+00:00", "active_flag": false}
-116	program_template_items	38	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:24:34.810679+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T02:01:54.330976+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:24:34.810679+00:00", "active_flag": false}
-117	program_template_items	41	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:29:56.610073+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T02:36:49.256529+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:29:56.610073+00:00", "active_flag": false}
-118	program_template_items	44	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:32:56.065087+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 4, "created_at": "2025-09-05T20:32:56.065087+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 58, "updated_at": "2025-09-05T20:32:56.065087+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 30, "instructions": "One more test", "days_from_start": 0, "program_template_id": 1, "program_template_items_id": 44}
-119	program_template_items	44	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:33:29.564932+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T20:32:56.065087+00:00", "active_flag": true}	{"updated_at": "2025-09-05T20:33:29.564932+00:00", "active_flag": false}
-121	program_template_items	43	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:45:02.595418+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"quantity": 2, "updated_at": "2025-09-05T20:44:17.647025+00:00", "days_between": 3, "days_from_start": 3}	{"quantity": 10, "updated_at": "2025-09-05T20:45:02.595418+00:00", "days_between": 10, "days_from_start": 10}
-122	program_template_items	45	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:48:30.776297+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-05T20:48:30.776297+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 25, "updated_at": "2025-09-05T20:48:30.776297+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 1, "program_template_items_id": 45}
-123	program_template_items	46	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:09:35.67532+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-05T21:09:35.67532+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 31, "updated_at": "2025-09-05T21:09:35.67532+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 4, "instructions": "Just showing off for Kami", "days_from_start": 8, "program_template_id": 1, "program_template_items_id": 46}
-124	program_template_items	45	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:11:03.626658+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T20:48:30.776297+00:00", "active_flag": true}	{"updated_at": "2025-09-05T21:11:03.626658+00:00", "active_flag": false}
-125	program_template_items	42	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:28:53.666582+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T02:38:49.658188+00:00", "active_flag": true}	{"updated_at": "2025-09-09T18:28:53.666582+00:00", "active_flag": false}
-126	program_template_items	26	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:29:17.909299+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-05-05T00:35:22.028112+00:00", "active_flag": true}	{"updated_at": "2025-09-09T18:29:17.909299+00:00", "active_flag": false}
-127	program_template_items	37	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:34:12.947227+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-05T20:08:38.67552+00:00", "active_flag": false}	{"updated_at": "2025-09-09T18:34:12.947227+00:00", "active_flag": true}
-128	program_template_items	47	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:46:49.784788+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 3, "created_at": "2025-09-09T18:46:49.784788+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 11, "updated_at": "2025-09-09T18:46:49.784788+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 2, "program_template_items_id": 47}
-129	program_template_items	48	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:15.722582+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 3, "created_at": "2025-09-09T18:47:15.722582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 14, "updated_at": "2025-09-09T18:47:15.722582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 2, "program_template_items_id": 48}
-130	program_template_items	49	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:43.47195+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 3, "created_at": "2025-09-09T18:47:43.47195+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 21, "updated_at": "2025-09-09T18:47:43.47195+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 2, "program_template_items_id": 49}
-131	program_template_items	47	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:51:25.596198+00	support	\N	\N	Legacy UPDATE on program_template_items	\N	{"updated_at": "2025-09-09T18:46:49.784788+00:00", "active_flag": true}	{"updated_at": "2025-09-09T18:51:25.596198+00:00", "active_flag": false}
-132	program_template_items	50	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:00.245176+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-09T22:01:00.245176+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-09T22:01:00.245176+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 9, "program_template_items_id": 50}
-133	program_template_items	51	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:22.096209+00	support	\N	\N	Legacy INSERT on program_template_items	\N	\N	{"quantity": 2, "created_at": "2025-09-09T22:01:22.096209+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 31, "updated_at": "2025-09-09T22:01:22.096209+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "days_between": 0, "instructions": "", "days_from_start": 0, "program_template_id": 9, "program_template_items_id": 51}
-134	status	9	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 16:46:42.36733+00	support	\N	\N	Legacy DELETE on status	\N	{"status_id": 9, "created_at": "2025-05-06T17:50:22.890342+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-05-06T17:50:29.018193+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "sadfsdfasd", "status_name": "Another Test"}	\N
-135	status	8	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 16:46:42.457232+00	support	\N	\N	Legacy DELETE on status	\N	{"status_id": 8, "created_at": "2025-05-04T00:01:49.859316+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-05-04T00:01:49.859316+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "sadfasdfasdfasdf", "status_name": "sdfasdfasdfsdf"}	\N
-136	status	11	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 18:01:19.062537+00	support	\N	\N	Legacy INSERT on status	\N	\N	{"status_id": 11, "created_at": "2025-09-03T18:01:19.062537+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-03T18:01:19.062537+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Use this status when you intended to follow up with the lead at some future date", "status_name": "Follow Up"}
-137	status	4	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 18:04:48.848601+00	support	\N	\N	Legacy UPDATE on status	\N	{"updated_at": "2025-04-28T02:56:24.163132+00:00", "status_name": "Member"}	{"updated_at": "2025-09-03T18:04:48.848601+00:00", "status_name": "Won"}
-138	status	12	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 18:39:43.624216+00	support	\N	\N	Legacy INSERT on status	\N	\N	{"status_id": 12, "created_at": "2025-09-03T18:39:43.624216+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-03T18:39:43.624216+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Temp status to clean up data", "status_name": "UNK"}
-139	status	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:30:47.761184+00	support	\N	\N	Legacy UPDATE on status	\N	{"updated_at": "2025-05-06T17:50:00.872262+00:00", "active_flag": false}	{"updated_at": "2025-09-05T21:30:47.761184+00:00", "active_flag": true}
-140	therapy_tasks	15	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 14:18:50.840959+00	support	\N	\N	Legacy INSERT on therapy_tasks	\N	\N	{"task_id": 15, "task_name": "Just a Test", "created_at": "2025-09-08T14:18:50.840959+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "task_delay": 0, "therapy_id": 14, "updated_at": "2025-09-08T14:18:50.840959+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing the creation of Therapy Tasks"}
-141	therapy_tasks	3	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 16:55:36.058324+00	support	\N	\N	Legacy UPDATE on therapy_tasks	\N	{"updated_at": "2025-05-03T16:41:03.000716+00:00", "active_flag": true}	{"updated_at": "2025-09-08T16:55:36.058324+00:00", "active_flag": false}
-142	therapy_tasks	16	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 16:56:11.108217+00	support	\N	\N	Legacy INSERT on therapy_tasks	\N	\N	{"task_id": 16, "task_name": "Another Test", "created_at": "2025-09-08T16:56:11.108217+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "task_delay": 6, "therapy_id": 13, "updated_at": "2025-09-08T16:56:11.108217+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Just testing add one more time"}
-143	therapy_tasks	16	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 16:56:27.697331+00	support	\N	\N	Legacy UPDATE on therapy_tasks	\N	{"task_delay": 6, "updated_at": "2025-09-08T16:56:11.108217+00:00"}	{"task_delay": -10, "updated_at": "2025-09-08T16:56:27.697331+00:00"}
-144	vendors	6	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 16:48:13.466869+00	support	\N	\N	Legacy DELETE on vendors	\N	{"email": "", "phone": "(281) 755-1799", "vendor_id": 6, "created_at": "2025-05-06T17:53:30.968711+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-07-03T04:59:59.604344+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "vendor_name": "asdfsdfsdf", "contact_person": "My Owja"}	\N
-145	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:16:57.924018+00	member	260	48	Program status changed active -> quote	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-20T02:59:48.041916+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing Copy of tasks", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 1, "source_template_id": 9, "program_template_name": "James Test 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T19:16:57.924018+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing Copy of tasks", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-146	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:31.464214+00	member	260	48	Updated program finances	\N	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 3, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 1, "member_program_id": 48, "member_program_finance_id": 29}
-147	member_program_payments	129	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 157.50, "payment_due_date": "2025-09-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 129}	\N
-148	member_program_payments	130	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-10-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 130}	\N
-149	member_program_payments	131	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-11-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 131}	\N
-150	member_program_payments	132	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-12-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 132}	\N
-151	member_program_payments	133	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-01-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 133}	\N
-152	member_program_payments	134	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-20T02:49:01.426269+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T02:49:01.426269+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-02-20", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 134}	\N
-153	member_program_payments	135	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:17:45.952096+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:17:45.952096+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 630.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 135}
-154	member_program_payments	135	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:17:45.952096+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:17:45.952096+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:17:45.952096+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 630.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 135}
-155	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.087295+00	member	260	48	Updated program finances	\N	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 1, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}
-156	member_program_payments	135	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T19:17:45.952096+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:17:45.952096+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 630.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 135}	\N
-157	member_program_payments	136	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 136}
-158	member_program_payments	136	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 136}
-159	member_program_payments	137	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 137}
-160	member_program_payments	137	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 137}
-161	member_program_payments	138	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 138}
-162	member_program_payments	138	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 19:30:19.523582+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 138}
-166	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:35.77851+00	member	260	48	Program finances updated: financing type 2 -> 3	\N	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 3, "member_program_id": 48, "member_program_finance_id": 29}
-167	member_program_payments	136	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 136}	\N
-168	member_program_payments	137	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 137}	\N
-169	member_program_payments	138	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T19:30:19.523582+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T19:30:19.523582+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 210.00, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 138}	\N
-170	member_program_payments	139	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 157.50, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 139}
-171	member_program_payments	139	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 157.50, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 139}
-172	member_program_payments	140	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 140}
-173	member_program_payments	140	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 140}
-174	member_program_payments	141	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 141}
-175	member_program_payments	141	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 141}
-176	member_program_payments	142	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-12-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 142}
-177	member_program_payments	142	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-12-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 142}
-178	member_program_payments	143	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-01-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 143}
-179	member_program_payments	143	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-01-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 143}
-180	member_program_payments	144	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-02-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 144}
-181	member_program_payments	144	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:45:43.688169+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-02-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 144}
-182	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 20:53:32.082313+00	member	260	48	Updated member program	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T19:16:57.924018+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing Copy of tasks", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T20:53:32.082313+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test Still 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-183	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:02:36.502296+00	member	260	48	Member program updated: description We are just testing the trigger for update -> We are just testing the trigger for update AGAIN with new code; program template name James Test Still 3 -> James Test JUST 3	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T20:53:32.082313+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test Still 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:02:36.502296+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update AGAIN with new code", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test JUST 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-184	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:10:20.483517+00	member	260	48	Member program updated: The Description and Program Name were changed.	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:02:36.502296+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update AGAIN with new code", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test JUST 3", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:10:20.483517+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-195	member_program_payments	146	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 146}
-185	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:15.699447+00	member	260	48	Program finances updated: The Margin, Finance Charges, Final Total Price, and Financing Type were changed.	\N	{"taxes": 0.00, "margin": 80.03, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 630.00, "financing_type_id": 3, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 85.29, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 225.00, "final_total_price": 855.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}
-186	member_program_payments	139	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 157.50, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 139}	\N
-187	member_program_payments	140	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 140}	\N
-188	member_program_payments	141	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 141}	\N
-189	member_program_payments	142	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2025-12-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 142}	\N
-190	member_program_payments	143	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-01-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 143}	\N
-191	member_program_payments	144	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Deleted program payment	\N	{"notes": null, "created_at": "2025-09-21T20:45:43.688169+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T20:45:43.688169+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 94.50, "payment_due_date": "2026-02-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 144}	\N
-192	member_program_payments	145	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 145}
-193	member_program_payments	145	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 145}
-194	member_program_payments	146	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-10-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 146}
-196	member_program_payments	147	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 147}
-197	member_program_payments	147	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	member	260	48	Created program payment	\N	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-11-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 147}
-198	member_program_payments	145	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:32:35.934832+00	member	260	48	Program payment updated: The Notes, Payment Method, Payment Reference, and Payment Status Id were changed.	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 145}	{"notes": "Will pay Friday", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 6, "payment_reference": "", "payment_status_id": 3, "member_program_payment_id": 145}
-199	member_program_payments	145	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:32:35.934832+00	member	260	48	Program payment updated: The Notes, Payment Method, Payment Reference, and Payment Status Id were changed.	\N	{"notes": null, "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": null, "payment_reference": null, "payment_status_id": 1, "member_program_payment_id": 145}	{"notes": "Will pay Friday", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 6, "payment_reference": "", "payment_status_id": 3, "member_program_payment_id": 145}
-220	member_program_item_schedule	300	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-11-01", "instance_number": 2, "member_program_item_id": 39, "member_program_item_schedule_id": 300}
-221	member_program_item_schedule	301	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-10", "instance_number": 1, "member_program_item_id": 40, "member_program_item_schedule_id": 301}
-222	member_program_item_schedule	302	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-23", "instance_number": 2, "member_program_item_id": 40, "member_program_item_schedule_id": 302}
-223	member_program_item_schedule	303	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-24", "instance_number": 1, "member_program_item_id": 43, "member_program_item_schedule_id": 303}
-224	member_program_item_schedule	304	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-27", "instance_number": 2, "member_program_item_id": 43, "member_program_item_schedule_id": 304}
-225	member_program_item_schedule	305	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-11-21", "instance_number": 1, "member_program_item_id": 46, "member_program_item_schedule_id": 305}
-226	member_program_item_schedule	306	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-22", "instance_number": 1, "member_program_item_id": 37, "member_program_item_schedule_id": 306}
-200	member_program_payments	145	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:36:21.082717+00	member	260	48	Program payment updated: The Notes, Payment Method, and Payment Status Id were changed.	\N	{"notes": "Will pay Friday", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 6, "payment_reference": "", "payment_status_id": 3, "member_program_payment_id": 145}	{"notes": "Just testing the Save firing", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 2, "payment_reference": "", "payment_status_id": 4, "member_program_payment_id": 145}
-201	member_program_payments	145	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:36:21.082717+00	member	260	48	Program payment updated: The Notes, Payment Method, and Payment Status Id were changed.	\N	{"notes": "Will pay Friday", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 6, "payment_reference": "", "payment_status_id": 3, "member_program_payment_id": 145}	{"notes": "Just testing the Save firing", "created_at": "2025-09-21T21:19:25.79336+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T21:19:25.79336+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "payment_date": null, "payment_amount": 285.00, "payment_due_date": "2025-09-21", "member_program_id": 48, "payment_method_id": 2, "payment_reference": "", "payment_status_id": 4, "member_program_payment_id": 145}
-202	member_program_items	59	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:44:55.993187+00	member	260	48	Program item updated: The Quantity and Days Between were changed.	\N	{"quantity": 10, "item_cost": 12.58, "created_at": "2025-09-20T03:24:51.565925+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-20T03:24:51.565925+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 63.00, "days_between": 5, "instructions": "", "days_from_start": 0, "member_program_id": 48, "member_program_item_id": 59}	{"quantity": 11, "item_cost": 12.58, "created_at": "2025-09-20T03:24:51.565925+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-21T21:44:55.993187+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 63.00, "days_between": 10, "instructions": "", "days_from_start": 0, "member_program_id": 48, "member_program_item_id": 59}
-203	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:44:56.429505+00	member	260	48	Member program updated: The Total Cost and Total Charge were changed.	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:10:20.483517+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 138.38, "updated_at": "2025-09-21T21:44:56.429505+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 693.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-204	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:44:56.950567+00	member	260	48	Program finances updated: The Margin and Program Price were changed.	\N	{"taxes": 0.00, "margin": 85.29, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 225.00, "final_total_price": 855.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 84.93, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 225.00, "final_total_price": 918.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}
-227	member_program_items_task_schedule	241	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Task schedule created	\N	\N	{"due_date": "2025-09-11", "created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 20, "member_program_item_schedule_id": 306, "member_program_item_task_schedule_id": 241}
-228	member_program_items_task_schedule	242	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Task schedule created	\N	\N	{"due_date": "2025-09-18", "created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 21, "member_program_item_schedule_id": 306, "member_program_item_task_schedule_id": 242}
-229	member_program_item_schedule	307	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-29", "instance_number": 2, "member_program_item_id": 37, "member_program_item_schedule_id": 307}
-205	member_program_item_tasks	38	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:54:49.727878+00	member	260	48	Program item task updated: The Task Delay was changed.	\N	{"task_id": 6, "task_name": "Schedule Thrive Labs", "created_at": "2025-09-20T03:24:51.937032+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "task_delay": -8, "updated_at": "2025-09-20T03:24:51.937032+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "description": "Schedule Scans and Blood Draw", "completed_by": null, "completed_date": null, "completed_flag": false, "member_program_item_id": 59, "member_program_item_task_id": 38}	{"task_id": 6, "task_name": "Schedule Thrive Labs", "created_at": "2025-09-20T03:24:51.937032+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "task_delay": -14, "updated_at": "2025-09-21T21:54:49.727878+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "description": "Schedule Scans and Blood Draw", "completed_by": null, "completed_date": null, "completed_flag": false, "member_program_item_id": 59, "member_program_item_task_id": 38}
-206	member_program_items	59	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:59:57.338408+00	member	260	48	Program item updated: The Quantity was changed.	\N	{"quantity": 11, "item_cost": 12.58, "created_at": "2025-09-20T03:24:51.565925+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-21T21:44:55.993187+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 63.00, "days_between": 10, "instructions": "", "days_from_start": 0, "member_program_id": 48, "member_program_item_id": 59}	{"quantity": 10, "item_cost": 12.58, "created_at": "2025-09-20T03:24:51.565925+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 15, "updated_at": "2025-09-21T21:59:57.338408+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 63.00, "days_between": 10, "instructions": "", "days_from_start": 0, "member_program_id": 48, "member_program_item_id": 59}
-207	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:59:57.652908+00	member	260	48	Member program updated: The Total Cost and Total Charge were changed.	\N	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 138.38, "updated_at": "2025-09-21T21:44:56.429505+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 693.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:59:57.652908+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-208	member_program_finances	29	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:59:58.020381+00	member	260	48	Program finances updated: The Margin and Program Price were changed.	\N	{"taxes": 0.00, "margin": 84.93, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 225.00, "final_total_price": 918.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}	{"taxes": 0.00, "margin": 85.29, "discounts": 0.00, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-18T22:51:23.542926+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 225.00, "final_total_price": 855.00, "financing_type_id": 2, "member_program_id": 48, "member_program_finance_id": 29}
-209	member_programs	48	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:01:08.072751+00	member	260	48	Member program updated: The Status was changed.	{"to_status": "active", "from_status": "quote"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T21:59:57.652908+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 6, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}	{"lead_id": 260, "created_at": "2025-09-18T22:51:23.542926+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": "2025-09-18", "total_cost": 125.80, "updated_at": "2025-09-21T22:01:08.072751+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "We are just testing the trigger for update ONE More Time", "total_charge": 630.00, "member_program_id": 48, "program_status_id": 1, "source_template_id": 9, "program_template_name": "James Test 3 One more time", "template_version_date": "2025-09-18T22:51:23.542926+00:00"}
-210	member_program_item_schedule	287	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:02:00.962141+00	member	260	48	Program item schedule updated: The Completed was changed.	\N	{"created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-18", "instance_number": 1, "member_program_item_id": 59, "member_program_item_schedule_id": 287}	{"created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:02:00.962141+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "scheduled_date": "2025-09-18", "instance_number": 1, "member_program_item_id": 59, "member_program_item_schedule_id": 287}
-211	member_program_item_schedule	289	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:02:03.472261+00	member	260	48	Program item schedule updated: The Completed was changed.	\N	{"created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-28", "instance_number": 3, "member_program_item_id": 59, "member_program_item_schedule_id": 289}	{"created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:02:03.472261+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "scheduled_date": "2025-09-28", "instance_number": 3, "member_program_item_id": 59, "member_program_item_schedule_id": 289}
-212	member_program_items_task_schedule	211	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:56.288556+00	member	260	48	Task schedule updated: The Completed was changed.	\N	{"due_date": "2025-09-10", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 38, "member_program_item_schedule_id": 287, "member_program_item_task_schedule_id": 211}	{"due_date": "2025-09-10", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:07:56.288556+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "member_program_item_task_id": 38, "member_program_item_schedule_id": 287, "member_program_item_task_schedule_id": 211}
-213	member_program_items_task_schedule	212	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:58.250344+00	member	260	48	Task schedule updated: The Completed was changed.	\N	{"due_date": "2025-09-16", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 39, "member_program_item_schedule_id": 287, "member_program_item_task_schedule_id": 212}	{"due_date": "2025-09-16", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:07:58.250344+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "member_program_item_task_id": 39, "member_program_item_schedule_id": 287, "member_program_item_task_schedule_id": 212}
-214	member_program_items_task_schedule	213	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:59.809985+00	member	260	48	Task schedule updated: The Completed was changed.	\N	{"due_date": "2025-09-15", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 38, "member_program_item_schedule_id": 288, "member_program_item_task_schedule_id": 213}	{"due_date": "2025-09-15", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:07:59.809985+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "member_program_item_task_id": 38, "member_program_item_schedule_id": 288, "member_program_item_task_schedule_id": 213}
-215	member_program_items_task_schedule	215	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:08:02.435648+00	member	260	48	Task schedule updated: The Completed was changed.	\N	{"due_date": "2025-09-20", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 38, "member_program_item_schedule_id": 289, "member_program_item_task_schedule_id": 215}	{"due_date": "2025-09-20", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:08:02.435648+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "member_program_item_task_id": 38, "member_program_item_schedule_id": 289, "member_program_item_task_schedule_id": 215}
-216	member_program_items_task_schedule	214	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:08:04.336823+00	member	260	48	Task schedule updated: The Completed was changed.	\N	{"due_date": "2025-09-21", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-20T03:24:53.18673+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 39, "member_program_item_schedule_id": 288, "member_program_item_task_schedule_id": 214}	{"due_date": "2025-09-21", "created_at": "2025-09-20T03:24:53.18673+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-21T22:08:04.336823+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": true, "member_program_item_task_id": 39, "member_program_item_schedule_id": 288, "member_program_item_task_schedule_id": 214}
-217	member_program_item_schedule	297	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-26", "instance_number": 1, "member_program_item_id": 41, "member_program_item_schedule_id": 297}
-218	member_program_item_schedule	298	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-14", "instance_number": 2, "member_program_item_id": 41, "member_program_item_schedule_id": 298}
-219	member_program_item_schedule	299	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-02", "instance_number": 1, "member_program_item_id": 39, "member_program_item_schedule_id": 299}
-230	member_program_items_task_schedule	243	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Task schedule created	\N	\N	{"due_date": "2025-09-18", "created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 20, "member_program_item_schedule_id": 307, "member_program_item_task_schedule_id": 243}
-231	member_program_items_task_schedule	244	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Task schedule created	\N	\N	{"due_date": "2025-09-25", "created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "member_program_item_task_id": 21, "member_program_item_schedule_id": 307, "member_program_item_task_schedule_id": 244}
-232	member_program_item_schedule	308	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-09-22", "instance_number": 1, "member_program_item_id": 42, "member_program_item_schedule_id": 308}
-233	member_program_item_schedule	309	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-07", "instance_number": 2, "member_program_item_id": 42, "member_program_item_schedule_id": 309}
-234	member_program_item_schedule	310	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	member	150	46	Program item schedule created	\N	\N	{"created_at": "2025-09-24T01:08:55.109429+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-24T01:08:55.109429+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "completed_flag": false, "scheduled_date": "2025-10-22", "instance_number": 3, "member_program_item_id": 42, "member_program_item_schedule_id": 310}
-235	therapies	5	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:25:42.994323+00	support	\N	\N	\N	\N	{"cost": 74.55, "charge": 373.00, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 5, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Anti-Aging IV Therapy", "therapy_type_id": 3}	{"cost": 74.55, "charge": 374.00, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 5, "updated_at": "2025-09-24T01:25:42.994323+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Drip", "therapy_name": "Anti-Aging IV Therapy", "therapy_type_id": 3}
+1	therapies	8	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 51.06, "charge": 255.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 8, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Beauty Drip IV Therapy", "therapy_type_id": 3}	\N
+2	therapies	9	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 6.50, "charge": 33.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 9, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Biotin - IM", "therapy_type_id": 3}	\N
+3	therapies	10	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 60.97, "charge": 305.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 10, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Blood Pressure Support (3000) IV Therapy", "therapy_type_id": 3}	\N
+4	therapies	11	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 70.71, "charge": 354.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 11, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Blood Sugar Blaster IV Therapy", "therapy_type_id": 3}	\N
+5	therapies	12	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 80.77, "charge": 404.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 12, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Calcium EDTA 3.0G IV Therapy", "therapy_type_id": 3}	\N
+6	therapies	13	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 83.98, "charge": 420.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 13, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Disodium EDTA 3.0G IV Therapy", "therapy_type_id": 3}	\N
+7	therapies	14	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 32.15, "charge": 161.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 14, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Energy Booster (Lava Lamp) - IM", "therapy_type_id": 3}	\N
+8	therapies	15	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 12.58, "charge": 63.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 15, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Glutathione 1000 IV Push", "therapy_type_id": 3}	\N
+9	therapies	16	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 19.25, "charge": 96.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 16, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Glutathione 2000 IV Push", "therapy_type_id": 3}	\N
+10	therapies	17	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 38.35, "charge": 192.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 17, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Glutathione 4000 IV Therapy", "therapy_type_id": 3}	\N
+11	therapies	18	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 59.24, "charge": 296.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 18, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Healthy Weight IV Therapy", "therapy_type_id": 3}	\N
+12	therapies	19	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 12.60, "charge": 63.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 19, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Hydration - Lactated Ringers IV Therapy", "therapy_type_id": 3}	\N
+13	therapies	20	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 15.19, "charge": 76.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 20, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Hydration - Normal Saline IV Therapy", "therapy_type_id": 3}	\N
+14	therapies	21	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 82.31, "charge": 412.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 21, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Illness Recovery IV Therapy", "therapy_type_id": 3}	\N
+15	therapies	22	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 41.43, "charge": 207.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 22, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Immune Booster IV Therapy", "therapy_type_id": 3}	\N
+16	therapies	23	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 75.30, "charge": 376.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 23, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Immune Complete IV Therapy", "therapy_type_id": 3}	\N
+17	therapies	24	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 13.00, "charge": 65.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 24, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Ketoralac (Toradol) IM/IV", "therapy_type_id": 3}	\N
+18	therapies	25	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 11.20, "charge": 56.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 25, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Lipodissolve (Large) ", "therapy_type_id": 3}	\N
+19	therapies	26	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 9.60, "charge": 48.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 26, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Lipodissolve (Small)", "therapy_type_id": 3}	\N
+20	therapies	27	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 1000.00, "charge": 5000.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 27, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Misc", "therapy_name": "Miscellaneous 1000", "therapy_type_id": 3}	\N
+21	therapies	28	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 500.00, "charge": 2500.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 28, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Misc5", "therapy_name": "Miscellaneous 500", "therapy_type_id": 3}	\N
+22	therapies	29	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 29.88, "charge": 149.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 29, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Mistletoe (1) 100mg IV Therapy", "therapy_type_id": 3}	\N
+23	therapies	30	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 51.75, "charge": 259.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 30, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Mistletoe (2) 200mg IV Therapy", "therapy_type_id": 3}	\N
+24	therapies	31	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 95.50, "charge": 478.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 31, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Mistletoe (3) 400mg IV Therapy", "therapy_type_id": 3}	\N
+25	therapies	32	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 139.25, "charge": 696.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 32, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Mistletoe (4) 600mg IV Therapy", "therapy_type_id": 3}	\N
+26	therapies	33	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 183.00, "charge": 915.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 33, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Mistletoe (5) 800mg IV Therapy", "therapy_type_id": 3}	\N
+27	therapies	34	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 31.43, "charge": 157.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 34, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Myers Plus IV Therapy", "therapy_type_id": 3}	\N
+28	therapies	35	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 7.50, "charge": 38.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 35, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "NAD+ (100mg) SQ", "therapy_type_id": 3}	\N
+29	therapies	36	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 13.00, "charge": 65.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 36, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "NAD+ (200mg) SQ", "therapy_type_id": 3}	\N
+30	therapies	37	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 44.50, "charge": 223.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 37, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "NAD+ (500mg) IV Therapy", "therapy_type_id": 3}	\N
+31	therapies	38	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 26.94, "charge": 135.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 38, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Ondansetron (Zofran)", "therapy_type_id": 3}	\N
+32	therapies	39	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 73.84, "charge": 369.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 39, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone and UBT IV Therapy", "therapy_type_id": 3}	\N
+33	therapies	40	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 42.46, "charge": 212.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 40, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone IV Therapy", "therapy_type_id": 3}	\N
+34	therapies	41	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 32.80, "charge": 164.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 41, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone Normal Saline IV Therapy", "therapy_type_id": 3}	\N
+35	therapies	42	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 57.44, "charge": 287.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 42, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Post Operation IV Therapy", "therapy_type_id": 3}	\N
+36	therapies	43	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 31.55, "charge": 158.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 43, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Pre Operation IV Therapy", "therapy_type_id": 3}	\N
+37	therapies	44	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 350.00, "charge": 1750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 44, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Semiglutide 5mg/ml (Vial 1)", "therapy_type_id": 3}	\N
+38	therapies	45	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 350.00, "charge": 1750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 45, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Semiglutide 5mg/ml (Vial 2)", "therapy_type_id": 3}	\N
+39	therapies	46	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 350.00, "charge": 1750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 46, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Semiglutide 5mg/ml (Vial 3)", "therapy_type_id": 3}	\N
+40	therapies	47	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 6.77, "charge": 34.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 47, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Slim Shot Turbo IM", "therapy_type_id": 3}	\N
+41	therapies	48	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 62.81, "charge": 314.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 48, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Superhero IV Therapy", "therapy_type_id": 3}	\N
+42	therapies	49	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 700.00, "charge": 3500.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 49, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Tirzepitide Vile 1", "therapy_type_id": 3}	\N
+43	therapies	50	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 700.00, "charge": 3500.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 50, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "Tirzepitide Vile 2", "therapy_type_id": 3}	\N
+44	therapies	51	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 7.64, "charge": 38.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 51, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Tri-Immune Booster", "therapy_type_id": 3}	\N
+45	therapies	52	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 23.57, "charge": 118.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 52, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Tri-Immune IM", "therapy_type_id": 3}	\N
+46	therapies	53	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 151.99, "charge": 760.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 53, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C 100G IV Therapy", "therapy_type_id": 3}	\N
+47	therapies	54	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 48.86, "charge": 244.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 54, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C 25G IV Therapy", "therapy_type_id": 3}	\N
+48	therapies	55	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 81.99, "charge": 410.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 55, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C 50G IV Therapy", "therapy_type_id": 3}	\N
+49	therapies	56	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 116.99, "charge": 585.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 56, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C 75G IV Therapy", "therapy_type_id": 3}	\N
+50	therapies	57	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 27.32, "charge": 137.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 57, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Vitamin D3 100,000IU - IM", "therapy_type_id": 3}	\N
+51	therapies	59	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 42.98, "charge": 215.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 59, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Vitamin D3 300,000IU - IM", "therapy_type_id": 3}	\N
+52	therapies	60	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 15.66, "charge": 78.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 60, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Vitamin D3 50,000IU - IM", "therapy_type_id": 3}	\N
+53	therapies	62	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 93.41, "charge": 467.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 62, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Works IV Therapy", "therapy_type_id": 3}	\N
+54	therapies	63	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 4.63, "charge": 23.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 63, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Zinc - IV Push", "therapy_type_id": 3}	\N
+55	therapies	64	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 31.50, "charge": 158.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 64, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Med", "therapy_name": "Ivermectin (.5mg-40mg)", "therapy_type_id": 3}	\N
+56	therapies	65	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 52.50, "charge": 263.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 65, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Med", "therapy_name": "Ivermectin (41mg-90mg)", "therapy_type_id": 3}	\N
+57	therapies	66	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 61.50, "charge": 308.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 66, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Med", "therapy_name": "Ivermectin (91mg-150mg)", "therapy_type_id": 3}	\N
+58	therapies	67	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 82.50, "charge": 413.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 67, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Med", "therapy_name": "Ivermectin (151mg-250mg)", "therapy_type_id": 3}	\N
+59	therapies	68	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 150.00, "charge": 750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 68, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "Med", "therapy_name": "Mebendozole 1mg-199mg", "therapy_type_id": 3}	\N
+60	therapies	69	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 78.00, "charge": 390.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 69, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 200mg-499mg 3 Days", "therapy_type_id": 3}	\N
+61	therapies	70	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 195.00, "charge": 975.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 70, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 200mg-499mg Daily", "therapy_type_id": 3}	\N
+62	therapies	71	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 255.00, "charge": 1275.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 71, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 500mg-899mg Daily", "therapy_type_id": 3}	\N
+63	therapies	72	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 300.00, "charge": 1500.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 72, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 900mg-1500mg Daily", "therapy_type_id": 3}	\N
+64	therapies	73	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 102.00, "charge": 510.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 73, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 500mg-899mg Daily 3 Days", "therapy_type_id": 3}	\N
+65	therapies	74	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 120.00, "charge": 600.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 74, "updated_at": "2025-04-28T20:25:18.925523+00:00", "updated_by": null, "active_flag": true, "description": "med", "therapy_name": "Mebendozole 900mg-1500mg 3 Days", "therapy_type_id": 3}	\N
+66	therapies	61	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 31.50, "charge": 158.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 61, "updated_at": "2025-05-05T15:36:18.971009+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": false, "description": "Med", "therapy_name": "Ivermectin (.5mg-40mg)", "therapy_type_id": 3}	\N
+67	therapies	58	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 31.50, "charge": 158.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 58, "updated_at": "2025-05-05T15:36:44.375374+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Med", "therapy_name": "Ivermectin (.5mg-40mg)", "therapy_type_id": 3}	\N
+68	therapies	4	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 80.00, "charge": 401.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 4, "updated_at": "2025-05-13T20:17:49.906032+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Drip", "therapy_name": "ALA 600mg IV Therapy", "therapy_type_id": 3}	\N
+69	therapies	78	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 99.00, "charge": 495.00, "taxable": false, "bucket_id": 16, "created_at": "2025-05-14T17:21:26.580224+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 78, "updated_at": "2025-05-14T17:21:26.580224+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Testing", "therapy_name": "Testing", "therapy_type_id": 3}	\N
+70	therapies	6	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 4.83, "charge": 24.00, "taxable": true, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 6, "updated_at": "2025-09-28T20:50:11.014226+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "IM", "therapy_name": "B-12 Methylcobalamin - IM", "therapy_type_id": 3}	\N
+71	therapies	7	\N	DELETE	\N	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 8.90, "charge": 45.00, "taxable": true, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 7, "updated_at": "2025-09-29T20:08:45.074757+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "B5 Injection - IM", "therapy_type_id": 3}	\N
+72	therapies	5	\N	DELETE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 01:41:58.382486+00	support	\N	\N	\N	\N	{"cost": 74.55, "charge": 374.00, "taxable": false, "bucket_id": 19, "created_at": "2025-04-28T20:25:18.925523+00:00", "created_by": null, "therapy_id": 5, "updated_at": "2025-09-24T01:25:42.994323+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Drip", "therapy_name": "Anti-Aging IV Therapy", "therapy_type_id": 3}	\N
+73	therapies	1	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.25, "charge": 41.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 1, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Balance (60ct)", "therapy_type_id": 6}
+74	therapies	2	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 69.95, "charge": 87.95, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 2, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Energy Enhancer", "therapy_type_id": 6}
+75	therapies	3	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 55.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 3, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Her Creative Fire Tincture", "therapy_type_id": 6}
+76	therapies	4	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 40.95, "charge": 102.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 4, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "IgG Protect Powder (30serv)", "therapy_type_id": 6}
+77	therapies	5	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 21.10, "charge": 53.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 5, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Inflamma-Blox (60ct)", "therapy_type_id": 6}
+78	therapies	6	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 41.60, "charge": 104.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 6, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "InflammaCORE Vanilla Chai (14serv)", "therapy_type_id": 6}
+79	therapies	7	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 21.80, "charge": 55.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 7, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "InosiCare (30serv)", "therapy_type_id": 6}
+80	therapies	8	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 328.43, "charge": 475.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 8, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Magnetic Pulser", "therapy_type_id": 6}
+81	therapies	9	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 175.36, "charge": 350.72, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 9, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Abietis 100mg", "therapy_type_id": 6}
+82	therapies	10	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 116.68, "charge": 233.36, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 10, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Abietis 50 (8 vials)", "therapy_type_id": 6}
+83	therapies	11	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 87.24, "charge": 174.48, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 11, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Abietis Series 1 (Green Box)", "therapy_type_id": 6}
+84	therapies	12	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 93.44, "charge": 186.88, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 12, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Abietis Series 2 (Green Box)", "therapy_type_id": 6}
+335	therapies	257	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 25.00, "charge": 25.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 257, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Shipping Fee", "therapy_type_id": 5}
+85	therapies	13	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 99.68, "charge": 199.99, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 13, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Abietis Series 4 (Green Box)", "therapy_type_id": 6}
+86	therapies	14	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 93.44, "charge": 186.88, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 14, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Mali Series 2", "therapy_type_id": 6}
+87	therapies	15	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 99.68, "charge": 199.36, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 15, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Mali Series 4", "therapy_type_id": 6}
+88	therapies	16	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 18.95, "charge": 47.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 16, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mitocore (60ct)", "therapy_type_id": 6}
+89	therapies	17	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 15.60, "charge": 39.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 17, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Magnesium & Potassium (60ct)", "therapy_type_id": 6}
+90	therapies	18	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 39.95, "charge": 100.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 18, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "SBI Protect Capsules (120ct)", "therapy_type_id": 6}
+91	therapies	19	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 211.55, "charge": 375.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 19, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Silver Pulser", "therapy_type_id": 6}
+92	therapies	20	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 29.70, "charge": 74.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 20, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Silymarin Forte (120ct)", "therapy_type_id": 6}
+93	therapies	21	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 299.00, "charge": 525.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 21, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thaena (90ct)", "therapy_type_id": 6}
+94	therapies	22	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 35.70, "charge": 89.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 22, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "TruAdapt (120ct)", "therapy_type_id": 6}
+95	therapies	23	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 42.00, "charge": 69.95, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 23, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Turkey Tail Extract Powder (45G)", "therapy_type_id": 6}
+96	therapies	24	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 30.95, "charge": 46.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 24, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ultimate Selenium� Capsules (90ct)", "therapy_type_id": 6}
+97	therapies	25	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 194.74, "charge": 365.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 25, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Bio Tuner 9", "therapy_type_id": 6}
+98	therapies	26	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 34.95, "charge": 87.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 26, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Cerenity PM (120ct)", "therapy_type_id": 6}
+99	therapies	27	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 27.65, "charge": 69.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 27, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Cerenity� (90ct)", "therapy_type_id": 6}
+100	therapies	28	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 23.30, "charge": 58.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 28, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "DG Protect (60ct)", "therapy_type_id": 6}
+101	therapies	29	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 24.45, "charge": 61.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 29, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "GlutaShield-Vanilla (30 Serv)", "therapy_type_id": 6}
+102	therapies	30	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 36.85, "charge": 92.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 30, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Inflamma-Blox (120ct)", "therapy_type_id": 6}
+103	therapies	31	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 30.85, "charge": 77.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 31, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Intestin-ol (90ct)", "therapy_type_id": 6}
+104	therapies	32	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 36.40, "charge": 62.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 32, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lugol's Iodine Liquid (2oz)", "therapy_type_id": 6}
+105	therapies	33	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 18.80, "charge": 47.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 33, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Nattokinase (60ct)", "therapy_type_id": 6}
+106	therapies	34	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 43.30, "charge": 108.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 34, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Orthomega� 820 (180ct)", "therapy_type_id": 6}
+107	therapies	35	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 25.55, "charge": 64.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 35, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Prostatrol Forte (60ct)", "therapy_type_id": 6}
+108	therapies	36	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.15, "charge": 40.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 36, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Cal-Mag (90ct)", "therapy_type_id": 6}
+109	therapies	37	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 35.70, "charge": 89.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 37, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "TruAdapt Plus (120ct)", "therapy_type_id": 6}
+110	therapies	38	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 99.95, "charge": 187.95, "taxable": false, "bucket_id": 17, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 38, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "X49", "therapy_type_id": 4}
+111	therapies	39	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 69.95, "charge": 87.95, "taxable": false, "bucket_id": 17, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 39, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Y-Age Glutathione", "therapy_type_id": 4}
+112	therapies	40	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 28.45, "charge": 71.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 40, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Botanicalm PM (60ct)", "therapy_type_id": 6}
+113	therapies	41	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 26.30, "charge": 66.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 41, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CM Core (90ct)", "therapy_type_id": 6}
+114	therapies	42	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 69.95, "charge": 87.95, "taxable": false, "bucket_id": 17, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 42, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Icewave", "therapy_type_id": 4}
+115	therapies	43	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 111.30, "charge": 159.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 43, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Inner Balance", "therapy_type_id": 6}
+116	therapies	44	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 36.90, "charge": 92.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 44, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Orthomega V (60ct)", "therapy_type_id": 6}
+117	therapies	45	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 9.35, "charge": 23.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 45, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Pregnenolone Micronized (100ct)", "therapy_type_id": 6}
+118	therapies	46	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 46.50, "charge": 116.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 46, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Turiva (120ct)", "therapy_type_id": 6}
+119	therapies	47	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 42.00, "charge": 69.95, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 47, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Turkey Tail Extract (200 ct)", "therapy_type_id": 6}
+120	therapies	48	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.80, "charge": 42.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 48, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vitamin K2 with D3 (60ct)", "therapy_type_id": 6}
+121	therapies	49	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 69.95, "charge": 87.95, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 49, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Y-Age Carnosine", "therapy_type_id": 6}
+122	therapies	50	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 29.15, "charge": 73.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 50, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Adren-All (120ct)", "therapy_type_id": 6}
+123	therapies	51	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 43.25, "charge": 108.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 51, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Bergamot BPF (120ct)", "therapy_type_id": 6}
+124	therapies	52	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 40.85, "charge": 102.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 52, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CDG EstroDIM (60ct)", "therapy_type_id": 6}
+125	therapies	53	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 36.70, "charge": 92.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 53, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CereVive (120ct)", "therapy_type_id": 6}
+126	therapies	54	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 42.90, "charge": 107.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 54, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CoQ-10 300mg (60ct)", "therapy_type_id": 6}
+127	therapies	55	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 18.25, "charge": 46.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 55, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lithium Orotate (60ct)", "therapy_type_id": 6}
+128	therapies	56	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 20.95, "charge": 52.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 56, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "L-Theanine (60ct)", "therapy_type_id": 6}
+129	therapies	57	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 210.00, "charge": 420.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 57, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "MAF Capsules 300mg (60ct)", "therapy_type_id": 6}
+130	therapies	58	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 22.95, "charge": 57.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 58, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Magnesium (180ct)", "therapy_type_id": 6}
+131	therapies	59	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 9.70, "charge": 24.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 59, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Zinc (60ct)", "therapy_type_id": 6}
+132	therapies	60	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 42.00, "charge": 69.95, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 60, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reishi (200 ct)", "therapy_type_id": 6}
+133	therapies	61	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 26.30, "charge": 66.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 61, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CitraNOX� (120ct)", "therapy_type_id": 6}
+134	therapies	62	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 14.85, "charge": 37.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 62, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "GABAnol (60ct)", "therapy_type_id": 6}
+135	therapies	63	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 14.95, "charge": 37.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 63, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "N-Acetyl Cysteine (60ct)", "therapy_type_id": 6}
+136	therapies	64	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 11.90, "charge": 30.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 64, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Selenium (90ct)", "therapy_type_id": 6}
+137	therapies	65	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.95, "charge": 42.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 65, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Z-Binder (60ct)", "therapy_type_id": 6}
+138	therapies	66	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 30.95, "charge": 46.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 66, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Collagen Peptides (10.5oz)", "therapy_type_id": 6}
+139	therapies	67	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 59.45, "charge": 149.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 67, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Core Restore Kit - Vanilla (7days)", "therapy_type_id": 6}
+140	therapies	68	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.00, "charge": 40.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 68, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Methyl B12 (60ct)", "therapy_type_id": 6}
+141	therapies	69	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 175.36, "charge": 350.72, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 69, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mistletoe - Viscum Mali 100mg", "therapy_type_id": 6}
+142	therapies	70	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 24.40, "charge": 61.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 70, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Natural D-Hist (120ct)", "therapy_type_id": 6}
+143	therapies	71	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 46.95, "charge": 70.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 71, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ultimate Mineral Caps� (64ct)", "therapy_type_id": 6}
+144	therapies	72	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 21.65, "charge": 54.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 72, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Motility Pro (60ct)", "therapy_type_id": 6}
+145	therapies	73	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 32.95, "charge": 82.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 73, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "OsteoPrev (120ct)", "therapy_type_id": 6}
+146	therapies	74	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 32.00, "charge": 42.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 74, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Sovereign Creative Stability", "therapy_type_id": 6}
+147	therapies	75	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 22.70, "charge": 57.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 75, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyrotain (120ct)", "therapy_type_id": 6}
+148	therapies	76	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 23.95, "charge": 60.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 76, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "L-Glutathione (60ct)", "therapy_type_id": 6}
+149	therapies	77	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 44.70, "charge": 112.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 77, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "SAMe (60ct)", "therapy_type_id": 6}
+150	therapies	78	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 46.90, "charge": 117.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 78, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Diaxinol (120ct)", "therapy_type_id": 6}
+151	therapies	79	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 23.45, "charge": 59.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 79, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Hiphenolic (60ct)", "therapy_type_id": 6}
+152	therapies	80	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 33.30, "charge": 83.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 80, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ortho Biotic (60ct)", "therapy_type_id": 6}
+153	therapies	81	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 12.30, "charge": 30.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 81, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Poria 15 Formula GF (Tablets)", "therapy_type_id": 6}
+154	therapies	82	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 8.60, "charge": 22.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 82, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Iron (60ct)", "therapy_type_id": 6}
+155	therapies	83	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 11.20, "charge": 28.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 83, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "DHEA 25mg (90ct)", "therapy_type_id": 6}
+156	therapies	84	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 16.80, "charge": 42.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 84, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reacted Magnesium (120ct)", "therapy_type_id": 6}
+157	therapies	85	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 36.95, "charge": 92.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 85, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "SBI Protect Powder 2.6oz (30serv)", "therapy_type_id": 6}
+158	therapies	86	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 47.95, "charge": 72.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 86, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ultimate Daily Capsules (180ct)", "therapy_type_id": 6}
+159	therapies	87	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 35.70, "charge": 89.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 87, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Digestzyme-V (180ct)", "therapy_type_id": 6}
+160	therapies	88	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 54.95, "charge": 82.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 88, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Gluco-Gel Plus� Liquid (32floz)", "therapy_type_id": 6}
+161	therapies	89	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 48.95, "charge": 73.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 89, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Majestic Earth Ultimate Classic� (32floz)", "therapy_type_id": 6}
+162	therapies	90	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 27.30, "charge": 55.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 90, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "His Creative Fire Tincture", "therapy_type_id": 6}
+163	therapies	91	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 29.95, "charge": 45.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 91, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Slender FX� Sweet Eze� (120ct)", "therapy_type_id": 6}
+164	therapies	92	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 4.30, "charge": 15.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 92, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vitamin D3 50000IU (15ct)", "therapy_type_id": 6}
+165	therapies	93	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 33.20, "charge": 83.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 93, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Mitocore (120ct)", "therapy_type_id": 6}
+166	therapies	94	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 33.60, "charge": 55.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 94, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thrive Alive", "therapy_type_id": 6}
+167	therapies	95	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 30.95, "charge": 77.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 95, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Orthomega� 820 (120ct)", "therapy_type_id": 6}
+168	therapies	96	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 28.95, "charge": 44.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 96, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Majestic Earth Strawberry Kiwi-Mins� (32floz)", "therapy_type_id": 6}
+169	therapies	97	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 22.00, "charge": 55.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 97, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Methyl CPG (60ct)", "therapy_type_id": 6}
+170	therapies	98	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 66.50, "charge": 105.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 98, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Digestive Enzyme Formula (200ct)", "therapy_type_id": 6}
+171	therapies	99	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 48.95, "charge": 73.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 99, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ultimate Tangy Tangerine� (32floz)", "therapy_type_id": 6}
+172	therapies	100	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 49.00, "charge": 80.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 100, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lugol's Iodine Plus Capsules (90ct)", "therapy_type_id": 6}
+173	therapies	101	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 23.95, "charge": 44.00, "taxable": true, "bucket_id": 20, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 101, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Majestic Earth Plant Derived Minerals � (32floz)", "therapy_type_id": 6}
+174	therapies	102	\N	INSERT	\N	2025-09-30 01:55:45.126688+00	support	\N	\N	\N	\N	\N	{"cost": 99.95, "charge": 187.95, "taxable": false, "bucket_id": 17, "created_at": "2025-09-30T01:55:45.126688+00:00", "created_by": null, "therapy_id": 102, "updated_at": "2025-09-30T01:55:45.126688+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "X39", "therapy_type_id": 4}
+175	therapies	103	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.00, "charge": 10.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 103, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "ABO GROUPING (006056)", "therapy_type_id": 8}
+176	therapies	104	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.30, "charge": 26.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 104, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Apolipoprotein A-1 (016873)", "therapy_type_id": 8}
+177	therapies	105	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.30, "charge": 26.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 105, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Apolipoprotein B (167015)", "therapy_type_id": 8}
+178	therapies	106	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.60, "charge": 8.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 106, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Bilirubin (Total, Direct, Indirect) (001214)", "therapy_type_id": 8}
+179	therapies	107	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.00, "charge": 30.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 107, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "C-Peptide (010108)", "therapy_type_id": 8}
+180	therapies	108	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.80, "charge": 19.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 108, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "C-Reactive Protein (CRP), Quantitative (006627)", "therapy_type_id": 8}
+181	therapies	109	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 30.75, "charge": 153.75, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 109, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CANCER PANEL COMPLETE (308401)", "therapy_type_id": 8}
+182	therapies	110	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.00, "charge": 10.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 110, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "CBC/Complete Blood Count Lab (005009)", "therapy_type_id": 8}
+183	therapies	111	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.30, "charge": 21.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 111, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Cortisol (004051)", "therapy_type_id": 8}
+184	therapies	112	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.50, "charge": 7.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 112, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Creatine Kinase,Total (001362)", "therapy_type_id": 8}
+185	therapies	113	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 13.80, "charge": 69.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 113, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "D-Dimer (115188)", "therapy_type_id": 8}
+186	therapies	114	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.00, "charge": 20.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 114, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "DHEA-S (004020)", "therapy_type_id": 8}
+187	therapies	115	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.00, "charge": 25.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 115, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Digoxin Level (007385)", "therapy_type_id": 8}
+188	therapies	116	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 199.00, "charge": 995.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 116, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Eat 144 Allergy Test", "therapy_type_id": 8}
+189	therapies	117	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 199.00, "charge": 995.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 117, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Eat 144 Allergy Test (Remote)", "therapy_type_id": 8}
+190	therapies	118	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 12.00, "charge": 60.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 118, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Epstein-Barr Virus (EBV) Antibodies to Early Antigen-Diffuse [EA(D)], IgG (096248)", "therapy_type_id": 8}
+191	therapies	119	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.50, "charge": 27.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 119, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Epstein-Barr Virus (EBV) Antibodies to Viral Capsid Antigen (VCA), IgG (096230)", "therapy_type_id": 8}
+192	therapies	120	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 9.00, "charge": 45.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 120, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Epstein-Barr Virus (EBV) Antibodies to Viral Capsid Antigen (VCA), IgM (096735)", "therapy_type_id": 8}
+193	therapies	121	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.50, "charge": 32.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 121, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Epstein-Barr Virus (EBV) Nuclear Antigen Antibodies, IgG (010272)", "therapy_type_id": 8}
+194	therapies	122	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.70, "charge": 28.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 122, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "ESR-Wes+CRP (286617)", "therapy_type_id": 8}
+195	therapies	123	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.00, "charge": 10.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 123, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Ferritin (004598)", "therapy_type_id": 8}
+196	therapies	124	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.30, "charge": 21.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 124, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Fibrinogen Activity (001610)", "therapy_type_id": 8}
+197	therapies	125	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 30.00, "charge": 150.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 125, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Fibrinogen Antigen (117052)", "therapy_type_id": 8}
+198	therapies	126	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 8.00, "charge": 40.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 126, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Folate & B12 - RBC (000810)", "therapy_type_id": 8}
+199	therapies	127	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.40, "charge": 22.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 127, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Folate - RBC (266015)", "therapy_type_id": 8}
+200	therapies	128	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.00, "charge": 30.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 128, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Follicle-stimulating Hormone (FSH) and Luteinizing Hormone (LH) (028480)", "therapy_type_id": 8}
+201	therapies	129	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.50, "charge": 22.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 129, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Fructosanine (100800)", "therapy_type_id": 8}
+202	therapies	130	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.40, "charge": 32.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 130, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "G6PD RED CELL COUNT (001917)", "therapy_type_id": 8}
+203	therapies	131	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.30, "charge": 26.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 131, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Gastrin (004390)", "therapy_type_id": 8}
+204	therapies	132	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.50, "charge": 7.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 132, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "GGT (001958)", "therapy_type_id": 8}
+205	therapies	133	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 13.25, "charge": 66.25, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 133, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Glu + A1C + Insulin + C Peptide Lab (305907)", "therapy_type_id": 8}
+206	therapies	134	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 103.00, "charge": 515.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 134, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Heavy Metals Profile II, Whole Blood (706200)", "therapy_type_id": 8}
+207	therapies	135	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.25, "charge": 11.25, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 135, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "HEMOGLOBIN A1C (001453)", "therapy_type_id": 8}
+208	therapies	136	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 12.00, "charge": 60.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 136, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Homocystine (706994)", "therapy_type_id": 8}
+209	therapies	137	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.00, "charge": 25.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 137, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "hsCRP (120766)", "therapy_type_id": 8}
+210	therapies	138	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 14.00, "charge": 70.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 138, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "IGF-1 (010363)", "therapy_type_id": 8}
+211	therapies	139	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.50, "charge": 17.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 139, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Insulin (Fasting) (004333)", "therapy_type_id": 8}
+212	therapies	140	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.40, "charge": 12.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 140, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Iron Serum & TIBC (001321)", "therapy_type_id": 8}
+213	therapies	141	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.50, "charge": 7.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 141, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "LDH (001115)", "therapy_type_id": 8}
+214	therapies	142	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 29.50, "charge": 147.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 142, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Leptin, Serum or Plasma (146712)", "therapy_type_id": 8}
+215	therapies	143	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 175.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 143, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Levetiracetam, Serum or Plasma (Keppra Level) (716936)", "therapy_type_id": 8}
+216	therapies	144	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.50, "charge": 12.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 144, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lipid Panel w/ Chol/HDL Ratio (221010)", "therapy_type_id": 8}
+217	therapies	145	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.50, "charge": 12.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 145, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lipid Panel With Total Cholesterol:HDL Ratio (221010)", "therapy_type_id": 8}
+218	therapies	146	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 7.50, "charge": 37.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 146, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lipoprotein (a) (120188)", "therapy_type_id": 8}
+219	therapies	147	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 156.30, "charge": 781.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 147, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "LYME (B. BURGDORFERI) PCR (138685)", "therapy_type_id": 8}
+220	therapies	148	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 10.60, "charge": 53.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 148, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "LYME, IGM, EARLY TEST/REFLEX (160333)", "therapy_type_id": 8}
+221	therapies	149	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 13.00, "charge": 65.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 149, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "LYME, TOTAL AB TEST/REFLEX (160325)", "therapy_type_id": 8}
+222	therapies	150	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 15.90, "charge": 79.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 150, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Magnesium RBC (080283)", "therapy_type_id": 8}
+223	therapies	151	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.00, "charge": 10.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 151, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Magnesium Serum (001537)", "therapy_type_id": 8}
+224	therapies	152	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.80, "charge": 14.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 152, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Metabolic Panel (14), Comprehensive (322000)", "therapy_type_id": 8}
+225	therapies	153	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 30.00, "charge": 150.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 153, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Osteocalcin, Serum (010249)", "therapy_type_id": 8}
+226	therapies	154	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 14.75, "charge": 73.75, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 154, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "PANCREATIC/COLORECTAL CANCER (222752)", "therapy_type_id": 8}
+227	therapies	155	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 7.50, "charge": 37.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 155, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Parathyroid Hormone (PTH), Intact (015610)", "therapy_type_id": 8}
+228	therapies	156	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.50, "charge": 7.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 156, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Phosphorus (001024)", "therapy_type_id": 8}
+229	therapies	157	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.00, "charge": 30.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 157, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Progesterone (004317)", "therapy_type_id": 8}
+230	therapies	158	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 249.70, "charge": 750.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 158, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "PROGRAM LABS", "therapy_type_id": 8}
+231	therapies	159	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.50, "charge": 17.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 159, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Prolactin (004465)", "therapy_type_id": 8}
+232	therapies	160	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.75, "charge": 23.75, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 160, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Prothrombin Time (PT) and Partial Thromboplastin Time (PTT) (020321)", "therapy_type_id": 8}
+233	therapies	161	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.50, "charge": 17.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 161, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "PSA TOTAL (Reflex to free) (480772)", "therapy_type_id": 8}
+234	therapies	162	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.50, "charge": 12.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 162, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reticulocyte Count (005280)", "therapy_type_id": 8}
+235	therapies	163	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 15.90, "charge": 79.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 163, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reverse T3 (070104)", "therapy_type_id": 8}
+236	therapies	164	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 36.40, "charge": 182.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 164, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Selenium, Whole Blood (081034)", "therapy_type_id": 8}
+237	therapies	165	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 8.00, "charge": 40.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 165, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Sex Horm Binding Glob, Serum (082016)", "therapy_type_id": 8}
+238	therapies	166	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 106.00, "charge": 530.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 166, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "SpectraCell Micronutrient & Lipid Plus Panel Lab", "therapy_type_id": 8}
+239	therapies	167	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 84.00, "charge": 420.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 167, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "SpectraCell Micronutrient Lab", "therapy_type_id": 8}
+240	therapies	168	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.60, "charge": 8.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 168, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "T3 Uptake (001156)", "therapy_type_id": 8}
+241	therapies	169	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.00, "charge": 20.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 169, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Testosterone, Total (004226)", "therapy_type_id": 8}
+242	therapies	170	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.50, "charge": 17.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 170, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroglobulin Antibody (006685)", "therapy_type_id": 8}
+243	therapies	171	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 6.00, "charge": 30.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 171, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroid Peroxidase (TPO) Antibodies (006676)", "therapy_type_id": 8}
+244	therapies	172	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 5.70, "charge": 28.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 172, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroid Profile With TSH (000620)", "therapy_type_id": 8}
+245	therapies	173	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 10.60, "charge": 53.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 173, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyrotropin Receptor Antibody, Serum (010314)", "therapy_type_id": 8}
+246	therapies	174	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.75, "charge": 13.75, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 174, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroxine (T4) Free, Direct (001974)", "therapy_type_id": 8}
+247	therapies	175	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.75, "charge": 13.75, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 175, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroxine (T4), Free, Direct (001974)", "therapy_type_id": 8}
+248	therapies	176	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 10.00, "charge": 50.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 176, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Thyroxine-binding Globulin (TBG), Serum (001735)", "therapy_type_id": 8}
+249	therapies	177	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 7.70, "charge": 38.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 177, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Transferrin (004937)", "therapy_type_id": 8}
+250	therapies	178	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 3.20, "charge": 16.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 178, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Triiodothyronine (T3) (002188)", "therapy_type_id": 8}
+251	therapies	179	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 2.80, "charge": 14.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 179, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "UA/M W/RFLX CULTURE, ROUTINE (377036)", "therapy_type_id": 8}
+252	therapies	180	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.60, "charge": 8.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 180, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "UIBC (001348)", "therapy_type_id": 8}
+253	therapies	181	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 1.50, "charge": 7.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 181, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Uric Acid (001057)", "therapy_type_id": 8}
+254	therapies	182	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 4.00, "charge": 20.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 182, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vitamin B12 (001503)", "therapy_type_id": 8}
+255	therapies	183	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 27.00, "charge": 135.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 183, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vitamin C (with dilution) (123420)", "therapy_type_id": 8}
+256	therapies	184	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 11.00, "charge": 55.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 184, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vitamin D, 25-Hydroxy (081950)", "therapy_type_id": 8}
+257	therapies	185	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 8.90, "charge": 44.50, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 185, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "WELLNESS PANEL (387146)", "therapy_type_id": 8}
+258	therapies	186	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 34.00, "charge": 170.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 186, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Zinc - RBC (070029)", "therapy_type_id": 8}
+259	therapies	187	\N	INSERT	\N	2025-09-30 02:30:22.921321+00	support	\N	\N	\N	\N	\N	{"cost": 7.00, "charge": 35.00, "taxable": false, "bucket_id": 14, "created_at": "2025-09-30T02:30:22.921321+00:00", "created_by": null, "therapy_id": 187, "updated_at": "2025-09-30T02:30:22.921321+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Zinc - Serum or Plasma (001800)", "therapy_type_id": 8}
+260	member_programs	1	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	member	609	1	Member program created	{"status": "active", "start_date": null}	\N	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}
+261	member_program_finances	1	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	member	609	1	Program finances created	\N	\N	{"taxes": 0.00, "margin": 62.27, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2214.70, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}
+262	member_program_items	1	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	member	609	1	Program item created	\N	\N	{"quantity": 1, "item_cost": 36.95, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 85, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 92.00, "days_between": 0, "instructions": "Take with food twice a day", "days_from_start": 14, "member_program_id": 1, "member_program_item_id": 1}
+263	member_program_items	2	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	member	609	1	Program item created	\N	\N	{"quantity": 6, "item_cost": 99.95, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 102, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 187.95, "days_between": 30, "instructions": "Use one per day", "days_from_start": 0, "member_program_id": 1, "member_program_item_id": 2}
+264	member_program_items	3	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	member	609	1	Program item created	\N	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 7, "member_program_id": 1, "member_program_item_id": 3}
+280	therapies	202	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 38.85, "charge": 105.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 202, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Hydration - Lactated Ringers IV Therapy", "therapy_type_id": 3}
+281	therapies	203	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 41.44, "charge": 105.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 203, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Hydration - Normal Saline IV Therapy", "therapy_type_id": 3}
+282	therapies	204	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 128.11, "charge": 385.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 204, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Illness Recovery Therapy", "therapy_type_id": 3}
+283	therapies	205	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 65.62, "charge": 220.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 205, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Immunity Booster IV Therapy", "therapy_type_id": 3}
+265	member_programs	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.665187+00	member	609	1	Member program updated: The Status was changed.	{"to_status": "quote", "from_status": "active"}	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T02:51:44.665187+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}
+266	therapies	188	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 81.44, "charge": 375.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 188, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Acute Illness IV Therapy", "therapy_type_id": 3}
+267	therapies	189	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 73.50, "charge": 335.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 189, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "ALA/Alpha Lipoic Acid (600mg) IV Therapy", "therapy_type_id": 3}
+268	therapies	190	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 94.21, "charge": 325.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 190, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Anti-Aging Therapy", "therapy_type_id": 3}
+269	therapies	191	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 12.58, "charge": 40.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 191, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "B12/Methylcobalamin (5mg) Injection", "therapy_type_id": 3}
+270	therapies	192	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 16.25, "charge": 70.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 192, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM55", "therapy_name": "B7/Biotin Injection", "therapy_type_id": 3}
+271	therapies	193	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 82.80, "charge": 225.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 193, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Beauty IV Drip", "therapy_type_id": 3}
+272	therapies	194	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 129.29, "charge": 325.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 194, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Blood Pressure Support IV Therapy", "therapy_type_id": 3}
+273	therapies	195	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 125.64, "charge": 499.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 195, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Blood Sugar Blaster IV Therapy", "therapy_type_id": 3}
+274	therapies	196	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 137.11, "charge": 415.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 196, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Chelation (EDTA) Calcium IV Therapy", "therapy_type_id": 3}
+275	therapies	197	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 24.98, "charge": 99.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 197, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM75", "therapy_name": "Energy Booster Injection", "therapy_type_id": 3}
+276	therapies	198	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 23.83, "charge": 70.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 198, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Glutathione (1000mg) IV Push", "therapy_type_id": 3}
+277	therapies	199	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 33.00, "charge": 100.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 199, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Glutathione (2000mg) IV Push", "therapy_type_id": 3}
+278	therapies	200	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 65.85, "charge": 165.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 200, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Glutathione (4000mg) IV Therapy", "therapy_type_id": 3}
+279	therapies	201	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 103.13, "charge": 299.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 201, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Healthy Weight IV Therapy", "therapy_type_id": 3}
+284	therapies	206	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 130.72, "charge": 445.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 206, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Immunity Complete IV Therapy", "therapy_type_id": 3}
+285	therapies	207	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 52.58, "charge": 135.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 207, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Magnesium (3000mg) IV Drip", "therapy_type_id": 3}
+286	therapies	208	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 61.88, "charge": 155.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 208, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Myers Plus", "therapy_type_id": 3}
+287	therapies	209	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 14.00, "charge": 55.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 209, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "NAD+ (100mg) SQ Injection", "therapy_type_id": 3}
+288	therapies	210	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.25, "charge": 90.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 210, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "SQ", "therapy_name": "NAD+ (200mg) SQ Injection", "therapy_type_id": 3}
+289	therapies	211	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 173.25, "charge": 520.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 211, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "NAD+ (500mg) IV Therapy", "therapy_type_id": 3}
+290	therapies	212	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 76.55, "charge": 195.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 212, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone in Normal Saline", "therapy_type_id": 3}
+291	therapies	213	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 86.21, "charge": 220.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 213, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone IV Therapy ", "therapy_type_id": 3}
+292	therapies	214	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 117.98, "charge": 295.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 214, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Ozone with UltraViolet Blood IV Therapy", "therapy_type_id": 3}
+293	therapies	215	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 75.68, "charge": 275.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 215, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Superhero IV Therapy", "therapy_type_id": 3}
+294	therapies	216	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.25, "charge": 55.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 216, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Toradol�/Ketorolac (30mg) Injection", "therapy_type_id": 3}
+295	therapies	217	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 32.32, "charge": 100.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 217, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Tri-Immune (Injection)", "therapy_type_id": 3}
+296	therapies	218	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 231.99, "charge": 580.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 218, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C (100g) with Hydration IV Therapy", "therapy_type_id": 3}
+297	therapies	219	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 77.61, "charge": 235.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 219, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C (25g) IV Therapy", "therapy_type_id": 3}
+298	therapies	220	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 130.74, "charge": 330.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 220, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C (50g) with Hydration IV Therapy", "therapy_type_id": 3}
+299	therapies	221	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 176.99, "charge": 445.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 221, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Vitamin C (75g) IV Therapy", "therapy_type_id": 3}
+300	therapies	222	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 21.15, "charge": 65.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 222, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Vitamin D3 (100,000IU) Injection", "therapy_type_id": 3}
+301	therapies	223	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 29.35, "charge": 90.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 223, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "IM", "therapy_name": "Vitamin D3 (300,000IU) Injection", "therapy_type_id": 3}
+302	therapies	224	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 101.44, "charge": 299.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 224, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Workout Recovery", "therapy_type_id": 3}
+303	therapies	225	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 159.14, "charge": 400.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 225, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Drip", "therapy_name": "Works IV Therapy", "therapy_type_id": 3}
+304	therapies	226	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 13.38, "charge": 45.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 226, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Zinc (20mg) IV Push", "therapy_type_id": 3}
+305	therapies	227	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 31.36, "charge": 95.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 227, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": "Push", "therapy_name": "Zofran�/Ondansetron IV Push", "therapy_type_id": 3}
+306	therapies	228	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 199.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 228, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Acupuncture 60 Minutes (Needles)", "therapy_type_id": 5}
+307	therapies	229	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 26.25, "charge": 199.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 229, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Acupuncture EAM�- Single Session 30 Minutes", "therapy_type_id": 5}
+308	therapies	230	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 199.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 230, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Acupuncture Fire Cupping Treatment", "therapy_type_id": 5}
+309	therapies	231	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 599.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 231, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Bio-Optic Holography", "therapy_type_id": 5}
+310	therapies	232	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 175.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 232, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "BrainTap� Session Add On", "therapy_type_id": 5}
+311	therapies	233	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 5.00, "charge": 25.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 233, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Coaching Session", "therapy_type_id": 5}
+312	therapies	234	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 234, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Custom Treatment Plan", "therapy_type_id": 5}
+313	therapies	235	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 235, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Custom Treatment Plan Nutritional Visit", "therapy_type_id": 5}
+314	therapies	236	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 236, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Emotion/Body Code Therapy (30 mins)", "therapy_type_id": 5}
+315	therapies	237	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 52.50, "charge": 399.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 237, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Energetic Osteopathy Treatment", "therapy_type_id": 5}
+316	therapies	238	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 99.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 238, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Cupping Treatment", "therapy_type_id": 5}
+317	therapies	239	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 75.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 239, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Food Sensitivity Remote Instruction/Supervision", "therapy_type_id": 5}
+318	therapies	240	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 175.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 240, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Food Sensitivity Test Review", "therapy_type_id": 5}
+319	therapies	241	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 8.75, "charge": 25.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 241, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Genius Insight Voice Upload ", "therapy_type_id": 5}
+320	therapies	242	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 5.00, "charge": 25.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 242, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Group RASHA", "therapy_type_id": 5}
+321	therapies	243	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 87.50, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 243, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Initial Nutritional Visit with Initial Supplements", "therapy_type_id": 5}
+322	therapies	244	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 375.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 244, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lab Review", "therapy_type_id": 5}
+323	therapies	245	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 26.25, "charge": 131.25, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 245, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Lymphatic Drainage 30 Minutes", "therapy_type_id": 5}
+324	therapies	246	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 175.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 246, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Physical Exam", "therapy_type_id": 5}
+325	therapies	247	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 87.50, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 247, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "PICC Line Dressing Change", "therapy_type_id": 5}
+326	therapies	248	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 248, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Program Onboarding 1", "therapy_type_id": 5}
+327	therapies	249	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 249, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Program Onboarding 2", "therapy_type_id": 5}
+328	therapies	250	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 250, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Program Onboarding 3", "therapy_type_id": 5}
+329	therapies	251	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 750.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 251, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Program ReCap and Maintenance Plan", "therapy_type_id": 5}
+330	therapies	252	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 600.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 252, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Rasha 120 Minutes ", "therapy_type_id": 5}
+331	therapies	253	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 300.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 253, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Rasha 60 Minutes", "therapy_type_id": 5}
+332	therapies	254	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 450.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 254, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Rasha 90 Minutes ", "therapy_type_id": 5}
+333	therapies	255	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 35.00, "charge": 299.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 255, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Reiki Treatment ", "therapy_type_id": 5}
+334	therapies	256	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 199.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 256, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Sacred Body Language Translation 30 Minutes", "therapy_type_id": 5}
+336	therapies	258	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 61.25, "charge": 306.25, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 258, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Specialized Body Therapy Massage 90 Minutes", "therapy_type_id": 5}
+337	therapies	259	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 115.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 259, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Tuning Fork 30 Minutes Premium", "therapy_type_id": 5}
+338	therapies	260	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 52.50, "charge": 195.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 260, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Vibration/Sound Therapy Massage 90 Minutes", "therapy_type_id": 5}
+339	therapies	261	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 261, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Weight Loss Check In", "therapy_type_id": 5}
+340	therapies	262	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 17.50, "charge": 125.00, "taxable": false, "bucket_id": 19, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 262, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "Weight Loss Orientation", "therapy_type_id": 5}
+341	therapies	263	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 179.00, "charge": 1790.00, "taxable": false, "bucket_id": 23, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 263, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "YOY University 3 Month", "therapy_type_id": 5}
+342	therapies	264	\N	INSERT	\N	2025-09-30 03:14:39.134091+00	support	\N	\N	\N	\N	\N	{"cost": 229.00, "charge": 2290.00, "taxable": false, "bucket_id": 23, "created_at": "2025-09-30T03:14:39.134091+00:00", "created_by": null, "therapy_id": 264, "updated_at": "2025-09-30T03:14:39.134091+00:00", "updated_by": null, "active_flag": true, "description": null, "therapy_name": "YOY University 4 Month", "therapy_type_id": 5}
+343	member_program_items	3	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:00:49.544307+00	member	609	1	Program item updated: The Days From Start was changed.	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 7, "member_program_id": 1, "member_program_item_id": 3}	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:00:49.544307+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 8, "member_program_id": 1, "member_program_item_id": 3}
+344	member_programs	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:00:49.692349+00	member	609	1	Member program updated	\N	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T02:51:44.665187+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:00:49.692349+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}
+345	member_program_finances	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:00:49.994288+00	member	609	1	Program finances updated: The Taxes, Margin, and Program Price were changed.	\N	{"taxes": 0.00, "margin": 62.27, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2214.70, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}	{"taxes": 7.59, "margin": 62.40, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2222.29, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}
+346	member_program_items	3	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:01:13.463677+00	member	609	1	Program item updated: The Quantity was changed.	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:00:49.544307+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 8, "member_program_id": 1, "member_program_item_id": 3}	{"quantity": 2, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:01:13.463677+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 8, "member_program_id": 1, "member_program_item_id": 3}
+347	member_programs	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:01:13.651294+00	member	609	1	Member program updated: The Total Cost and Total Charge were changed.	\N	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:00:49.692349+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 1034.65, "updated_at": "2025-09-30T17:01:13.651294+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 3209.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}
+348	member_program_finances	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:01:13.932539+00	member	609	1	Program finances updated: The Margin and Program Price were changed.	\N	{"taxes": 7.59, "margin": 62.40, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2222.29, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}	{"taxes": 7.59, "margin": 67.84, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 3217.29, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}
+353	member_program_finances	2	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	member	609	2	Program finances created	\N	\N	{"taxes": 0.00, "margin": 62.27, "discounts": 0.00, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2214.70, "financing_type_id": null, "member_program_id": 2, "member_program_finance_id": 2}
+349	member_program_items	3	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:04:00.21156+00	member	609	1	Program item updated: The Quantity was changed.	\N	{"quantity": 2, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:01:13.463677+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 8, "member_program_id": 1, "member_program_item_id": 3}	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:04:00.21156+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 8, "member_program_id": 1, "member_program_item_id": 3}
+350	member_programs	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:04:00.347671+00	member	609	1	Member program updated: The Total Cost and Total Charge were changed.	\N	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 1034.65, "updated_at": "2025-09-30T17:01:13.651294+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 3209.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:04:00.347671+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "This is my test program please do not alter the content", "total_charge": 2214.70, "member_program_id": 1, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM", "template_version_date": "2025-09-30T02:51:44.617552+00:00"}
+351	member_program_finances	1	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:04:00.552668+00	member	609	1	Program finances updated: The Margin and Program Price were changed.	\N	{"taxes": 7.59, "margin": 67.84, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 3217.29, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}	{"taxes": 7.59, "margin": 62.40, "discounts": 0.00, "created_at": "2025-09-30T02:51:44.617552+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T02:51:44.617552+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2222.29, "financing_type_id": null, "member_program_id": 1, "member_program_finance_id": 1}
+352	member_programs	2	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	member	609	2	Member program created	{"status": "active", "start_date": null}	\N	{"lead_id": 609, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not mess with my program", "total_charge": 2214.70, "member_program_id": 2, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM II", "template_version_date": "2025-09-30T17:06:36.309418+00:00"}
+354	member_program_items	4	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	member	609	2	Program item created	\N	\N	{"quantity": 1, "item_cost": 36.95, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 85, "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 92.00, "days_between": 0, "instructions": "Take with food twice a day", "days_from_start": 14, "member_program_id": 2, "member_program_item_id": 4}
+355	member_program_items	5	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	member	609	2	Program item created	\N	\N	{"quantity": 6, "item_cost": 99.95, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 102, "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 187.95, "days_between": 30, "instructions": "Use one per day", "days_from_start": 0, "member_program_id": 2, "member_program_item_id": 5}
+356	member_program_items	6	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	member	609	2	Program item created	\N	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 7, "member_program_id": 2, "member_program_item_id": 6}
+357	member_programs	2	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.357884+00	member	609	2	Member program updated: The Status was changed.	{"to_status": "quote", "from_status": "active"}	{"lead_id": 609, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:06:36.309418+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not mess with my program", "total_charge": 2214.70, "member_program_id": 2, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM II", "template_version_date": "2025-09-30T17:06:36.309418+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T17:06:36.309418+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:06:36.357884+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not mess with my program", "total_charge": 2214.70, "member_program_id": 2, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM II", "template_version_date": "2025-09-30T17:06:36.309418+00:00"}
+358	member_programs	3	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	member	609	3	Member program created	{"status": "active", "start_date": null}	\N	{"lead_id": 609, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not alter the content of my program", "total_charge": 2214.70, "member_program_id": 3, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM III", "template_version_date": "2025-09-30T17:14:43.200876+00:00"}
+359	member_program_finances	3	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	member	609	3	Program finances created	\N	\N	{"taxes": 0.00, "margin": 62.27, "discounts": 0.00, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2214.70, "financing_type_id": null, "member_program_id": 3, "member_program_finance_id": 3}
+360	member_program_items	7	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	member	609	3	Program item created	\N	\N	{"quantity": 1, "item_cost": 36.95, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 85, "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 92.00, "days_between": 0, "instructions": "Take with food twice a day", "days_from_start": 14, "member_program_id": 3, "member_program_item_id": 7}
+361	member_program_items	8	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	member	609	3	Program item created	\N	\N	{"quantity": 6, "item_cost": 99.95, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 102, "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 187.95, "days_between": 30, "instructions": "Use one per day", "days_from_start": 0, "member_program_id": 3, "member_program_item_id": 8}
+362	member_program_items	9	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	member	609	3	Program item created	\N	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 7, "member_program_id": 3, "member_program_item_id": 9}
+363	member_programs	3	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.29416+00	member	609	3	Member program updated: The Status was changed.	{"to_status": "quote", "from_status": "active"}	{"lead_id": 609, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:14:43.200876+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not alter the content of my program", "total_charge": 2214.70, "member_program_id": 3, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM III", "template_version_date": "2025-09-30T17:14:43.200876+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T17:14:43.200876+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:14:43.29416+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Please do not alter the content of my program", "total_charge": 2214.70, "member_program_id": 3, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM III", "template_version_date": "2025-09-30T17:14:43.200876+00:00"}
+365	member_programs	5	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	member	609	5	Member program created	{"status": "active", "start_date": null}	\N	{"lead_id": 609, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Dont mess with this its mine", "total_charge": 2214.70, "member_program_id": 5, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM IV", "template_version_date": "2025-09-30T17:29:35.456951+00:00"}
+366	member_program_items	10	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	member	609	5	Program item created	\N	\N	{"quantity": 1, "item_cost": 36.95, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 85, "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 92.00, "days_between": 0, "instructions": "Take with food twice a day", "days_from_start": 14, "member_program_id": 5, "member_program_item_id": 10}
+367	member_program_items	11	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	member	609	5	Program item created	\N	\N	{"quantity": 6, "item_cost": 99.95, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 102, "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 187.95, "days_between": 30, "instructions": "Use one per day", "days_from_start": 0, "member_program_id": 5, "member_program_item_id": 11}
+368	member_program_items	12	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	member	609	5	Program item created	\N	\N	{"quantity": 1, "item_cost": 199.00, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "therapy_id": 116, "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "item_charge": 995.00, "days_between": 0, "instructions": "", "days_from_start": 7, "member_program_id": 5, "member_program_item_id": 12}
+369	member_program_finances	4	\N	INSERT	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	member	609	5	Program finances created	\N	\N	{"taxes": 7.59, "margin": 62.27, "discounts": 0.00, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "finance_charges": 0.00, "final_total_price": 2222.29, "financing_type_id": null, "member_program_id": 5, "member_program_finance_id": 4}
+370	member_programs	5	\N	UPDATE	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.508551+00	member	609	5	Member program updated: The Status was changed.	{"to_status": "quote", "from_status": "active"}	{"lead_id": 609, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:29:35.456951+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Dont mess with this its mine", "total_charge": 2214.70, "member_program_id": 5, "program_status_id": 1, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM IV", "template_version_date": "2025-09-30T17:29:35.456951+00:00"}	{"lead_id": 609, "created_at": "2025-09-30T17:29:35.456951+00:00", "created_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "start_date": null, "total_cost": 835.65, "updated_at": "2025-09-30T17:29:35.508551+00:00", "updated_by": "a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a", "active_flag": true, "description": "Dont mess with this its mine", "total_charge": 2214.70, "member_program_id": 5, "program_status_id": 6, "source_template_id": 1, "program_template_name": "TEST JAMES PROGRAM IV", "template_version_date": "2025-09-30T17:29:35.456951+00:00"}
 \.
 
 
@@ -3766,8 +4003,6 @@ COPY public.audit_logs (id, table_name, record_id, operation, old_record, new_re
 --
 
 COPY public.bodies (body_id, body_name, description, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-3	Bliss Body	This is the Bliss Body	t	2025-07-03 20:35:40.864806+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-07-03 21:29:26.801911+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-1	Physical Body	Just Testing	t	2025-05-08 21:35:15.56533+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-07-03 21:29:33.173158+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -3842,6 +4077,22 @@ COPY public.financing_types (financing_type_id, financing_type_name, financing_t
 3	Financed - 6 Pay	Will make 6 payments.  The first payment will equal 25% of the total.  The remaining balance will be split between the 5 remaining payments	t	2025-09-10 22:34:41.071155+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-10 22:34:41.071155+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	internal
 4	Financed - Patient Fi	Add the different amounts we are charged here	t	2025-09-15 01:17:13.670959+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 15:54:54.809796+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	external
 5	Financed - Cherry 	Add the different finance charges here	t	2025-09-15 01:17:55.032847+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 15:55:04.109868+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	external
+\.
+
+
+--
+-- Data for Name: lead_notes; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.lead_notes (note_id, lead_id, note_type, note, created_at, created_by) FROM stdin;
+1	260	PME	rescheduled for next week. child is sick	2025-09-24 21:00:01.501445+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+2	260	Win	Really exited about her progress	2025-09-24 21:02:52.701831+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+3	260	Challenge	This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. This an example of a Challange. 	2025-09-24 21:13:18.238436+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+4	260	Other	Now I have 1 of each type of note\n	2025-09-24 21:20:59.268033+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+5	260	PME	Just one more test for note count	2025-09-24 21:23:45.203813+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+6	260	Other	.... and one more test	2025-09-24 21:29:48.566773+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+7	150	PME	This is a test of Ally Hollas	2025-09-24 21:41:33.693508+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+8	150	PME	Just testing from the Leads grid	2025-09-24 21:49:28.536272+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -3926,7 +4177,6 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 78	Michael	Khalaf	update@later.com	2813334517	2	57	2025-09-18	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 79	Hibba	Khalifa	update@later.com	2813334518	3	58	2025-07-23	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 80	Mary	Broussard	update@later.com	2813334519	3	49	2025-07-18	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-81	#VALUE!	#VALUE!	update@later.com	2813334520	3	49	2025-07-18	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 82	Allison	Droddy	update@later.com	2813334521	11	58	2025-07-17	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 83	Karen	Harpold	update@later.com	2813334522	3	51	2025-07-17	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 84	Malka	Shivdasani	update@later.com	2813334523	3	58	2025-07-16	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4294,11 +4544,9 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 446	Precious	Hollins	update@later.com	2813334885	3	33	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 447	Glenda	Holmes	update@later.com	2813334886	3	36	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 448	Misty	Holsinger	update@later.com	2813334887	3	27	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-449	#VALUE!	#VALUE!	update@later.com	2813334888	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 450	Betty	Humphrey	update@later.com	2813334889	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 451	Farazia	Imam	update@later.com	2813334890	3	43	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 452	Kaukab	Jafry	update@later.com	2813334891	3	51	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-453	#VALUE!	#VALUE!	update@later.com	2813334892	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 454	Darlene	Johnson	update@later.com	2813334893	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 455	Lois	Johnson	update@later.com	2813334894	3	33	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 456	Susan	Johnson	update@later.com	2813334895	3	27	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4343,7 +4591,6 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 495	Deborah	Montz	update@later.com	2813334934	3	27	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 496	Carmen	Moreno	update@later.com	2813334935	3	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 497	Stacy	Morgan	update@later.com	2813334936	3	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-498	#VALUE!	#VALUE!	update@later.com	2813334937	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 499	Alla	Muzyka	update@later.com	2813334938	3	51	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 500	Sheryl	Myers	update@later.com	2813334939	3	28	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 501	Bessie	Neal	update@later.com	2813334940	3	35	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4362,9 +4609,7 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 514	Nikki	Osude	update@later.com	2813334953	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 515	Kat	Paterno	update@later.com	2813334954	3	58	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 516	Adelia	Pavliska	update@later.com	2813334955	3	45	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-517	#VALUE!	#VALUE!	update@later.com	2813334956	3	45	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 518	Sandra	Peeples	update@later.com	2813334957	3	48	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-519	#VALUE!	#VALUE!	update@later.com	2813334958	3	29	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 520	Maribel	Pettas	update@later.com	2813334959	3	41	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 521	Julie	Pham	update@later.com	2813334960	3	29	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 522	Michelle	Pham	update@later.com	2813334961	3	38	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4373,7 +4618,6 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 525	Lacy	Poth	update@later.com	2813334964	3	53	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 526	Dawn	Pounders	update@later.com	2813334965	3	27	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 527	Farra	R	update@later.com	2813334966	3	29	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-528	#VALUE!	#VALUE!	update@later.com	2813334967	3	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 529	Isabel	Rangel	update@later.com	2813334968	3	48	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 530	Virginia	Rangel	update@later.com	2813334969	3	50	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 531	Marla	Rasco	update@later.com	2813334970	3	24	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4398,12 +4642,10 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 550	Siu	Shum	update@later.com	2813334989	3	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 551	Amenahon	Sidahome	update@later.com	2813334990	3	42	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 552	Kee	Singletary	update@later.com	2813334991	3	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-553	#VALUE!	#VALUE!	update@later.com	2813334992	3	51	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 554	Hazel	Smith	update@later.com	2813334993	3	41	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 555	Isaura	Smith	update@later.com	2813334994	3	47	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 556	Lameca	Stewart	update@later.com	2813334995	3	25	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 557	Arlynea	Stuckey	update@later.com	2813334996	3	39	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
-558	#VALUE!	#VALUE!	update@later.com	2813334997	3	52	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 559	May	Tape	update@later.com	2813334998	3	30	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 560	Stephanie	Tettleton	update@later.com	2813334999	3	33	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 561	Nichole	Thalji	update@later.com	2813335000	3	48	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
@@ -4453,6 +4695,10 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 605	Candy	Rodriquez	update@later.com	2813335044	12	52	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 606	Elizabeth	Rose	update@later.com	2813335045	12	54	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
 607	Amanda	Williams	update@later.com	2813335046	12	52	\N	t	2025-09-03 18:58:31.554901+00	\N	2025-09-03 18:58:31.554901+00	\N
+608	Kami	Owen	kowenfnp@gmail.com	2817551792	4	37	2025-09-30	t	2025-09-29 20:42:10.391728+00	a8ba615f-befc-47c7-9016-4bccfac99e8f	2025-09-29 20:42:10.391728+00	a8ba615f-befc-47c7-9016-4bccfac99e8f
+609	Test	James	James.Owen@newo-co.com	2817551793	11	57	2025-09-15	t	2025-09-29 20:52:30.712526+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-29 20:52:30.712526+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+610	Test	Salah	myowja@gmail.com	2817551793	12	43	2025-07-17	t	2025-09-29 20:53:49.45024+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-29 20:53:49.45024+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+611	Test	Kami	kowendnp@gmail.com	2817551792	2	24	2025-09-30	t	2025-09-29 20:55:17.778468+00	a8ba615f-befc-47c7-9016-4bccfac99e8f	2025-09-29 20:55:17.778468+00	a8ba615f-befc-47c7-9016-4bccfac99e8f
 \.
 
 
@@ -4461,9 +4707,10 @@ COPY public.leads (lead_id, first_name, last_name, email, phone, status_id, camp
 --
 
 COPY public.member_program_finances (member_program_finance_id, member_program_id, finance_charges, taxes, discounts, final_total_price, margin, financing_type_id, created_at, created_by, updated_at, updated_by) FROM stdin;
-27	46	0.00	100.00	-300.00	4506.00	78.68	1	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-30	49	0.00	0.00	0.00	1082.00	80.02	3	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-29	48	225.00	0.00	0.00	855.00	85.29	2	2025-09-18 22:51:23.542926+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-18 22:51:23.542926+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+1	1	0.00	7.59	0.00	2222.29	62.40	\N	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+2	2	0.00	0.00	0.00	2214.70	62.27	\N	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+3	3	0.00	0.00	0.00	2214.70	62.27	\N	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+4	5	0.00	7.59	0.00	2222.29	62.27	\N	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4472,34 +4719,6 @@ COPY public.member_program_finances (member_program_finance_id, member_program_i
 --
 
 COPY public.member_program_item_schedule (member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-247	51	1	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-248	51	2	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-249	52	1	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-250	52	2	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-288	59	2	2025-09-23	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-290	59	4	2025-10-03	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-291	59	5	2025-10-08	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-292	59	6	2025-10-13	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-293	59	7	2025-10-18	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-294	59	8	2025-10-23	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-295	59	9	2025-10-28	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-296	59	10	2025-11-02	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-287	59	1	2025-09-18	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:02:00.962141+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-289	59	3	2025-09-28	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:02:03.472261+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-297	41	1	2025-09-26	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-298	41	2	2025-10-14	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-299	39	1	2025-10-02	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-300	39	2	2025-11-01	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-301	40	1	2025-10-10	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-302	40	2	2025-10-23	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-303	43	1	2025-09-24	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-304	43	2	2025-09-27	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-305	46	1	2025-11-21	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-306	37	1	2025-09-22	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-307	37	2	2025-09-29	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-308	42	1	2025-09-22	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-309	42	2	2025-10-07	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-310	42	3	2025-10-22	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4508,14 +4727,6 @@ COPY public.member_program_item_schedule (member_program_item_schedule_id, membe
 --
 
 COPY public.member_program_item_tasks (member_program_item_task_id, member_program_item_id, task_id, task_name, description, task_delay, completed_flag, completed_date, completed_by, created_at, created_by, updated_at, updated_by) FROM stdin;
-30	51	6	Schedule Thrive Labs	Schedule Scans and Blood Draw	-8	f	\N	\N	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-31	51	14	Testing Again	Just another Test	-2	f	\N	\N	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-32	52	1	Schedule the Next set of Labs	Call the patient and schedule their Thrive labs	-11	f	\N	\N	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-33	52	10	Another Misletoe task	I'm just testing here	-4	f	\N	\N	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-20	37	1	Schedule the Next set of Labs	Call the patient and schedule their Thrive labs	-11	f	\N	\N	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-21	37	10	Another Misletoe task	I'm just testing here	-4	f	\N	\N	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-39	59	14	Testing Again	Just another Test	-2	f	\N	\N	2025-09-20 03:24:51.937032+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:51.937032+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-38	59	6	Schedule Thrive Labs	Schedule Scans and Blood Draw	-14	f	\N	\N	2025-09-20 03:24:51.937032+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:54:49.727878+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4524,16 +4735,18 @@ COPY public.member_program_item_tasks (member_program_item_task_id, member_progr
 --
 
 COPY public.member_program_items (member_program_item_id, member_program_id, therapy_id, quantity, item_cost, item_charge, days_from_start, days_between, instructions, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-41	46	63	2	4.63	23.00	4	18		t	2025-09-17 03:19:04.711444+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 03:19:04.711444+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-39	46	11	2	70.71	354.00	10	30		t	2025-09-15 02:24:29.511283+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 03:44:03.482511+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-40	46	18	2	59.24	296.00	18	13		t	2025-09-16 03:05:50.123784+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 04:33:42.323126+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-59	48	15	10	12.58	63.00	0	10		t	2025-09-20 03:24:51.565925+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:59:57.338408+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-43	46	18	2	59.24	296.00	2	3		t	2025-09-17 04:33:42.323126+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 15:42:52.426943+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-46	46	31	1	95.50	478.00	60	0		t	2025-09-18 01:50:48.988674+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-18 01:50:48.988674+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-37	46	31	2	95.50	478.00	0	7		t	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-18 01:50:48.988674+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-42	46	31	3	95.50	478.00	0	15		t	2025-09-17 04:33:42.323126+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-18 01:59:28.094176+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-51	49	15	2	12.58	63.00	0	0		t	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-52	49	31	2	95.50	478.00	0	0		t	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+1	1	85	1	36.95	92.00	14	0	Take with food twice a day	t	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+2	1	102	6	99.95	187.95	0	30	Use one per day	t	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+3	1	116	1	199.00	995.00	8	0		t	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:04:00.21156+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+4	2	85	1	36.95	92.00	14	0	Take with food twice a day	t	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+5	2	102	6	99.95	187.95	0	30	Use one per day	t	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+6	2	116	1	199.00	995.00	7	0		t	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+7	3	85	1	36.95	92.00	14	0	Take with food twice a day	t	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+8	3	102	6	99.95	187.95	0	30	Use one per day	t	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+9	3	116	1	199.00	995.00	7	0		t	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+10	5	85	1	36.95	92.00	14	0	Take with food twice a day	t	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+11	5	102	6	99.95	187.95	0	30	Use one per day	t	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+12	5	116	1	199.00	995.00	7	0		t	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4542,38 +4755,6 @@ COPY public.member_program_items (member_program_item_id, member_program_id, the
 --
 
 COPY public.member_program_items_task_schedule (member_program_item_task_schedule_id, member_program_item_schedule_id, member_program_item_task_id, due_date, completed_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-216	289	39	2025-09-26	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-217	290	38	2025-09-25	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-218	290	39	2025-10-01	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-219	291	38	2025-09-30	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-220	291	39	2025-10-06	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-221	292	38	2025-10-05	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-222	292	39	2025-10-11	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-223	293	38	2025-10-10	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-224	293	39	2025-10-16	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-225	294	38	2025-10-15	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-226	294	39	2025-10-21	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-227	295	38	2025-10-20	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-228	295	39	2025-10-26	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-229	296	38	2025-10-25	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-230	296	39	2025-10-31	f	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-211	287	38	2025-09-10	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:56.288556+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-212	287	39	2025-09-16	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:58.250344+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-213	288	38	2025-09-15	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:07:59.809985+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-215	289	38	2025-09-20	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:08:02.435648+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-214	288	39	2025-09-21	t	2025-09-20 03:24:53.18673+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:08:04.336823+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-241	306	20	2025-09-11	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-242	306	21	2025-09-18	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-243	307	20	2025-09-18	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-244	307	21	2025-09-25	f	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:08:55.109429+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-163	247	30	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-164	247	31	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-165	248	30	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-166	248	31	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-167	249	32	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-168	249	33	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-169	250	32	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-170	250	33	\N	f	2025-09-20 00:46:31.486851+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:19.814434+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4582,16 +4763,6 @@ COPY public.member_program_items_task_schedule (member_program_item_task_schedul
 --
 
 COPY public.member_program_payments (member_program_payment_id, member_program_id, payment_amount, payment_due_date, payment_date, payment_status_id, payment_method_id, payment_reference, notes, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-104	46	2002.00	2025-09-17	\N	1	\N	\N	\N	t	2025-09-17 03:46:13.999984+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 03:46:13.999984+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-123	49	270.50	2025-09-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-124	49	162.30	2025-10-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-125	49	162.30	2025-11-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-126	49	162.30	2025-12-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-127	49	162.30	2026-01-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-128	49	162.30	2026-02-19	\N	1	\N	\N	\N	t	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-19 03:35:56.57536+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-146	48	285.00	2025-10-21	\N	1	\N	\N	\N	t	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-147	48	285.00	2025-11-21	\N	1	\N	\N	\N	t	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-145	48	285.00	2025-09-21	\N	4	2		Just testing the Save firing	t	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 21:19:25.79336+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4600,9 +4771,10 @@ COPY public.member_program_payments (member_program_payment_id, member_program_i
 --
 
 COPY public.member_programs (member_program_id, program_template_name, description, total_cost, total_charge, lead_id, start_date, active_flag, program_status_id, source_template_id, template_version_date, created_at, created_by, updated_at, updated_by) FROM stdin;
-48	James Test 3 One more time	We are just testing the trigger for update ONE More Time	125.80	630.00	260	2025-09-18	t	1	9	2025-09-18 22:51:23.542926+00	2025-09-18 22:51:23.542926+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-21 22:01:08.072751+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-49	James Test 4	Testing Copy of tasks - Paused Test DO NOT change status for a couple of days	216.16	1082.00	105	2025-09-09	t	3	9	2025-09-19 02:41:44.796664+00	2025-09-19 02:41:44.796664+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-20 02:05:20.128897+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-46	James Test	Testing Copy of tasks	960.64	4806.00	150	2025-09-22	t	1	9	2025-09-15 00:51:32.008213+00	2025-09-15 00:51:32.008213+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 17:20:27.542597+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+1	TEST JAMES PROGRAM	This is my test program please do not alter the content	835.65	2214.70	609	\N	t	6	1	2025-09-30 02:51:44.617552+00	2025-09-30 02:51:44.617552+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:04:00.347671+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+2	TEST JAMES PROGRAM II	Please do not mess with my program	835.65	2214.70	609	\N	t	6	1	2025-09-30 17:06:36.309418+00	2025-09-30 17:06:36.309418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:06:36.357884+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+3	TEST JAMES PROGRAM III	Please do not alter the content of my program	835.65	2214.70	609	\N	t	6	1	2025-09-30 17:14:43.200876+00	2025-09-30 17:14:43.200876+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:14:43.29416+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+5	TEST JAMES PROGRAM IV	Dont mess with this its mine	835.65	2214.70	609	\N	t	6	1	2025-09-30 17:29:35.456951+00	2025-09-30 17:29:35.456951+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 17:29:35.508551+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4611,28 +4783,28 @@ COPY public.member_programs (member_program_id, program_template_name, descripti
 --
 
 COPY public.menu_items (id, path, label, section, icon, created_at, updated_at) FROM stdin;
-60	/dashboard	Dashboard	main	Dashboard	2025-09-20 01:20:32.332588	2025-09-20 01:20:32.332588
-61	/dashboard/coordinator	Coordinator	main	AssignmentTurnedIn	2025-09-20 01:20:32.732402	2025-09-20 01:20:32.732402
-62	/dashboard/reports	Reports	main	BarChart	2025-09-20 01:20:33.030694	2025-09-20 01:20:33.030694
-63	/dashboard/audit-report	Audit Report	main	History	2025-09-20 01:20:33.285929	2025-09-20 01:20:33.285929
-64	/dashboard/campaigns	Campaigns	marketing	Event	2025-09-20 01:20:33.57669	2025-09-20 01:20:33.57669
-65	/dashboard/leads	Leads	marketing	GroupAdd	2025-09-20 01:20:33.883051	2025-09-20 01:20:33.883051
-66	/dashboard/programs	Programs	sales	School	2025-09-20 01:20:34.077159	2025-09-20 01:20:34.077159
-67	/documents	Documents	sales	Description	2025-09-20 01:20:34.388545	2025-09-20 01:20:34.388545
-68	/dashboard/admin/program-templates	Program Templates	admin	Description	2025-09-20 01:20:34.75253	2025-09-20 01:20:34.75253
-69	/dashboard/therapies	Therapies	admin	LocalHospital	2025-09-20 01:20:34.926177	2025-09-20 01:20:34.926177
-70	/dashboard/therapy-tasks	Therapy Tasks	admin	Assignment	2025-09-20 01:20:35.091021	2025-09-20 01:20:35.091021
-71	/dashboard/admin/users	User Management	admin	AdminPanelSettings	2025-09-20 01:20:35.353997	2025-09-20 01:20:35.353997
-72	/dashboard/bodies	Bodies	admin	PeopleAlt	2025-09-20 01:20:35.534541	2025-09-20 01:20:35.534541
-73	/dashboard/buckets	Buckets	admin	Inventory2	2025-09-20 01:20:35.709844	2025-09-20 01:20:35.709844
-74	/dashboard/financing-types	Financing Types	admin	AccountBalance	2025-09-20 01:20:35.893381	2025-09-20 01:20:35.893381
-75	/dashboard/status	Lead Status	admin	VerifiedUser	2025-09-20 01:20:36.201851	2025-09-20 01:20:36.201851
-76	/dashboard/payment-methods	Pay Methods	admin	Payment	2025-09-20 01:20:36.381254	2025-09-20 01:20:36.381254
-77	/dashboard/payment-status	Pay Status	admin	CheckCircle	2025-09-20 01:20:36.563712	2025-09-20 01:20:36.563712
-78	/dashboard/pillars	Pillars	admin	AccountTree	2025-09-20 01:20:36.769463	2025-09-20 01:20:36.769463
-79	/dashboard/program-status	Program Status	admin	AssignmentTurnedIn	2025-09-20 01:20:36.943164	2025-09-20 01:20:36.943164
-80	/dashboard/therapy-type	Therapy Types	admin	LocalHospital	2025-09-20 01:20:37.123246	2025-09-20 01:20:37.123246
-81	/dashboard/vendors	Vendors	admin	Store	2025-09-20 01:20:37.290106	2025-09-20 01:20:37.290106
+126	/dashboard	Dashboard	main	Dashboard	2025-09-29 18:47:05.412556	2025-09-29 18:47:05.412556
+127	/dashboard/coordinator	Coordinator	main	AssignmentTurnedIn	2025-09-29 18:47:06.394817	2025-09-29 18:47:06.394817
+128	/dashboard/campaigns	Campaigns	marketing	Event	2025-09-29 18:47:06.558353	2025-09-29 18:47:06.558353
+129	/dashboard/leads	Leads	marketing	GroupAdd	2025-09-29 18:47:06.736971	2025-09-29 18:47:06.736971
+130	/dashboard/reports	Reports	marketing	BarChart	2025-09-29 18:47:06.879536	2025-09-29 18:47:06.879536
+131	/dashboard/programs	Programs	sales	School	2025-09-29 18:47:07.025544	2025-09-29 18:47:07.025544
+132	/documents	Documents	sales	Description	2025-09-29 18:47:07.170273	2025-09-29 18:47:07.170273
+133	/dashboard/admin/program-templates	Program Templates	admin	Description	2025-09-29 18:47:07.346165	2025-09-29 18:47:07.346165
+134	/dashboard/therapies	Therapies	admin	LocalHospital	2025-09-29 18:47:07.51398	2025-09-29 18:47:07.51398
+135	/dashboard/therapy-tasks	Therapy Tasks	admin	Assignment	2025-09-29 18:47:07.650046	2025-09-29 18:47:07.650046
+136	/dashboard/admin/users	User Management	admin	AdminPanelSettings	2025-09-29 18:47:07.788077	2025-09-29 18:47:07.788077
+137	/dashboard/audit-report	Audit Report	admin	History	2025-09-29 18:47:07.942661	2025-09-29 18:47:07.942661
+138	/dashboard/bodies	Bodies	admin	PeopleAlt	2025-09-29 18:47:08.075477	2025-09-29 18:47:08.075477
+139	/dashboard/buckets	Buckets	admin	Inventory2	2025-09-29 18:47:08.239462	2025-09-29 18:47:08.239462
+140	/dashboard/financing-types	Financing Types	admin	AccountBalance	2025-09-29 18:47:08.372751	2025-09-29 18:47:08.372751
+141	/dashboard/status	Lead Status	admin	VerifiedUser	2025-09-29 18:47:08.521386	2025-09-29 18:47:08.521386
+142	/dashboard/payment-methods	Pay Methods	admin	Payment	2025-09-29 18:47:08.663373	2025-09-29 18:47:08.663373
+143	/dashboard/payment-status	Pay Status	admin	CheckCircle	2025-09-29 18:47:08.796326	2025-09-29 18:47:08.796326
+144	/dashboard/pillars	Pillars	admin	AccountTree	2025-09-29 18:47:08.935994	2025-09-29 18:47:08.935994
+145	/dashboard/program-status	Program Status	admin	AssignmentTurnedIn	2025-09-29 18:47:09.089857	2025-09-29 18:47:09.089857
+146	/dashboard/therapy-type	Therapy Types	admin	LocalHospital	2025-09-29 18:47:09.22685	2025-09-29 18:47:09.22685
+147	/dashboard/vendors	Vendors	admin	Store	2025-09-29 18:47:09.392978	2025-09-29 18:47:09.392978
 \.
 
 
@@ -4667,8 +4839,6 @@ COPY public.payment_status (payment_status_id, payment_status_name, payment_stat
 --
 
 COPY public.pillars (pillar_id, pillar_name, description, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-1	Nutrition	Gut Health and Healing	t	2025-05-08 21:20:03.779913+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-08 21:20:03.779913+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-6	My Pillar Test	Just Testing adding a New Pillar	f	2025-07-03 22:39:56.084106+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-07-03 22:40:15.49007+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4682,7 +4852,6 @@ COPY public.program_status (program_status_id, status_name, description, active_
 3	Paused	Program is temporarily paused	t	2025-06-22 18:14:25.451724+00	\N	2025-06-22 18:14:25.451724+00	\N
 4	Cancelled	Program has been cancelled	t	2025-06-22 18:14:25.451724+00	\N	2025-06-22 18:14:25.451724+00	\N
 6	Quote	This should be the first status a program is set to until the customer decides to participate	t	2025-09-09 01:50:01.220511+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 01:50:01.220511+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-7	Draft	Draft Mode.  Financial changes can only happen when this state is set	f	2025-09-15 22:32:39.918114+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-15 22:32:39.918114+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4691,15 +4860,7 @@ COPY public.program_status (program_status_id, status_name, description, active_
 --
 
 COPY public.program_template (program_template_id, program_template_name, description, total_cost, total_charge, margin_percentage, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-3	Thrive for WLP	This the third level plan	0.00	0.00	0.00	f	2025-04-28 23:56:06.65114+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-04 19:06:45.51352+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-7	New Test Program	The is the first level plan	0.00	0.00	0.00	f	2025-05-04 04:24:03.812968+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-04 04:24:03.812968+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-4	testing		0.00	0.00	0.00	f	2025-04-29 00:06:18.991544+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-06-11 01:30:49.435712+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-6	Kamis Testing	Testing	86.73	434.00	80.02	t	2025-05-02 00:58:31.570711+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-06-26 00:02:47.298773+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-5	Another tst		0.00	0.00	0.00	f	2025-04-29 00:46:14.875651+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-06-26 00:02:57.807842+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-1	Thrive Foundation	Use this to test member programs. Just testing again. one more time. Save and watch for grid update.	982.08	4916.00	80.00	t	2025-04-28 23:28:28.521126+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:34:13.272446+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-2	Thrive Primer	The is the second level plan	343.38	1719.00	80.00	t	2025-04-28 23:53:12.753574+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:51:26.019611+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-9	James Test Template Saving Test	Testing Copy of tasks	216.16	1082.00	80.00	t	2025-09-09 20:49:35.265323+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-17 00:14:06.763818+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-8	Just Test one more time	Test	0.00	0.00	0.00	f	2025-09-04 18:28:32.456833+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 02:06:22.574674+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+1	TEST JAMES	This my test template please do not alter the content	835.65	2214.70	62.30	t	2025-09-30 02:37:49.936248+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:41:24.06433+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4708,27 +4869,9 @@ COPY public.program_template (program_template_id, program_template_name, descri
 --
 
 COPY public.program_template_items (program_template_items_id, program_template_id, therapy_id, quantity, days_from_start, days_between, instructions, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-34	1	15	2	7	7	testo	f	2025-09-04 03:36:03.56584+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:17.586327+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-35	1	15	2	7	7	testo	f	2025-09-04 03:36:03.642763+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-04 03:36:23.497958+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-36	1	15	2	7	7	testo	f	2025-09-04 03:36:04.701572+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 02:03:27.604598+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-29	1	31	1	0	0	\N	f	2025-05-05 00:53:46.446857+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:05:17.53633+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-33	1	15	2	0	0	\N	f	2025-06-11 01:28:51.600717+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:05:40.910112+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-40	1	41	1	14	0		f	2025-09-05 02:35:46.36578+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:14:41.821054+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-39	1	38	2	2	2	One more save test	f	2025-09-05 02:02:51.556102+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:18:14.443386+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-38	1	14	2	2	19	Testing	f	2025-09-05 02:01:54.330976+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:24:34.810679+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-41	1	78	1	30	0	test placment in grid	f	2025-09-05 02:36:49.256529+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:29:56.610073+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-44	1	58	4	0	30	One more test	f	2025-09-05 20:32:56.065087+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:33:29.564932+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-43	1	11	10	10	10	This is now all set and I can move on to edit\n	t	2025-09-05 19:36:01.343082+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 20:45:02.595418+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-46	1	31	2	8	4	Just showing off for Kami	t	2025-09-05 21:09:35.67532+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:09:35.67532+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-45	1	25	2	0	0		f	2025-09-05 20:48:30.776297+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:11:03.626658+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-42	1	5	1	5	0	sort order test	f	2025-09-05 02:38:49.658188+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:28:53.666582+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-26	1	4	1	7	2	Take 2 of these and call me in the morning	f	2025-05-04 17:44:31.30399+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:29:17.909299+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-37	1	13	1	0	0		t	2025-09-04 03:55:10.882538+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:34:12.947227+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-48	2	14	3	0	0		t	2025-09-09 18:47:15.722582+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:15.722582+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-49	2	21	3	0	0		t	2025-09-09 18:47:43.47195+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:47:43.47195+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-47	2	11	3	0	0		f	2025-09-09 18:46:49.784788+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 18:51:25.596198+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-50	9	15	2	0	0		t	2025-09-09 22:01:00.245176+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:00.245176+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-51	9	31	2	0	0		t	2025-09-09 22:01:22.096209+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-09 22:01:22.096209+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+1	1	116	1	7	0		t	2025-09-30 02:38:41.73475+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:38:41.73475+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+2	1	102	6	0	30	Use one per day	t	2025-09-30 02:40:09.353922+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:40:09.353922+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+3	1	85	1	14	0	Take with food twice a day	t	2025-09-30 02:41:23.885249+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-30 02:41:23.885249+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4744,6 +4887,7 @@ COPY public.status (status_id, status_name, description, active_flag, created_at
 4	Won	Use this if they purchased a program	t	2025-04-28 02:56:24.163132+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 18:04:48.848601+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 12	UNK	Temp status to clean up data	t	2025-09-03 18:39:43.624216+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-03 18:39:43.624216+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 1	No PME	Use this if they attended a discovery but did not opt in for a PME	t	2025-04-28 02:54:48.605248+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-05 21:30:47.761184+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+13	No Program	No Program was offered	t	2025-09-29 03:05:45.197731+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-29 03:05:45.197731+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4751,79 +4895,271 @@ COPY public.status (status_id, status_name, description, active_flag, created_at
 -- Data for Name: therapies; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.therapies (therapy_id, therapy_name, description, therapy_type_id, bucket_id, cost, charge, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-6	B-12 Methylcobalamin - IM	IM	3	19	4.83	24.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-7	B5 Injection - IM	IM	3	19	8.90	45.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-8	Beauty Drip IV Therapy	Drip	3	19	51.06	255.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-9	Biotin - IM	IM	3	19	6.50	33.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-10	Blood Pressure Support (3000) IV Therapy	Drip	3	19	60.97	305.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-11	Blood Sugar Blaster IV Therapy	Drip	3	19	70.71	354.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-12	Calcium EDTA 3.0G IV Therapy	Drip	3	19	80.77	404.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-13	Disodium EDTA 3.0G IV Therapy	Drip	3	19	83.98	420.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-14	Energy Booster (Lava Lamp) - IM	IM	3	19	32.15	161.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-15	Glutathione 1000 IV Push	Push	3	19	12.58	63.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-16	Glutathione 2000 IV Push	Push	3	19	19.25	96.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-17	Glutathione 4000 IV Therapy	Drip	3	19	38.35	192.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-18	Healthy Weight IV Therapy	Drip	3	19	59.24	296.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-19	Hydration - Lactated Ringers IV Therapy	Drip	3	19	12.60	63.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-20	Hydration - Normal Saline IV Therapy	Drip	3	19	15.19	76.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-21	Illness Recovery IV Therapy	Drip	3	19	82.31	412.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-22	Immune Booster IV Therapy	Drip	3	19	41.43	207.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-23	Immune Complete IV Therapy	Drip	3	19	75.30	376.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-24	Ketoralac (Toradol) IM/IV	IM	3	19	13.00	65.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-25	Lipodissolve (Large) 	SQ	3	19	11.20	56.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-26	Lipodissolve (Small)	SQ	3	19	9.60	48.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-27	Miscellaneous 1000	Misc	3	19	1000.00	5000.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-28	Miscellaneous 500	Misc5	3	19	500.00	2500.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-29	Mistletoe (1) 100mg IV Therapy	Drip	3	19	29.88	149.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-30	Mistletoe (2) 200mg IV Therapy	Drip	3	19	51.75	259.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-31	Mistletoe (3) 400mg IV Therapy	Drip	3	19	95.50	478.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-32	Mistletoe (4) 600mg IV Therapy	Drip	3	19	139.25	696.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-33	Mistletoe (5) 800mg IV Therapy	Drip	3	19	183.00	915.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-34	Myers Plus IV Therapy	Drip	3	19	31.43	157.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-35	NAD+ (100mg) SQ	SQ	3	19	7.50	38.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-36	NAD+ (200mg) SQ	SQ	3	19	13.00	65.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-37	NAD+ (500mg) IV Therapy	Drip	3	19	44.50	223.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-38	Ondansetron (Zofran)	Push	3	19	26.94	135.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-39	Ozone and UBT IV Therapy	Drip	3	19	73.84	369.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-40	Ozone IV Therapy	Drip	3	19	42.46	212.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-41	Ozone Normal Saline IV Therapy	Drip	3	19	32.80	164.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-42	Post Operation IV Therapy	Drip	3	19	57.44	287.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-43	Pre Operation IV Therapy	Drip	3	19	31.55	158.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-44	Semiglutide 5mg/ml (Vial 1)	SQ	3	19	350.00	1750.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-45	Semiglutide 5mg/ml (Vial 2)	SQ	3	19	350.00	1750.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-46	Semiglutide 5mg/ml (Vial 3)	SQ	3	19	350.00	1750.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-47	Slim Shot Turbo IM	IM	3	19	6.77	34.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-48	Superhero IV Therapy	Drip	3	19	62.81	314.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-49	Tirzepitide Vile 1	SQ	3	19	700.00	3500.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-50	Tirzepitide Vile 2	SQ	3	19	700.00	3500.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-51	Tri-Immune Booster	IM	3	19	7.64	38.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-52	Tri-Immune IM	IM	3	19	23.57	118.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-53	Vitamin C 100G IV Therapy	Drip	3	19	151.99	760.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-54	Vitamin C 25G IV Therapy	Drip	3	19	48.86	244.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-55	Vitamin C 50G IV Therapy	Drip	3	19	81.99	410.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-56	Vitamin C 75G IV Therapy	Drip	3	19	116.99	585.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-57	Vitamin D3 100,000IU - IM	IM	3	19	27.32	137.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-59	Vitamin D3 300,000IU - IM	IM	3	19	42.98	215.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-60	Vitamin D3 50,000IU - IM	IM	3	19	15.66	78.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-62	Works IV Therapy	Drip	3	19	93.41	467.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-63	Zinc - IV Push	Push	3	19	4.63	23.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-64	Ivermectin (.5mg-40mg)	Med	3	19	31.50	158.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-65	Ivermectin (41mg-90mg)	Med	3	19	52.50	263.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-66	Ivermectin (91mg-150mg)	Med	3	19	61.50	308.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-67	Ivermectin (151mg-250mg)	Med	3	19	82.50	413.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-68	Mebendozole 1mg-199mg	Med	3	19	150.00	750.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-69	Mebendozole 200mg-499mg 3 Days	med	3	19	78.00	390.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-70	Mebendozole 200mg-499mg Daily	med	3	19	195.00	975.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-71	Mebendozole 500mg-899mg Daily	med	3	19	255.00	1275.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-72	Mebendozole 900mg-1500mg Daily	med	3	19	300.00	1500.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-73	Mebendozole 500mg-899mg Daily 3 Days	med	3	19	102.00	510.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-74	Mebendozole 900mg-1500mg 3 Days	med	3	19	120.00	600.00	t	2025-04-28 20:25:18.925523+00	\N	2025-04-28 20:25:18.925523+00	\N
-61	Ivermectin (.5mg-40mg)	Med	3	19	31.50	158.00	f	2025-04-28 20:25:18.925523+00	\N	2025-05-05 15:36:18.971009+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-58	Ivermectin (.5mg-40mg)	Med	3	19	31.50	158.00	t	2025-04-28 20:25:18.925523+00	\N	2025-05-05 15:36:44.375374+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-4	ALA 600mg IV Therapy	Drip	3	19	80.00	401.00	t	2025-04-28 20:25:18.925523+00	\N	2025-05-13 20:17:49.906032+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-78	Testing	Testing	3	16	99.00	495.00	t	2025-05-14 17:21:26.580224+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-14 17:21:26.580224+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-5	Anti-Aging IV Therapy	Drip	3	19	74.55	374.00	t	2025-04-28 20:25:18.925523+00	\N	2025-09-24 01:25:42.994323+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+COPY public.therapies (therapy_id, therapy_name, description, therapy_type_id, bucket_id, cost, charge, active_flag, created_at, created_by, updated_at, updated_by, taxable) FROM stdin;
+1	Balance (60ct)	\N	6	20	16.25	41.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+2	Energy Enhancer	\N	6	20	69.95	87.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+3	Her Creative Fire Tincture	\N	6	20	35.00	55.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+4	IgG Protect Powder (30serv)	\N	6	20	40.95	102.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+5	Inflamma-Blox (60ct)	\N	6	20	21.10	53.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+6	InflammaCORE Vanilla Chai (14serv)	\N	6	20	41.60	104.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+7	InosiCare (30serv)	\N	6	20	21.80	55.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+8	Magnetic Pulser	\N	6	20	328.43	475.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+9	Mistletoe - Viscum Abietis 100mg	\N	6	20	175.36	350.72	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+10	Mistletoe - Viscum Abietis 50 (8 vials)	\N	6	20	116.68	233.36	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+11	Mistletoe - Viscum Abietis Series 1 (Green Box)	\N	6	20	87.24	174.48	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+12	Mistletoe - Viscum Abietis Series 2 (Green Box)	\N	6	20	93.44	186.88	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+13	Mistletoe - Viscum Abietis Series 4 (Green Box)	\N	6	20	99.68	199.99	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+14	Mistletoe - Viscum Mali Series 2	\N	6	20	93.44	186.88	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+15	Mistletoe - Viscum Mali Series 4	\N	6	20	99.68	199.36	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+16	Mitocore (60ct)	\N	6	20	18.95	47.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+17	Reacted Magnesium & Potassium (60ct)	\N	6	20	15.60	39.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+18	SBI Protect Capsules (120ct)	\N	6	20	39.95	100.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+19	Silver Pulser	\N	6	20	211.55	375.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+20	Silymarin Forte (120ct)	\N	6	20	29.70	74.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+21	Thaena (90ct)	\N	6	20	299.00	525.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+22	TruAdapt (120ct)	\N	6	20	35.70	89.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+23	Turkey Tail Extract Powder (45G)	\N	6	20	42.00	69.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+24	Ultimate Selenium� Capsules (90ct)	\N	6	20	30.95	46.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+25	Bio Tuner 9	\N	6	20	194.74	365.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+26	Cerenity PM (120ct)	\N	6	20	34.95	87.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+27	Cerenity� (90ct)	\N	6	20	27.65	69.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+28	DG Protect (60ct)	\N	6	20	23.30	58.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+29	GlutaShield-Vanilla (30 Serv)	\N	6	20	24.45	61.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+30	Inflamma-Blox (120ct)	\N	6	20	36.85	92.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+31	Intestin-ol (90ct)	\N	6	20	30.85	77.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+32	Lugol's Iodine Liquid (2oz)	\N	6	20	36.40	62.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+33	Nattokinase (60ct)	\N	6	20	18.80	47.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+34	Orthomega� 820 (180ct)	\N	6	20	43.30	108.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+35	Prostatrol Forte (60ct)	\N	6	20	25.55	64.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+36	Reacted Cal-Mag (90ct)	\N	6	20	16.15	40.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+37	TruAdapt Plus (120ct)	\N	6	20	35.70	89.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+38	X49	\N	4	17	99.95	187.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	f
+39	Y-Age Glutathione	\N	4	17	69.95	87.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	f
+40	Botanicalm PM (60ct)	\N	6	20	28.45	71.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+41	CM Core (90ct)	\N	6	20	26.30	66.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+42	Icewave	\N	4	17	69.95	87.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	f
+43	Inner Balance	\N	6	20	111.30	159.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+44	Orthomega V (60ct)	\N	6	20	36.90	92.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+45	Pregnenolone Micronized (100ct)	\N	6	20	9.35	23.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+46	Turiva (120ct)	\N	6	20	46.50	116.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+47	Turkey Tail Extract (200 ct)	\N	6	20	42.00	69.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+48	Vitamin K2 with D3 (60ct)	\N	6	20	16.80	42.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+49	Y-Age Carnosine	\N	6	20	69.95	87.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+50	Adren-All (120ct)	\N	6	20	29.15	73.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+51	Bergamot BPF (120ct)	\N	6	20	43.25	108.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+52	CDG EstroDIM (60ct)	\N	6	20	40.85	102.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+53	CereVive (120ct)	\N	6	20	36.70	92.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+54	CoQ-10 300mg (60ct)	\N	6	20	42.90	107.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+55	Lithium Orotate (60ct)	\N	6	20	18.25	46.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+56	L-Theanine (60ct)	\N	6	20	20.95	52.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+57	MAF Capsules 300mg (60ct)	\N	6	20	210.00	420.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+58	Reacted Magnesium (180ct)	\N	6	20	22.95	57.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+59	Reacted Zinc (60ct)	\N	6	20	9.70	24.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+60	Reishi (200 ct)	\N	6	20	42.00	69.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+61	CitraNOX� (120ct)	\N	6	20	26.30	66.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+62	GABAnol (60ct)	\N	6	20	14.85	37.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+63	N-Acetyl Cysteine (60ct)	\N	6	20	14.95	37.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+64	Reacted Selenium (90ct)	\N	6	20	11.90	30.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+65	Z-Binder (60ct)	\N	6	20	16.95	42.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+66	Collagen Peptides (10.5oz)	\N	6	20	30.95	46.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+67	Core Restore Kit - Vanilla (7days)	\N	6	20	59.45	149.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+68	Methyl B12 (60ct)	\N	6	20	16.00	40.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+69	Mistletoe - Viscum Mali 100mg	\N	6	20	175.36	350.72	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+70	Natural D-Hist (120ct)	\N	6	20	24.40	61.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+71	Ultimate Mineral Caps� (64ct)	\N	6	20	46.95	70.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+72	Motility Pro (60ct)	\N	6	20	21.65	54.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+73	OsteoPrev (120ct)	\N	6	20	32.95	82.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+74	Sovereign Creative Stability	\N	6	20	32.00	42.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+75	Thyrotain (120ct)	\N	6	20	22.70	57.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+76	L-Glutathione (60ct)	\N	6	20	23.95	60.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+77	SAMe (60ct)	\N	6	20	44.70	112.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+78	Diaxinol (120ct)	\N	6	20	46.90	117.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+79	Hiphenolic (60ct)	\N	6	20	23.45	59.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+80	Ortho Biotic (60ct)	\N	6	20	33.30	83.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+81	Poria 15 Formula GF (Tablets)	\N	6	20	12.30	30.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+82	Reacted Iron (60ct)	\N	6	20	8.60	22.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+83	DHEA 25mg (90ct)	\N	6	20	11.20	28.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+84	Reacted Magnesium (120ct)	\N	6	20	16.80	42.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+85	SBI Protect Powder 2.6oz (30serv)	\N	6	20	36.95	92.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+86	Ultimate Daily Capsules (180ct)	\N	6	20	47.95	72.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+87	Digestzyme-V (180ct)	\N	6	20	35.70	89.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+88	Gluco-Gel Plus� Liquid (32floz)	\N	6	20	54.95	82.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+89	Majestic Earth Ultimate Classic� (32floz)	\N	6	20	48.95	73.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+90	His Creative Fire Tincture	\N	6	20	27.30	55.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+91	Slender FX� Sweet Eze� (120ct)	\N	6	20	29.95	45.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+92	Vitamin D3 50000IU (15ct)	\N	6	20	4.30	15.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+93	Mitocore (120ct)	\N	6	20	33.20	83.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+94	Thrive Alive	\N	6	20	33.60	55.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+95	Orthomega� 820 (120ct)	\N	6	20	30.95	77.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+96	Majestic Earth Strawberry Kiwi-Mins� (32floz)	\N	6	20	28.95	44.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+97	Methyl CPG (60ct)	\N	6	20	22.00	55.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+98	Digestive Enzyme Formula (200ct)	\N	6	20	66.50	105.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+99	Ultimate Tangy Tangerine� (32floz)	\N	6	20	48.95	73.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+100	Lugol's Iodine Plus Capsules (90ct)	\N	6	20	49.00	80.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+101	Majestic Earth Plant Derived Minerals � (32floz)	\N	6	20	23.95	44.00	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	t
+102	X39	\N	4	17	99.95	187.95	t	2025-09-30 01:55:45.126688+00	\N	2025-09-30 01:55:45.126688+00	\N	f
+103	ABO GROUPING (006056)	\N	8	14	2.00	10.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+104	Apolipoprotein A-1 (016873)	\N	8	14	5.30	26.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+105	Apolipoprotein B (167015)	\N	8	14	5.30	26.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+106	Bilirubin (Total, Direct, Indirect) (001214)	\N	8	14	1.60	8.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+107	C-Peptide (010108)	\N	8	14	6.00	30.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+108	C-Reactive Protein (CRP), Quantitative (006627)	\N	8	14	3.80	19.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+109	CANCER PANEL COMPLETE (308401)	\N	8	14	30.75	153.75	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+110	CBC/Complete Blood Count Lab (005009)	\N	8	14	2.00	10.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+111	Cortisol (004051)	\N	8	14	4.30	21.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+112	Creatine Kinase,Total (001362)	\N	8	14	1.50	7.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+113	D-Dimer (115188)	\N	8	14	13.80	69.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+114	DHEA-S (004020)	\N	8	14	4.00	20.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+115	Digoxin Level (007385)	\N	8	14	5.00	25.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+116	Eat 144 Allergy Test	\N	8	14	199.00	995.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+117	Eat 144 Allergy Test (Remote)	\N	8	14	199.00	995.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+118	Epstein-Barr Virus (EBV) Antibodies to Early Antigen-Diffuse [EA(D)], IgG (096248)	\N	8	14	12.00	60.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+119	Epstein-Barr Virus (EBV) Antibodies to Viral Capsid Antigen (VCA), IgG (096230)	\N	8	14	5.50	27.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+120	Epstein-Barr Virus (EBV) Antibodies to Viral Capsid Antigen (VCA), IgM (096735)	\N	8	14	9.00	45.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+121	Epstein-Barr Virus (EBV) Nuclear Antigen Antibodies, IgG (010272)	\N	8	14	6.50	32.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+122	ESR-Wes+CRP (286617)	\N	8	14	5.70	28.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+123	Ferritin (004598)	\N	8	14	2.00	10.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+124	Fibrinogen Activity (001610)	\N	8	14	4.30	21.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+125	Fibrinogen Antigen (117052)	\N	8	14	30.00	150.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+126	Folate & B12 - RBC (000810)	\N	8	14	8.00	40.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+127	Folate - RBC (266015)	\N	8	14	4.40	22.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+128	Follicle-stimulating Hormone (FSH) and Luteinizing Hormone (LH) (028480)	\N	8	14	6.00	30.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+129	Fructosanine (100800)	\N	8	14	4.50	22.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+130	G6PD RED CELL COUNT (001917)	\N	8	14	6.40	32.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+131	Gastrin (004390)	\N	8	14	5.30	26.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+132	GGT (001958)	\N	8	14	1.50	7.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+133	Glu + A1C + Insulin + C Peptide Lab (305907)	\N	8	14	13.25	66.25	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+134	Heavy Metals Profile II, Whole Blood (706200)	\N	8	14	103.00	515.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+135	HEMOGLOBIN A1C (001453)	\N	8	14	2.25	11.25	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+136	Homocystine (706994)	\N	8	14	12.00	60.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+137	hsCRP (120766)	\N	8	14	5.00	25.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+138	IGF-1 (010363)	\N	8	14	14.00	70.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+139	Insulin (Fasting) (004333)	\N	8	14	3.50	17.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+140	Iron Serum & TIBC (001321)	\N	8	14	2.40	12.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+141	LDH (001115)	\N	8	14	1.50	7.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+142	Leptin, Serum or Plasma (146712)	\N	8	14	29.50	147.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+143	Levetiracetam, Serum or Plasma (Keppra Level) (716936)	\N	8	14	35.00	175.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+144	Lipid Panel w/ Chol/HDL Ratio (221010)	\N	8	14	2.50	12.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+145	Lipid Panel With Total Cholesterol:HDL Ratio (221010)	\N	8	14	2.50	12.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+146	Lipoprotein (a) (120188)	\N	8	14	7.50	37.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+147	LYME (B. BURGDORFERI) PCR (138685)	\N	8	14	156.30	781.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+148	LYME, IGM, EARLY TEST/REFLEX (160333)	\N	8	14	10.60	53.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+149	LYME, TOTAL AB TEST/REFLEX (160325)	\N	8	14	13.00	65.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+150	Magnesium RBC (080283)	\N	8	14	15.90	79.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+151	Magnesium Serum (001537)	\N	8	14	2.00	10.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+152	Metabolic Panel (14), Comprehensive (322000)	\N	8	14	2.80	14.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+153	Osteocalcin, Serum (010249)	\N	8	14	30.00	150.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+154	PANCREATIC/COLORECTAL CANCER (222752)	\N	8	14	14.75	73.75	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+155	Parathyroid Hormone (PTH), Intact (015610)	\N	8	14	7.50	37.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+156	Phosphorus (001024)	\N	8	14	1.50	7.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+157	Progesterone (004317)	\N	8	14	6.00	30.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+158	PROGRAM LABS	\N	8	14	249.70	750.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+159	Prolactin (004465)	\N	8	14	3.50	17.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+160	Prothrombin Time (PT) and Partial Thromboplastin Time (PTT) (020321)	\N	8	14	4.75	23.75	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+161	PSA TOTAL (Reflex to free) (480772)	\N	8	14	3.50	17.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+162	Reticulocyte Count (005280)	\N	8	14	2.50	12.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+163	Reverse T3 (070104)	\N	8	14	15.90	79.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+164	Selenium, Whole Blood (081034)	\N	8	14	36.40	182.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+165	Sex Horm Binding Glob, Serum (082016)	\N	8	14	8.00	40.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+166	SpectraCell Micronutrient & Lipid Plus Panel Lab	\N	8	14	106.00	530.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+167	SpectraCell Micronutrient Lab	\N	8	14	84.00	420.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+168	T3 Uptake (001156)	\N	8	14	1.60	8.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+169	Testosterone, Total (004226)	\N	8	14	4.00	20.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+170	Thyroglobulin Antibody (006685)	\N	8	14	3.50	17.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+171	Thyroid Peroxidase (TPO) Antibodies (006676)	\N	8	14	6.00	30.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+172	Thyroid Profile With TSH (000620)	\N	8	14	5.70	28.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+173	Thyrotropin Receptor Antibody, Serum (010314)	\N	8	14	10.60	53.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+174	Thyroxine (T4) Free, Direct (001974)	\N	8	14	2.75	13.75	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+175	Thyroxine (T4), Free, Direct (001974)	\N	8	14	2.75	13.75	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+176	Thyroxine-binding Globulin (TBG), Serum (001735)	\N	8	14	10.00	50.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+177	Transferrin (004937)	\N	8	14	7.70	38.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+178	Triiodothyronine (T3) (002188)	\N	8	14	3.20	16.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+179	UA/M W/RFLX CULTURE, ROUTINE (377036)	\N	8	14	2.80	14.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+180	UIBC (001348)	\N	8	14	1.60	8.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+181	Uric Acid (001057)	\N	8	14	1.50	7.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+182	Vitamin B12 (001503)	\N	8	14	4.00	20.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+183	Vitamin C (with dilution) (123420)	\N	8	14	27.00	135.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+184	Vitamin D, 25-Hydroxy (081950)	\N	8	14	11.00	55.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+185	WELLNESS PANEL (387146)	\N	8	14	8.90	44.50	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+186	Zinc - RBC (070029)	\N	8	14	34.00	170.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+187	Zinc - Serum or Plasma (001800)	\N	8	14	7.00	35.00	t	2025-09-30 02:30:22.921321+00	\N	2025-09-30 02:30:22.921321+00	\N	f
+188	Acute Illness IV Therapy	Drip	3	19	81.44	375.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+189	ALA/Alpha Lipoic Acid (600mg) IV Therapy	Drip	3	19	73.50	335.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+190	Anti-Aging Therapy	Drip	3	19	94.21	325.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+191	B12/Methylcobalamin (5mg) Injection	IM	3	19	12.58	40.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+192	B7/Biotin Injection	IM55	3	19	16.25	70.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+193	Beauty IV Drip	Drip	3	19	82.80	225.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+194	Blood Pressure Support IV Therapy	Drip	3	19	129.29	325.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+195	Blood Sugar Blaster IV Therapy	Drip	3	19	125.64	499.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+196	Chelation (EDTA) Calcium IV Therapy	Drip	3	19	137.11	415.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+197	Energy Booster Injection	IM75	3	19	24.98	99.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+198	Glutathione (1000mg) IV Push	Push	3	19	23.83	70.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+199	Glutathione (2000mg) IV Push	Push	3	19	33.00	100.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+200	Glutathione (4000mg) IV Therapy	Drip	3	19	65.85	165.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+201	Healthy Weight IV Therapy	Drip	3	19	103.13	299.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+202	Hydration - Lactated Ringers IV Therapy	Drip	3	19	38.85	105.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+203	Hydration - Normal Saline IV Therapy	Drip	3	19	41.44	105.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+204	Illness Recovery Therapy	Drip	3	19	128.11	385.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+205	Immunity Booster IV Therapy	Drip	3	19	65.62	220.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+206	Immunity Complete IV Therapy	Drip	3	19	130.72	445.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+207	Magnesium (3000mg) IV Drip	Drip	3	19	52.58	135.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+208	Myers Plus	Drip	3	19	61.88	155.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+209	NAD+ (100mg) SQ Injection	SQ	3	19	14.00	55.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+210	NAD+ (200mg) SQ Injection	SQ	3	19	17.25	90.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+211	NAD+ (500mg) IV Therapy	Drip	3	19	173.25	520.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+212	Ozone in Normal Saline	Drip	3	19	76.55	195.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+213	Ozone IV Therapy 	Drip	3	19	86.21	220.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+214	Ozone with UltraViolet Blood IV Therapy	Drip	3	19	117.98	295.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+215	Superhero IV Therapy	Drip	3	19	75.68	275.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+216	Toradol�/Ketorolac (30mg) Injection	IM	3	19	17.25	55.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+217	Tri-Immune (Injection)	IM	3	19	32.32	100.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+218	Vitamin C (100g) with Hydration IV Therapy	Drip	3	19	231.99	580.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+219	Vitamin C (25g) IV Therapy	Drip	3	19	77.61	235.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+220	Vitamin C (50g) with Hydration IV Therapy	Drip	3	19	130.74	330.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+221	Vitamin C (75g) IV Therapy	Drip	3	19	176.99	445.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+222	Vitamin D3 (100,000IU) Injection	IM	3	19	21.15	65.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+223	Vitamin D3 (300,000IU) Injection	IM	3	19	29.35	90.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+224	Workout Recovery	Drip	3	19	101.44	299.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+225	Works IV Therapy	Drip	3	19	159.14	400.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+226	Zinc (20mg) IV Push	Push	3	19	13.38	45.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+227	Zofran�/Ondansetron IV Push	Push	3	19	31.36	95.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+228	Acupuncture 60 Minutes (Needles)	\N	5	19	35.00	199.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+229	Acupuncture EAM�- Single Session 30 Minutes	\N	5	19	26.25	199.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+230	Acupuncture Fire Cupping Treatment	\N	5	19	35.00	199.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+231	Bio-Optic Holography	\N	5	19	35.00	599.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+232	BrainTap� Session Add On	\N	5	19	35.00	175.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+233	Coaching Session	\N	5	19	5.00	25.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+234	Custom Treatment Plan	\N	5	19	35.00	750.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+235	Custom Treatment Plan Nutritional Visit	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+236	Emotion/Body Code Therapy (30 mins)	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+237	Energetic Osteopathy Treatment	\N	5	19	52.50	399.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+238	Cupping Treatment	\N	5	19	17.50	99.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+239	Food Sensitivity Remote Instruction/Supervision	\N	5	19	17.50	75.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+240	Food Sensitivity Test Review	\N	5	19	35.00	175.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+241	Genius Insight Voice Upload 	\N	5	19	8.75	25.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+242	Group RASHA	\N	5	19	5.00	25.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+243	Initial Nutritional Visit with Initial Supplements	\N	5	19	17.50	87.50	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+244	Lab Review	\N	5	19	17.50	375.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+245	Lymphatic Drainage 30 Minutes	\N	5	19	26.25	131.25	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+246	Physical Exam	\N	5	19	35.00	175.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+247	PICC Line Dressing Change	\N	5	19	17.50	87.50	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+248	Program Onboarding 1	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+249	Program Onboarding 2	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+250	Program Onboarding 3	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+251	Program ReCap and Maintenance Plan	\N	5	19	17.50	750.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+252	Rasha 120 Minutes 	\N	5	19	35.00	600.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+253	Rasha 60 Minutes	\N	5	19	17.50	300.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+254	Rasha 90 Minutes 	\N	5	19	17.50	450.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+255	Reiki Treatment 	\N	5	19	35.00	299.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+256	Sacred Body Language Translation 30 Minutes	\N	5	19	17.50	199.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+257	Shipping Fee	\N	5	19	25.00	25.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+258	Specialized Body Therapy Massage 90 Minutes	\N	5	19	61.25	306.25	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+259	Tuning Fork 30 Minutes Premium	\N	5	19	17.50	115.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+260	Vibration/Sound Therapy Massage 90 Minutes	\N	5	19	52.50	195.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+261	Weight Loss Check In	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+262	Weight Loss Orientation	\N	5	19	17.50	125.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+263	YOY University 3 Month	\N	5	23	179.00	1790.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
+264	YOY University 4 Month	\N	5	23	229.00	2290.00	t	2025-09-30 03:14:39.134091+00	\N	2025-09-30 03:14:39.134091+00	\N	f
 \.
 
 
@@ -4832,12 +5168,6 @@ COPY public.therapies (therapy_id, therapy_name, description, therapy_type_id, b
 --
 
 COPY public.therapies_bodies_pillars (therapy_id, body_id, pillar_id, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-5	1	1	t	2025-05-09 23:47:46.8766+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-09 23:47:46.8766+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-4	1	1	t	2025-05-10 12:22:48.405549+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-10 12:22:48.405549+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-16	1	1	t	2025-05-14 14:34:10.845103+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-14 14:34:10.845103+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-78	1	1	t	2025-05-14 17:21:49.48496+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-14 17:21:49.48496+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-5	3	1	t	2025-07-05 02:15:06.010515+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-07-05 02:15:06.010515+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-7	3	1	t	2025-09-24 01:26:17.178794+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-24 01:26:17.178794+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4846,16 +5176,6 @@ COPY public.therapies_bodies_pillars (therapy_id, body_id, pillar_id, active_fla
 --
 
 COPY public.therapy_tasks (task_id, task_name, description, therapy_id, task_delay, active_flag, created_at, created_by, updated_at, updated_by) FROM stdin;
-6	Schedule Thrive Labs	Schedule Scans and Blood Draw	15	-8	t	2025-05-03 16:45:09.84361+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-03 16:45:09.84361+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-9	One more test		25	-15	t	2025-05-03 18:34:48.892483+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-03 18:34:48.892483+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-1	Schedule the Next set of Labs	Call the patient and schedule their Thrive labs	31	-11	t	2025-05-03 16:26:05.505582+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-03 18:42:31.03734+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-10	Another Misletoe task	I'm just testing here	31	-4	t	2025-05-05 00:57:23.918885+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-05 00:57:23.918885+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-11	fsdfsdfs	sdfsdfsd	16	-18	t	2025-05-06 17:56:48.740635+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-06 17:56:48.740635+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-12	sdfsfsdfdf	sdfsdfsdf	4	5	t	2025-05-06 18:26:09.768037+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-06 18:26:09.768037+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-14	Testing Again	Just another Test	15	-2	t	2025-06-11 01:15:02.33514+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-06-11 01:15:02.33514+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-15	Just a Test	Testing the creation of Therapy Tasks	14	0	t	2025-09-08 14:18:50.840959+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 14:18:50.840959+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-3	Schedule Thrive Labs	Schedule initial labs for scans and blood draws	18	-7	f	2025-05-03 16:41:03.000716+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 16:55:36.058324+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-16	Another Test	Just testing add one more time	13	-10	t	2025-09-08 16:56:11.108217+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-08 16:56:27.697331+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4867,9 +5187,8 @@ COPY public.therapytype (therapy_type_id, therapy_type_name, description, active
 4	Home Therapy	Examples are Lifewave patches, Mag Pulser etc	t	2025-04-28 20:03:27.536569+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-04-28 20:03:27.536569+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 5	Service	Examples are Tuning Forks, Physical Exam etc.	t	2025-04-28 20:04:15.767858+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-04-28 20:05:36.459887+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 6	Supplement	Examples are DHEA Majestic Earth Minerals etc.	t	2025-04-28 20:05:08.552764+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-04-28 20:05:44.55609+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-8	Functional Nutrition	Examples are Misletoe, IVs, NAD etc	f	2025-05-05 14:57:36.699562+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-05 14:57:36.699562+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-9	asdfssdf		t	2025-05-06 17:52:49.055511+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-06 17:52:49.055511+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 3	Functional Nutrition	Examples are Misletoe, IVs, NAD etc	t	2025-04-28 20:02:15.717938+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-05-06 18:27:22.066173+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+8	Test	Examples Wellness Test, EAT144	t	2025-05-05 14:57:36.699562+00	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	2025-09-25 01:48:39.727931+00	\N
 \.
 
 
@@ -4896,32 +5215,10 @@ COPY public.user_menu_permissions (id, user_id, menu_path, granted_at, granted_b
 108	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/therapies	2025-09-08 14:06:06.48339	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 109	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/therapy-tasks	2025-09-08 14:06:06.672255	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 110	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/vendors	2025-09-08 14:06:06.821831	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-111	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard	2025-09-08 14:06:06.967386	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-112	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/reports	2025-09-08 14:06:07.12588	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-113	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/audit-report	2025-09-08 14:06:07.270897	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-114	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/campaigns	2025-09-08 14:06:07.424457	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-115	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/leads	2025-09-08 14:06:07.582611	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-116	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/programs	2025-09-08 14:06:07.738848	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-117	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/documents	2025-09-08 14:06:07.88989	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-118	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/admin/users	2025-09-08 14:06:08.049157	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-119	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/bodies	2025-09-08 14:06:08.213159	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-120	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/buckets	2025-09-08 14:06:08.363175	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-121	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/status	2025-09-08 14:06:08.513734	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-122	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/pillars	2025-09-08 14:06:08.664626	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-123	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/program-status	2025-09-08 14:06:08.827638	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-124	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/admin/program-templates	2025-09-08 14:06:08.984779	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-125	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/therapy-type	2025-09-08 14:06:09.146117	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-126	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/therapies	2025-09-08 14:06:09.30319	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-127	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/therapy-tasks	2025-09-08 14:06:09.448898	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-128	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/vendors	2025-09-08 14:06:09.604816	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 129	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/programs	2025-09-10 21:00:38.293596	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 130	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/financing-types	2025-09-10 21:00:38.840314	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 131	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/payment-methods	2025-09-10 21:00:39.004169	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 132	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/payment-status	2025-09-10 21:00:39.171209	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-133	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/programs	2025-09-10 21:00:40.82387	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-134	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/financing-types	2025-09-10 21:00:41.310017	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-135	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/payment-methods	2025-09-10 21:00:41.522359	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-136	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/payment-status	2025-09-10 21:00:41.722459	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 137	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/audit-report	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 138	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 139	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/reports	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
@@ -4936,8 +5233,65 @@ COPY public.user_menu_permissions (id, user_id, menu_path, granted_at, granted_b
 148	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/therapies	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 149	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/therapy-tasks	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 150	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/admin/users	2025-09-10 21:01:58.570095	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
-151	5b0ceed7-5f27-4752-8fca-1a9d7f527441	/dashboard/coordinator	2025-09-20 01:20:37.623917	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 152	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	/dashboard/coordinator	2025-09-20 01:20:39.830732	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+153	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/coordinator	2025-09-29 03:12:11.785231	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+154	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/programs	2025-09-29 03:12:12.28886	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+155	d583c051-8c7a-4977-abd5-be15348ca538	/documents	2025-09-29 03:12:12.491192	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+156	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/bodies	2025-09-29 03:12:13.000486	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+157	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/buckets	2025-09-29 03:12:13.158179	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+158	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/pillars	2025-09-29 03:12:13.639036	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+159	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/program-status	2025-09-29 03:12:13.804025	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+160	d583c051-8c7a-4977-abd5-be15348ca538	/dashboard/therapy-type	2025-09-29 03:12:13.959586	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+161	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard	2025-09-29 03:12:14.209068	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+162	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/coordinator	2025-09-29 03:12:14.391427	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+163	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/audit-report	2025-09-29 03:12:14.547058	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+164	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/campaigns	2025-09-29 03:12:14.690769	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+165	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/leads	2025-09-29 03:12:14.868393	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+166	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/reports	2025-09-29 03:12:15.020924	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+167	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/programs	2025-09-29 03:12:15.193875	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+168	a8ba615f-befc-47c7-9016-4bccfac99e8f	/documents	2025-09-29 03:12:15.37357	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+169	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/admin/program-templates	2025-09-29 03:12:15.518783	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+170	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/therapies	2025-09-29 03:12:15.675165	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+171	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/therapy-tasks	2025-09-29 03:12:15.83414	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+172	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/admin/users	2025-09-29 03:12:15.977581	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+173	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/bodies	2025-09-29 03:12:16.127823	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+174	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/buckets	2025-09-29 03:12:16.293031	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+175	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/financing-types	2025-09-29 03:12:16.453624	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+176	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/status	2025-09-29 03:12:16.60492	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+177	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/payment-methods	2025-09-29 03:12:16.76907	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+178	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/payment-status	2025-09-29 03:12:16.924982	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+179	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/pillars	2025-09-29 03:12:17.096946	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+180	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/program-status	2025-09-29 03:12:17.262799	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+181	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/therapy-type	2025-09-29 03:12:17.434468	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+182	a8ba615f-befc-47c7-9016-4bccfac99e8f	/dashboard/vendors	2025-09-29 03:12:17.590869	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+183	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard	2025-09-29 03:12:17.773651	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+184	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/coordinator	2025-09-29 03:12:17.943897	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+185	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/audit-report	2025-09-29 03:12:18.103706	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+186	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/campaigns	2025-09-29 03:12:18.294345	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+187	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/leads	2025-09-29 03:12:18.46297	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+188	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/reports	2025-09-29 03:12:18.642628	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+189	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/programs	2025-09-29 03:12:18.813942	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+190	27886ce5-5117-40ad-b97c-279ed74f8a88	/documents	2025-09-29 03:12:19.000864	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+191	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/admin/program-templates	2025-09-29 03:12:19.168099	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+192	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/therapies	2025-09-29 03:12:19.335373	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+193	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/therapy-tasks	2025-09-29 03:12:19.496224	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+194	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/admin/users	2025-09-29 03:12:19.669832	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+195	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/bodies	2025-09-29 03:12:19.85098	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+196	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/buckets	2025-09-29 03:12:20.076652	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+197	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/financing-types	2025-09-29 03:12:20.263135	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+198	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/status	2025-09-29 03:12:20.427315	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+199	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/payment-methods	2025-09-29 03:12:20.634613	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+200	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/payment-status	2025-09-29 03:12:20.795557	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+201	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/pillars	2025-09-29 03:12:20.989299	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+202	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/program-status	2025-09-29 03:12:21.159053	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+203	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/therapy-type	2025-09-29 03:12:21.32089	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+204	27886ce5-5117-40ad-b97c-279ed74f8a88	/dashboard/vendors	2025-09-29 03:12:21.478955	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+205	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+206	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard/campaigns	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+207	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard/leads	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+208	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard/reports	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+209	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard/vendors	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
+210	9fd60aca-70b4-4c09-a829-557985e421e4	/dashboard/status	2025-09-29 03:23:48.007476	a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a
 \.
 
 
@@ -4946,12 +5300,11 @@ COPY public.user_menu_permissions (id, user_id, menu_path, granted_at, granted_b
 --
 
 COPY public.users (id, email, full_name, created_at, is_admin, is_active) FROM stdin;
-5fea9280-b2a0-47c7-965d-9712409f304b	saleh@owen.casa	\N	2025-06-04 18:25:28.328831+00	f	f
-5b0ceed7-5f27-4752-8fca-1a9d7f527441	saleh.owen@gmail.com	\N	2025-05-20 20:15:27.199648+00	t	f
-a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	james@youonlyyounger.com	\N	2025-04-24 03:18:26.089499+00	t	t
 d583c051-8c7a-4977-abd5-be15348ca538	james.owen@newo-co.com	Salah James Owen	2025-09-08 00:28:18.361214+00	t	t
 a8ba615f-befc-47c7-9016-4bccfac99e8f	kami@youonlyyounger.com	Kami Owen	2025-09-24 01:20:17.245507+00	t	t
 27886ce5-5117-40ad-b97c-279ed74f8a88	aldana@youonlyyounger.com	Aldana Matamoros	2025-09-24 01:20:55.236262+00	t	t
+a1ebfe3c-9270-4e2a-89f0-4d5b4e5f033a	james@youonlyyounger.com	James Owen	2025-04-24 03:18:26.089499+00	t	t
+9fd60aca-70b4-4c09-a829-557985e421e4	jennifer@youonlyyounger.com	Jennifer Yager	2025-09-29 03:19:41.237684+00	f	t
 \.
 
 
@@ -4969,126 +5322,133 @@ COPY public.vendors (vendor_id, vendor_name, contact_person, email, phone, activ
 -- Name: audit_events_event_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_events_event_id_seq', 235, true);
+SELECT pg_catalog.setval('public.audit_events_event_id_seq', 370, true);
 
 
 --
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 145, true);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 145, false);
 
 
 --
 -- Name: bodies_body_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.bodies_body_id_seq', 3, true);
+SELECT pg_catalog.setval('public.bodies_body_id_seq', 1, false);
 
 
 --
 -- Name: buckets_bucket_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.buckets_bucket_id_seq', 26, true);
+SELECT pg_catalog.setval('public.buckets_bucket_id_seq', 24, false);
 
 
 --
 -- Name: campaigns_campaign_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.campaigns_campaign_id_seq', 58, true);
+SELECT pg_catalog.setval('public.campaigns_campaign_id_seq', 59, false);
 
 
 --
 -- Name: financing_types_financing_type_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.financing_types_financing_type_id_seq', 5, true);
+SELECT pg_catalog.setval('public.financing_types_financing_type_id_seq', 6, false);
+
+
+--
+-- Name: lead_notes_note_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.lead_notes_note_id_seq', 9, false);
 
 
 --
 -- Name: leads_lead_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.leads_lead_id_seq', 607, true);
+SELECT pg_catalog.setval('public.leads_lead_id_seq', 612, true);
 
 
 --
 -- Name: member_program_finances_member_program_finance_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_finances_member_program_finance_id_seq', 30, true);
+SELECT pg_catalog.setval('public.member_program_finances_member_program_finance_id_seq', 4, true);
 
 
 --
 -- Name: member_program_item_schedule_member_program_item_schedule_id_se; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_item_schedule_member_program_item_schedule_id_se', 310, true);
+SELECT pg_catalog.setval('public.member_program_item_schedule_member_program_item_schedule_id_se', 1, false);
 
 
 --
 -- Name: member_program_item_tasks_member_program_item_task_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_item_tasks_member_program_item_task_id_seq', 39, true);
+SELECT pg_catalog.setval('public.member_program_item_tasks_member_program_item_task_id_seq', 1, false);
 
 
 --
 -- Name: member_program_items_member_program_item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_items_member_program_item_id_seq', 59, true);
+SELECT pg_catalog.setval('public.member_program_items_member_program_item_id_seq', 12, true);
 
 
 --
 -- Name: member_program_items_task_schedule_member_program_item_task_sch; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_items_task_schedule_member_program_item_task_sch', 244, true);
+SELECT pg_catalog.setval('public.member_program_items_task_schedule_member_program_item_task_sch', 1, false);
 
 
 --
 -- Name: member_program_payments_member_program_payment_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_program_payments_member_program_payment_id_seq', 147, true);
+SELECT pg_catalog.setval('public.member_program_payments_member_program_payment_id_seq', 1, false);
 
 
 --
 -- Name: member_programs_member_program_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.member_programs_member_program_id_seq', 49, true);
+SELECT pg_catalog.setval('public.member_programs_member_program_id_seq', 5, true);
 
 
 --
 -- Name: menu_items_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.menu_items_id_seq', 81, true);
+SELECT pg_catalog.setval('public.menu_items_id_seq', 148, false);
 
 
 --
 -- Name: payment_methods_payment_method_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.payment_methods_payment_method_id_seq', 7, true);
+SELECT pg_catalog.setval('public.payment_methods_payment_method_id_seq', 7, false);
 
 
 --
 -- Name: payment_status_payment_status_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.payment_status_payment_status_id_seq', 4, true);
+SELECT pg_catalog.setval('public.payment_status_payment_status_id_seq', 5, false);
 
 
 --
 -- Name: pillars_pillar_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.pillars_pillar_id_seq', 6, true);
+SELECT pg_catalog.setval('public.pillars_pillar_id_seq', 1, false);
 
 
 --
@@ -5102,21 +5462,21 @@ SELECT pg_catalog.setval('public.program_items_program_item_id_seq', 1, false);
 -- Name: program_status_program_status_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.program_status_program_status_id_seq', 7, true);
+SELECT pg_catalog.setval('public.program_status_program_status_id_seq', 7, false);
 
 
 --
 -- Name: program_template_items_program_template_items_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.program_template_items_program_template_items_id_seq', 51, true);
+SELECT pg_catalog.setval('public.program_template_items_program_template_items_id_seq', 3, true);
 
 
 --
 -- Name: program_template_program_template_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.program_template_program_template_id_seq', 9, true);
+SELECT pg_catalog.setval('public.program_template_program_template_id_seq', 1, true);
 
 
 --
@@ -5130,42 +5490,42 @@ SELECT pg_catalog.setval('public.programs_program_id_seq', 1, false);
 -- Name: status_status_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.status_status_id_seq', 12, true);
+SELECT pg_catalog.setval('public.status_status_id_seq', 14, false);
 
 
 --
 -- Name: therapies_therapy_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.therapies_therapy_id_seq', 79, true);
+SELECT pg_catalog.setval('public.therapies_therapy_id_seq', 264, true);
 
 
 --
 -- Name: therapy_tasks_task_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.therapy_tasks_task_id_seq', 16, true);
+SELECT pg_catalog.setval('public.therapy_tasks_task_id_seq', 1, false);
 
 
 --
 -- Name: therapy_type_therapy_type_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.therapy_type_therapy_type_id_seq', 10, true);
+SELECT pg_catalog.setval('public.therapy_type_therapy_type_id_seq', 11, false);
 
 
 --
 -- Name: user_menu_permissions_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.user_menu_permissions_id_seq', 152, true);
+SELECT pg_catalog.setval('public.user_menu_permissions_id_seq', 211, false);
 
 
 --
 -- Name: vendors_vendor_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.vendors_vendor_id_seq', 8, true);
+SELECT pg_catalog.setval('public.vendors_vendor_id_seq', 5, false);
 
 
 --
@@ -5206,6 +5566,14 @@ ALTER TABLE ONLY public.buckets
 
 ALTER TABLE ONLY public.campaigns
     ADD CONSTRAINT campaigns_pkey PRIMARY KEY (campaign_id);
+
+
+--
+-- Name: lead_notes lead_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.lead_notes
+    ADD CONSTRAINT lead_notes_pkey PRIMARY KEY (note_id);
 
 
 --
@@ -5465,6 +5833,27 @@ CREATE INDEX idx_aevt_when ON public.audit_events USING btree (event_at);
 --
 
 CREATE INDEX idx_aevtchg_col ON public.audit_event_changes USING btree (column_name);
+
+
+--
+-- Name: idx_lead_notes_created_at; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_lead_notes_created_at ON public.lead_notes USING btree (created_at DESC);
+
+
+--
+-- Name: idx_lead_notes_lead_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_lead_notes_lead_id ON public.lead_notes USING btree (lead_id);
+
+
+--
+-- Name: idx_lead_notes_note_type; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_lead_notes_note_type ON public.lead_notes USING btree (note_type);
 
 
 --
@@ -5955,6 +6344,14 @@ ALTER TABLE ONLY public.therapies
 
 
 --
+-- Name: lead_notes fk_lead_notes_lead_id; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.lead_notes
+    ADD CONSTRAINT fk_lead_notes_lead_id FOREIGN KEY (lead_id) REFERENCES public.leads(lead_id) ON DELETE CASCADE;
+
+
+--
 -- Name: member_program_finances fk_member_program_finances_financing_type; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6104,6 +6501,14 @@ ALTER TABLE ONLY public.member_program_items
 
 ALTER TABLE ONLY public.therapies
     ADD CONSTRAINT fk_therapy_type FOREIGN KEY (therapy_type_id) REFERENCES public.therapytype(therapy_type_id);
+
+
+--
+-- Name: lead_notes lead_notes_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.lead_notes
+    ADD CONSTRAINT lead_notes_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -6443,6 +6848,20 @@ ALTER TABLE ONLY public.vendors
 
 
 --
+-- Name: lead_notes Authenticated users can insert lead notes; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Authenticated users can insert lead notes" ON public.lead_notes FOR INSERT TO authenticated WITH CHECK (true);
+
+
+--
+-- Name: lead_notes Authenticated users can view lead notes; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Authenticated users can view lead notes" ON public.lead_notes FOR SELECT TO authenticated USING (true);
+
+
+--
 -- Name: bodies all_access_bodies; Type: POLICY; Schema: public; Owner: postgres
 --
 
@@ -6661,6 +7080,12 @@ ALTER TABLE public.financing_types ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY financing_types_read ON public.financing_types FOR SELECT TO authenticated USING (true);
 
+
+--
+-- Name: lead_notes; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.lead_notes ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: leads; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -6974,12 +7399,12 @@ GRANT ALL ON FUNCTION public.compute_program_total_pause_days(p_program_id integ
 
 
 --
--- Name: FUNCTION create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date); Type: ACL; Schema: public; Owner: postgres
 --
 
-REVOKE ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date) TO authenticated;
-GRANT ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_id integer, p_start_date date) TO service_role;
+REVOKE ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date) TO authenticated;
+GRANT ALL ON FUNCTION public.create_member_program_from_template(p_lead_id integer, p_template_ids integer[], p_program_name text, p_description text, p_start_date date) TO service_role;
 
 
 --
@@ -7168,6 +7593,24 @@ GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.fi
 
 GRANT ALL ON SEQUENCE public.financing_types_financing_type_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.financing_types_financing_type_id_seq TO service_role;
+
+
+--
+-- Name: TABLE lead_notes; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.lead_notes TO anon;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.lead_notes TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE public.lead_notes TO service_role;
+
+
+--
+-- Name: SEQUENCE lead_notes_note_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.lead_notes_note_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.lead_notes_note_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.lead_notes_note_id_seq TO service_role;
 
 
 --
@@ -7628,5 +8071,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT SELECT,I
 -- PostgreSQL database dump complete
 --
 
-\unrestrict eUB9AbDMbqByKFubIf9ubyxePqdxli34znaGTNPf0BzUYZEdpJ5jj1GqncEdb2K
+\unrestrict HXy1aZTXyMq53elNl58n2ykBcCGCSccgRx0xGvbi4Z6kqoAz0eB0dPyutVBXPSj
 

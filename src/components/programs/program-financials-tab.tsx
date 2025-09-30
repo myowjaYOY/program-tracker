@@ -39,6 +39,7 @@ import {
 } from '@/lib/hooks/use-member-program-payments';
 import { useActiveFinancingTypes } from '@/lib/hooks/use-financing-types';
 import { useMemberProgram } from '@/lib/hooks/use-member-programs';
+import { useMemberProgramItems } from '@/lib/hooks/use-member-program-items';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import { isProgramLocked } from '@/lib/utils/program-lock';
 import useFinancialsLock from '@/lib/hooks/use-financials-lock';
@@ -77,6 +78,23 @@ export default function ProgramFinancialsTab({
   );
   const { data: freshProgram } = useMemberProgram(program.member_program_id);
   const { data: allStatuses = [] } = useProgramStatus();
+  
+  // Fetch program items to calculate taxable charge
+  const { data: programItems = [] } = useMemberProgramItems(program.member_program_id);
+
+  // Calculate total taxable charge from items
+  const totalTaxableCharge = React.useMemo(() => {
+    return (programItems || []).reduce((sum: number, item: any) => {
+      const quantity = item.quantity || 1;
+      const charge = item.item_charge || 0;
+      const isTaxable = item.therapies?.taxable === true;
+      
+      if (isTaxable) {
+        return sum + (charge * quantity);
+      }
+      return sum;
+    }, 0);
+  }, [programItems]);
 
   const paidTotal = React.useMemo(() => {
     return (payments || []).reduce((sum: number, p: any) => {
@@ -204,13 +222,14 @@ export default function ProgramFinancialsTab({
   };
 
   // Derived values via shared hook
-  const { programPrice: derivedProgramPrice, margin: derivedMargin } =
+  const { programPrice: derivedProgramPrice, margin: derivedMargin, taxes: derivedTaxes } =
     useFinancialsDerived({
       totalCharge: Number(program.total_charge || 0),
       totalCost: Number(program.total_cost || 0),
       financeCharges: Number(watchedValues.finance_charges || 0),
       discounts: Number(watchedValues.discounts || 0),
       taxes: Number(existingFinances?.taxes || 0),
+      totalTaxableCharge: totalTaxableCharge,
     });
 
   // Load existing data when available
@@ -296,6 +315,7 @@ export default function ProgramFinancialsTab({
         discounts: Number(data.discounts || 0),
         final_total_price: Number(data.final_total_price || 0),
         margin: Number(data.margin || 0),
+        taxes: derivedTaxes, // Use calculated taxes from derived hook
         financing_type_id: safeFinancingTypeId,
       } as Partial<MemberProgramFinancesFormData>;
       setInline(null);
@@ -671,7 +691,7 @@ export default function ProgramFinancialsTab({
                 label="Taxes"
                 fullWidth
                 disabled
-                value={formatCurrency(Number(existingFinances?.taxes || 0))}
+                value={formatCurrency(derivedTaxes)}
                 InputProps={{ readOnly: true }}
                 helperText="Calculated from taxable items (8.25%)"
               />

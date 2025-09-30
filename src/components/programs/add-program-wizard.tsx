@@ -26,7 +26,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useLeads } from '@/lib/hooks/use-leads';
+import { useLeadsForProgramCreation } from '@/lib/hooks/use-leads';
 import { useProgramTemplates } from '@/lib/hooks/use-program-templates';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import { useCreateMemberProgram } from '@/lib/hooks/use-member-programs';
@@ -68,18 +68,12 @@ export default function AddProgramWizard({
   const [totalCost, setTotalCost] = useState(0);
   const [totalCharge, setTotalCharge] = useState(0);
 
-  const { data: allLeads = [] } = useLeads();
+  const { data: leads = [] } = useLeadsForProgramCreation();
   const { data: allProgramTemplates = [] } = useProgramTemplates();
   const { data: programStatuses = [] } = useActiveProgramStatus();
 
-  // Filter leads: exclude Lost, UNK, or No PME status and sort by first name
-  const leads = allLeads
-    .filter(
-      lead =>
-        (lead as any).status_name &&
-        !['Lost', 'UNK', 'No PME'].includes((lead as any).status_name)
-    )
-    .sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
+  // Sort leads by first name
+  const sortedLeads = leads.sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
 
   // Filter program templates: only active ones and sort by name
   const programTemplates = allProgramTemplates
@@ -222,7 +216,7 @@ export default function AddProgramWizard({
                       onBlur={field.onBlur}
                       name={field.name}
                     >
-                      {leads.map(lead => (
+                      {sortedLeads.map(lead => (
                         <MenuItem key={lead.lead_id} value={lead.lead_id}>
                           {lead.first_name} {lead.last_name} ({lead.email})
                         </MenuItem>

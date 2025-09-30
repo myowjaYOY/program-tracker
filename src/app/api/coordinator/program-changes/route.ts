@@ -91,6 +91,46 @@ export async function GET(req: NextRequest) {
 
     let rows = (data as any[]) || [];
 
+    // Filter for Active and Paused programs only (IDs 1 and 3)
+    if (rows.length > 0) {
+      try {
+        // Get Active and Paused program status IDs
+        const { data: statusData, error: statusError } = await supabase
+          .from('program_status')
+          .select('program_status_id, status_name')
+          .in('status_name', ['Active', 'Paused']);
+
+        if (statusError) {
+          // Continue with unfiltered data if status fetch fails
+        } else {
+          const activeAndPausedStatusIds = statusData?.map(s => s.program_status_id) || [];
+          
+          // Get member programs with their status IDs
+          const programIds = [...new Set(rows.map(r => r.program_id).filter(Boolean))];
+          if (programIds.length > 0) {
+            const { data: memberPrograms, error: programsError } = await supabase
+              .from('member_programs')
+              .select('member_program_id, program_status_id')
+              .in('member_program_id', programIds);
+
+            if (programsError) {
+              // Continue with unfiltered data if member programs fetch fails
+            } else if (memberPrograms) {
+              // Filter to only include Active and Paused programs
+              const activePausedProgramIds = memberPrograms
+                .filter(mp => activeAndPausedStatusIds.includes(mp.program_status_id))
+                .map(mp => mp.member_program_id);
+
+              // Filter rows to only include Active/Paused programs
+              rows = rows.filter(row => activePausedProgramIds.includes(row.program_id));
+            }
+          }
+        }
+      } catch (error) {
+        // Continue with unfiltered data if filtering fails
+      }
+    }
+
     // Handle unique grouping if requested
     if (uniqueOnly) {
       // Group by member_id + program_id, take most recent change per program

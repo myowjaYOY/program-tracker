@@ -13,7 +13,7 @@ import {
   useCreateMemberProgram,
   useUpdateMemberProgram,
 } from '@/lib/hooks/use-member-programs';
-import { useActiveLeads } from '@/lib/hooks/use-leads';
+import { useLeadsForProgramCreation } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 
 interface ProgramFormProps {
@@ -51,7 +51,7 @@ export default function ProgramForm({
 
   const createProgram = useCreateMemberProgram();
   const updateProgram = useUpdateMemberProgram();
-  const { data: leads = [] } = useActiveLeads();
+  const { data: leads = [] } = useLeadsForProgramCreation();
   const { data: programStatuses = [] } = useActiveProgramStatus();
 
   const onSubmit = async (values: MemberProgramFormData) => {

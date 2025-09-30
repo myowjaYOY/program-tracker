@@ -16,7 +16,7 @@ import {
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import TodayIcon from '@mui/icons-material/Today';
+import { Today as TodayIcon } from '@mui/icons-material';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
@@ -44,11 +44,11 @@ export default function CoordinatorPage() {
   const [end, setEnd] = useState<string | null>(null);
 
 
-  // Members: only leads with programs not Cancelled/Completed/Quote
+  // Members: only leads with programs that are Active or Paused
   const memberOptions = useMemo(() => {
-    const excluded = new Set(['cancelled', 'completed', 'quote']);
+    const included = new Set(['active', 'paused']);
     const filtered = (programs || []).filter((p: any) =>
-      !excluded.has((p.status_name || '').toLowerCase())
+      included.has((p.status_name || '').toLowerCase())
     );
     const pairs = filtered
       .filter((p: any) => !!p.lead_id)

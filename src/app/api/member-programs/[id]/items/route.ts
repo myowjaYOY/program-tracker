@@ -220,7 +220,7 @@ async function updateMemberProgramCalculatedFields(
     // Calculate totals
     let totalCost = 0;
     let totalCharge = 0;
-    let calculatedTaxes = 0;
+    let totalTaxableCharge = 0;
 
     (items || []).forEach((item: any) => {
       const quantity = item.quantity || 1;
@@ -231,9 +231,9 @@ async function updateMemberProgramCalculatedFields(
       totalCost += cost * quantity;
       totalCharge += charge * quantity;
       
-      // Calculate taxes for taxable items (8.25% rate)
+      // Track taxable charge separately
       if (isTaxable) {
-        calculatedTaxes += charge * quantity * 0.0825;
+        totalTaxableCharge += charge * quantity;
       }
     });
 
@@ -264,10 +264,23 @@ async function updateMemberProgramCalculatedFields(
     }
     const positiveFinance = Math.max(0, financeCharges);
     const negativeFinanceFee = Math.max(0, -financeCharges);
+    
+    // Calculate proportional discount for taxable items
+    let calculatedTaxes = 0;
+    if (totalCharge > 0 && totalTaxableCharge > 0) {
+      // Calculate what percentage of the total charge is taxable
+      const taxablePercentage = totalTaxableCharge / totalCharge;
+      // Apply that percentage of the discount to taxable items
+      const taxableDiscount = Math.abs(discounts) * taxablePercentage;
+      // Calculate taxes on the discounted taxable amount
+      const discountedTaxableCharge = totalTaxableCharge - taxableDiscount;
+      calculatedTaxes = discountedTaxableCharge * 0.0825;
+    }
+    
     const finalTotal = totalCharge + positiveFinance + discounts + calculatedTaxes;
     const margin =
       finalTotal > 0
-        ? ((finalTotal - (totalCost + negativeFinanceFee)) / finalTotal) * 100
+        ? ((finalTotal - (totalCost + negativeFinanceFee + calculatedTaxes)) / finalTotal) * 100
         : 0;
 
     // Check if finances record exists

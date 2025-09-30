@@ -231,7 +231,7 @@ export async function POST(
   }
   let charge = 0;
   let cost = 0;
-  let calculatedTaxes = 0;
+  let totalTaxableCharge = 0;
   for (const r of postItems || []) {
     const quantity = Number(r.quantity || 0);
     const itemCharge = Number(r.item_charge || 0);
@@ -241,14 +241,26 @@ export async function POST(
     charge += itemCharge * quantity;
     cost += itemCost * quantity;
     
-    // Calculate taxes for taxable items (8.25% rate)
+    // Track taxable charge separately
     if (isTaxable) {
-      calculatedTaxes += itemCharge * quantity * 0.0825;
+      totalTaxableCharge += itemCharge * quantity;
     }
+  }
+  
+  // Calculate proportional discount for taxable items
+  let calculatedTaxes = 0;
+  if (charge > 0 && totalTaxableCharge > 0) {
+    // Calculate what percentage of the total charge is taxable
+    const taxablePercentage = totalTaxableCharge / charge;
+    // Apply that percentage of the discount to taxable items
+    const taxableDiscount = Math.abs(discounts) * taxablePercentage;
+    // Calculate taxes on the discounted taxable amount
+    const discountedTaxableCharge = totalTaxableCharge - taxableDiscount;
+    calculatedTaxes = discountedTaxableCharge * 0.0825;
   }
   const projectedPrice = charge + financeCharges + discounts + calculatedTaxes;
   const projectedMargin =
-    lockedPrice > 0 ? ((lockedPrice - cost) / lockedPrice) * 100 : 0;
+    lockedPrice > 0 ? ((lockedPrice - (cost + calculatedTaxes)) / lockedPrice) * 100 : 0;
   const priceDeltaCents = toCents(projectedPrice) - toCents(lockedPrice);
   const marginDelta = projectedMargin - lockedMargin;
   const ok =

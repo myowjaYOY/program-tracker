@@ -29,7 +29,7 @@ import {
   MemberProgramFormData,
 } from '@/lib/validations/member-program';
 import { MemberPrograms } from '@/types/database.types';
-import { useActiveLeads } from '@/lib/hooks/use-leads';
+import { useLeadsForProgramCreation } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
@@ -63,7 +63,7 @@ export default function ProgramInfoTab({
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: leads = [] } = useActiveLeads();
+  const { data: leads = [] } = useLeadsForProgramCreation();
   const { data: programStatuses = [] } = useActiveProgramStatus();
   const { data: finances } = useMemberProgramFinances(
     program.member_program_id
