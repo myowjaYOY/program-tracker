@@ -164,3 +164,31 @@ export function useDeleteMemberProgramPayment(programId: number) {
     },
   });
 }
+
+export function useBatchUpdateMemberProgramPayments() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ programId, paymentUpdates }: { programId: number; paymentUpdates: any[] }) => {
+      const res = await fetch(`/api/member-programs/${programId}/payments/batch-update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ paymentUpdates }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to batch update payments');
+      return json.data;
+    },
+    onSuccess: (_, { programId }) => {
+      toast.success('Payments updated successfully');
+      queryClient.invalidateQueries({
+        queryKey: memberProgramPaymentKeys.byProgram(programId),
+      });
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to update payments');
+    },
+  });
+}

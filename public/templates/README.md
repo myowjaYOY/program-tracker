@@ -28,7 +28,7 @@ Create a Word document with the following bookmarks:
 - `MARGIN` - Margin percentage
 
 #### Payment Schedule Section
-- `PAYMENT_SCHEDULE` - Formatted payment schedule list
+- `PAYMENT_SCHEDULE` - Word table with payment schedule (columns: Payment #, Date, Amount, Status)
 - `TOTAL_PAYMENTS` - Total number of payments
 - `PAID_PAYMENTS` - Number of paid payments
 - `PENDING_PAYMENTS` - Number of pending payments
@@ -71,6 +71,7 @@ Margin: [MARGIN]
 
 Payment Schedule:
 [PAYMENT_SCHEDULE]
+(Word table with borders and proper formatting)
 
 Summary:
 Total Payments: [TOTAL_PAYMENTS]

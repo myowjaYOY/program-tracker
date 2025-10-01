@@ -83,6 +83,7 @@ export default function ProgramPaymentsTab({
             initialValues={initialValues as any}
             mode={mode}
             onSuccess={onClose}
+            programStatus={statusName}
           />
         )}
         pageSize={10}

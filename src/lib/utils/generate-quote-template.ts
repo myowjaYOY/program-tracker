@@ -4,7 +4,7 @@ interface QuoteData {
   member: {
     name: string;
     email: string;
-    phone: string;
+    phone?: string;
     address?: string;
   };
   program: {
@@ -33,6 +33,21 @@ export async function downloadQuoteFromTemplate(
   data: QuoteData,
   templateBuffer: ArrayBuffer
 ): Promise<void> {
+  return downloadDocumentFromTemplate(data, templateBuffer, 'Q');
+}
+
+export async function downloadContractFromTemplate(
+  data: QuoteData,
+  templateBuffer: ArrayBuffer
+): Promise<void> {
+  return downloadDocumentFromTemplate(data, templateBuffer, 'C');
+}
+
+async function downloadDocumentFromTemplate(
+  data: QuoteData,
+  templateBuffer: ArrayBuffer,
+  prefix: string
+): Promise<void> {
   try {
     // Prepare bookmark replacements
     const replacements: Record<string, string> = {
@@ -55,8 +70,7 @@ export async function downloadQuoteFromTemplate(
       'FINAL_TOTAL_PRICE': `$${data.financials.finalTotalPrice.toFixed(2)}`,
       'MARGIN': `${data.financials.margin.toFixed(2)}%`,
       
-      // Payment Schedule
-      'PAYMENT_SCHEDULE': formatPaymentSchedule(data.payments),
+      // Payment Schedule - will be handled separately as Word elements
       
       // Generated Date
       'GENERATED_DATE': data.generatedDate,
@@ -72,12 +86,18 @@ export async function downloadQuoteFromTemplate(
     const buffer = Buffer.from(templateBuffer);
     
     // Replace bookmarks in template with font size option
-    const updatedDocxBuffer = await docxmarks(buffer, replacements, 11);
+    let updatedDocxBuffer = await docxmarks(buffer, replacements, 11);
+    
+           // Handle payment schedule as formatted text
+           if (data.payments && data.payments.length > 0) {
+             const formattedTable = formatPaymentScheduleAsText(data.payments);
+             updatedDocxBuffer = await docxmarks(updatedDocxBuffer, { 'PAYMENT_SCHEDULE': formattedTable });
+           }
     
     // Create filename by removing special characters
     const memberName = data.member.name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
     const programName = data.program.name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-    const filename = `${memberName} - ${programName}.docx`;
+    const filename = `${prefix}-${memberName} - ${programName}.docx`;
     
     // Create blob and trigger download
     const blob = new Blob([new Uint8Array(updatedDocxBuffer)], {
@@ -97,33 +117,25 @@ export async function downloadQuoteFromTemplate(
   }
 }
 
-function formatPaymentSchedule(payments: QuoteData['payments']): string {
+
+function formatPaymentScheduleAsText(payments: QuoteData['payments']): string {
   if (!payments || payments.length === 0) {
     return 'No payment schedule available.';
   }
 
-  const paymentRows = payments.map((payment, index) => {
-    const status = payment.paymentDate ? 'Paid' : 'Pending';
-    const statusIcon = payment.paymentDate ? '✓' : '○';
-    return `${index + 1}. ${statusIcon} $${payment.amount.toFixed(2)} - Due: ${payment.dueDate} (${status})`;
-  }).join('\n');
-
-  return `Payment Schedule:\n${paymentRows}`;
-}
-
-// Alternative: Generate a simple table format for the payment schedule
-function formatPaymentScheduleTable(payments: QuoteData['payments']): string {
-  if (!payments || payments.length === 0) {
-    return 'No payment schedule available.';
-  }
-
-  const header = 'Payment #\tAmount\t\tDue Date\t\tStatus';
-  const separator = '─────────\t──────\t\t────────\t\t──────';
+  // Create tab-separated text that Word can convert to a table
+  const header = 'Payment #\tDate\tAmount\tStatus';
+  
   const rows = payments.map((payment, index) => {
     const status = payment.paymentDate ? 'Paid' : 'Pending';
-    return `${index + 1}\t\t$${payment.amount.toFixed(2)}\t\t${payment.dueDate}\t\t${status}`;
-  }).join('\n');
+    const paymentNumber = (index + 1).toString();
+    const amount = `$${payment.amount.toFixed(2)}`;
+    
+    return `${paymentNumber}\t${payment.dueDate}\t${amount}\t${status}`;
+  });
 
-  return `${header}\n${separator}\n${rows}`;
+  return `${header}\t\n${rows.join('\t\n')}`;
 }
+
+
 

@@ -10,7 +10,7 @@ export interface ProgramLockInfo {
  * A single source of truth for determining whether Financials/Items should be locked.
  * Rules:
  * - Lock when program status is not "Quote" (case-insensitive)
- * - Lock when there is at least one payment with a Paid Date
+ * - Paid payments do not lock the Financials tab
  */
 export function isProgramLocked(
   program: Partial<MemberPrograms> | null | undefined,
@@ -27,7 +27,7 @@ export function isProgramLocked(
     : false;
 
   return {
-    locked: isLockedByStatus || hasPaidPayment,
+    locked: isLockedByStatus, // Only lock by status, ignore paid payments
     isLockedByStatus,
     hasPaidPayment,
   };

@@ -34,7 +34,7 @@ import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
-import { downloadQuoteFromTemplate } from '@/lib/utils/generate-quote-template';
+import { downloadQuoteFromTemplate, downloadContractFromTemplate } from '@/lib/utils/generate-quote-template';
 import { loadTemplate, TEMPLATE_PATHS } from '@/lib/utils/template-loader';
 import { toast } from 'sonner';
 
@@ -61,6 +61,7 @@ export default function ProgramInfoTab({
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
+  const [isGeneratingContract, setIsGeneratingContract] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: leads = [] } = useLeadsForProgramCreation();
@@ -219,24 +220,18 @@ export default function ProgramInfoTab({
     try {
       setIsGeneratingQuote(true);
       
-      // Get the current lead data
-      const currentLead = leads.find(lead => lead.lead_id === program.lead_id);
-      if (!currentLead) {
-        throw new Error('Lead information not found');
-      }
-
       // Check if financial data exists
       if (!finances) {
         throw new Error('Program financial information not found. Please ensure the program has financial data before generating a quote.');
       }
 
-      // Prepare quote data
+      // Prepare quote data using lead info already in program object
       const quoteData = {
         member: {
-          name: `${currentLead.first_name || ''} ${currentLead.last_name || ''}`.trim(),
-          email: currentLead.email || '',
-          phone: currentLead.phone || '',
-          address: '', // Address field not available in Leads table
+          name: program.lead_name || 'N/A',
+          email: program.lead_email || 'N/A',
+          phone: 'N/A', // Phone not available
+          address: 'N/A', // Address not available
         },
         program: {
           name: program.program_template_name || 'Program',
@@ -277,6 +272,65 @@ export default function ProgramInfoTab({
       console.error('Quote generation error:', error);
     } finally {
       setIsGeneratingQuote(false);
+    }
+  };
+
+  const handleGenerateContract = async () => {
+    try {
+      setIsGeneratingContract(true);
+      
+      // Check if financial data exists
+      if (!finances) {
+        throw new Error('Program financial information not found. Please ensure the program has financial data before generating a contract.');
+      }
+
+      // Prepare contract data using lead info already in program object
+      const contractData = {
+        member: {
+          name: program.lead_name || 'N/A',
+          email: program.lead_email || 'N/A',
+          phone: 'N/A', // Phone not available
+          address: 'N/A', // Address not available
+        },
+        program: {
+          name: program.program_template_name || 'Program',
+          description: program.description || 'No description available',
+          startDate: program.start_date ? new Date(program.start_date).toLocaleDateString() : 'Not set',
+          duration: 'Program duration not specified',
+        },
+        financials: {
+          financeCharges: finances?.finance_charges || 0,
+          taxes: finances?.taxes || 0,
+          discounts: finances?.discounts || 0,
+          finalTotalPrice: finances?.final_total_price || 0,
+          margin: finances?.margin || 0,
+        },
+        payments: (payments || []).map(payment => ({
+          paymentId: payment.member_program_payment_id,
+          amount: payment.payment_amount || 0,
+          dueDate: payment.payment_due_date ? new Date(payment.payment_due_date).toLocaleDateString() : 'Not set',
+          ...(payment.payment_date && { paymentDate: new Date(payment.payment_date).toLocaleDateString() }),
+        })),
+        generatedDate: new Date().toLocaleDateString(),
+      };
+
+      // Load the contract template
+      let templateBuffer: ArrayBuffer;
+      try {
+        templateBuffer = await loadTemplate(TEMPLATE_PATHS.CONTRACT);
+      } catch (templateError) {
+        throw new Error(`Template not found. Please ensure ${TEMPLATE_PATHS.CONTRACT} exists in the public/templates directory. ${templateError instanceof Error ? templateError.message : ''}`);
+      }
+      
+      // Generate and download the document from template
+      await downloadContractFromTemplate(contractData, templateBuffer);
+      toast.success('Contract document generated successfully!');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to generate contract: ${errorMessage}`);
+      console.error('Contract generation error:', error);
+    } finally {
+      setIsGeneratingContract(false);
     }
   };
 
@@ -493,17 +547,15 @@ export default function ProgramInfoTab({
             </Button>
             <Button
               variant="outlined"
-              disabled={program.status_name?.toLowerCase() !== 'quote'}
+              disabled={program.status_name?.toLowerCase() !== 'quote' || isGeneratingContract}
               sx={{ 
                 minWidth: 100,
                 borderRadius: 0,
               }}
-              onClick={() => {
-                // TODO: Implement Contract functionality
-                console.log('Contract button clicked');
-              }}
+              onClick={handleGenerateContract}
+              startIcon={isGeneratingContract ? <CircularProgress size={16} /> : undefined}
             >
-              Contract
+              {isGeneratingContract ? 'Generating...' : 'Contract'}
             </Button>
           </Box>
 
