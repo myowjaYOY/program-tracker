@@ -491,7 +491,7 @@ export default function ProgramItemsTab({
     },
     {
       field: 'days_from_start',
-      headerName: 'Days After Start',
+      headerName: 'Days From Start',
       width: 150,
       type: 'number',
     },

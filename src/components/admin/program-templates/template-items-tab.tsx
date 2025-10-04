@@ -185,7 +185,7 @@ export default function TemplateItemsTab({
     },
     {
       field: 'days_from_start',
-      headerName: 'Days Before Start',
+      headerName: 'Days From Start',
       width: 150,
       type: 'number',
     },

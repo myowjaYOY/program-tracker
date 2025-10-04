@@ -257,14 +257,7 @@ export default function MemberProgramPaymentForm({
       return;
     }
 
-    if (!values.payment_method_id || values.payment_method_id === 0) {
-      setError('payment_method_id', {
-        type: 'required',
-        message: 'Method is required',
-      });
-      return;
-    }
-
+    // Method is only required when status is "Paid"
     const selectedStatus = (statusOptions as any[]).find((s: any) => {
       const sid = (s.payment_status_id ?? (s.status_id as any)) as number;
       return sid === (values.payment_status_id as unknown as number);
@@ -276,6 +269,15 @@ export default function MemberProgramPaymentForm({
     )
       .toString()
       .toLowerCase();
+    
+    if (statusName === 'paid' && (!values.payment_method_id || values.payment_method_id === 0)) {
+      setError('payment_method_id', {
+        type: 'required',
+        message: 'Method is required when status is Paid',
+      });
+      return;
+    }
+
     const isPaid = statusName === 'paid';
 
     // Enforce Paid Date when status is Paid
@@ -397,10 +399,11 @@ export default function MemberProgramPaymentForm({
                 fullWidth
                 required
                 error={!!errors.payment_status_id}
-                helperText={errors.payment_status_id?.toString()}
+                helperText={errors.payment_status_id?.message || errors.payment_status_id?.toString()}
                 value={field.value || 0}
                 onChange={e => {
                   clearErrors('payment_date');
+                  clearErrors('payment_method_id');
                   const value = e.target.value;
                   field.onChange(value ? Number(value) : 0);
                 }}
@@ -438,9 +441,9 @@ export default function MemberProgramPaymentForm({
                   select
                   label="Method"
                   fullWidth
-                  required
+                  required={isPaidSelected}
                   error={!!errors.payment_method_id}
-                  helperText={errors.payment_method_id?.toString()}
+                  helperText={errors.payment_method_id?.message || errors.payment_method_id?.toString()}
                   value={field.value || 0}
                   onChange={e => {
                     const value = e.target.value;
