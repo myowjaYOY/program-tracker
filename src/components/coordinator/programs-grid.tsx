@@ -80,6 +80,7 @@ export default function CoordinatorProgramsGrid({
       total_charge: row.total_charge,
       lead_id: row.lead_id,
       start_date: row.start_date,
+      duration: row.duration || 30,
       active_flag: row.active_flag,
       program_status_id: row.program_status_id,
       source_template_id: row.source_template_id,

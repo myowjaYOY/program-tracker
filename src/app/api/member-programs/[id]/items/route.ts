@@ -248,9 +248,7 @@ async function updateMemberProgramCalculatedFields(
       .eq('member_program_id', memberProgramId)
       .select();
 
-    // Calculate and update Program Price and Margin in finances table (match Financials tab rules)
-    // Program Price = totalCharge + max(0, finance_charges) + discounts + taxes
-    // Margin = (Program Price - (totalCost + max(0, -finance_charges))) / Program Price * 100
+    // Calculate and update Program Price and Margin in finances table using shared utility
     let financeCharges = 0;
     let discounts = 0;
     const { data: finVals } = await supabase
@@ -262,26 +260,20 @@ async function updateMemberProgramCalculatedFields(
       financeCharges = Number(finVals.finance_charges || 0);
       discounts = Number(finVals.discounts || 0);
     }
-    const positiveFinance = Math.max(0, financeCharges);
-    const negativeFinanceFee = Math.max(0, -financeCharges);
+
+    // Use shared calculation utility
+    const { calculateProgramFinancials } = await import('@/lib/utils/financial-calculations');
+    const financialResult = calculateProgramFinancials({
+      totalCost,
+      totalCharge,
+      financeCharges,
+      discounts,
+      totalTaxableCharge,
+    });
     
-    // Calculate proportional discount for taxable items
-    let calculatedTaxes = 0;
-    if (totalCharge > 0 && totalTaxableCharge > 0) {
-      // Calculate what percentage of the total charge is taxable
-      const taxablePercentage = totalTaxableCharge / totalCharge;
-      // Apply that percentage of the discount to taxable items
-      const taxableDiscount = Math.abs(discounts) * taxablePercentage;
-      // Calculate taxes on the discounted taxable amount
-      const discountedTaxableCharge = totalTaxableCharge - taxableDiscount;
-      calculatedTaxes = discountedTaxableCharge * 0.0825;
-    }
-    
-    const finalTotal = totalCharge + positiveFinance + discounts + calculatedTaxes;
-    const margin =
-      finalTotal > 0
-        ? ((finalTotal - (totalCost + negativeFinanceFee + calculatedTaxes)) / finalTotal) * 100
-        : 0;
+    const finalTotal = financialResult.programPrice;
+    const margin = financialResult.margin;
+    const calculatedTaxes = financialResult.taxes;
 
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase

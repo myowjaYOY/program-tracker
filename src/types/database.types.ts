@@ -162,6 +162,7 @@ export interface MemberPrograms {
   final_total_price?: number | null;
   lead_id: number | null;
   start_date: string | null;
+  duration: number;
   active_flag: boolean;
   created_at: string | null;
   created_by: string | null;

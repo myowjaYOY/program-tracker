@@ -87,6 +87,7 @@ export default function ProgramInfoTab({
       description: program.description || '',
       lead_id: program.lead_id,
       start_date: program.start_date || '',
+      duration: program.duration || 30,
       program_status_id: program.program_status_id || null,
       active_flag: program.active_flag,
     },
@@ -99,6 +100,7 @@ export default function ProgramInfoTab({
       description: program.description || '',
       lead_id: program.lead_id,
       start_date: program.start_date,
+      duration: program.duration || 30,
       program_status_id: program.program_status_id || null,
       active_flag: program.active_flag,
     });
@@ -132,6 +134,7 @@ export default function ProgramInfoTab({
         description: updatedProgram.description || '',
         lead_id: updatedProgram.lead_id,
         start_date: updatedProgram.start_date || '',
+        duration: updatedProgram.duration || 30,
         program_status_id: updatedProgram.program_status_id || null,
         active_flag: updatedProgram.active_flag,
       });
@@ -506,16 +509,34 @@ export default function ProgramInfoTab({
                   label="Member Goals"
                   fullWidth
                   multiline
-                  rows={6}
+                  rows={4}
                   error={!!errors.description}
                   helperText={errors.description?.message}
                   sx={{
                     flex: 1,
                     '& .MuiInputBase-root': {
                       height: '100%',
-                      minHeight: '200px',
+                      minHeight: '140px',
                     },
                   }}
+                />
+              )}
+            />
+
+            <Controller
+              name="duration"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  label="Duration (days)"
+                  type="number"
+                  fullWidth
+                  required
+                  error={!!errors.duration}
+                  helperText={errors.duration?.message}
+                  inputProps={{ min: 1 }}
+                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
                 />
               )}
             />

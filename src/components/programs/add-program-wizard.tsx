@@ -368,7 +368,7 @@ export default function AddProgramWizard({
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Description"
+                    label="Member Goal"
                     fullWidth
                     multiline
                     rows={3}

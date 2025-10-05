@@ -5,6 +5,7 @@ export const memberProgramSchema = z.object({
   description: z.string().nullable().optional(),
   lead_id: z.number().nullable().optional(),
   start_date: z.string().nullable().optional(),
+  duration: z.number().min(1, 'Duration must be at least 1'),
   program_status_id: z.number().nullable().optional(),
   active_flag: z.boolean().optional(),
 });

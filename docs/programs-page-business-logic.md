@@ -19,9 +19,9 @@ This document explains the end‑to‑end business logic that powers the Program
 
 ## Financials: Calculations and Rules
 
-- **Program Price (display)**: `final_total_price = total_charge + finance_charges + discounts`
-  - Note: Taxes are displayed separately and do not change `final_total_price`.
-- **Margin (display)**: `margin = final_total_price > 0 ? ((final_total_price - total_cost) / final_total_price) * 100 : 0`
+- **Program Price (display)**: `final_total_price = total_charge + finance_charges + discounts + taxes`
+  - Note: Taxes are included in the final program price calculation.
+- **Margin (display)**: `margin = final_total_price > 0 ? ((final_total_price - (total_cost + max(0, -finance_charges))) / final_total_price) * 100 : 0`
   - Color coding:
     - ≥ 80% → Green
     - ≥ 75% and < 80% → Orange

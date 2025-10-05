@@ -91,6 +91,7 @@ export default function ProgramsPage() {
           description: updatedProgram.description,
           lead_id: updatedProgram.lead_id,
           start_date: updatedProgram.start_date,
+          duration: updatedProgram.duration,
           program_status_id: updatedProgram.program_status_id,
           active_flag: updatedProgram.active_flag,
         },

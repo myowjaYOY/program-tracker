@@ -1,4 +1,5 @@
 import { ProgramTemplateItems } from '@/types/database.types';
+import { calculateTemplateTotals } from './financial-calculations';
 
 export interface ProgramTemplateTotals {
   total_cost: number;
@@ -8,25 +9,16 @@ export interface ProgramTemplateTotals {
 
 /**
  * Calculate totals for a program template based on its items
+ * Uses shared calculation utility for consistency
  */
 export function calculateProgramTemplateTotals(
   items: ProgramTemplateItems[]
 ): ProgramTemplateTotals {
-  const total_cost = items.reduce((sum, item) => {
-    return sum + (item.item_cost ?? 0) * (item.quantity ?? 0);
-  }, 0);
-
-  const total_charge = items.reduce((sum, item) => {
-    return sum + (item.item_charge ?? 0) * (item.quantity ?? 0);
-  }, 0);
-
-  // Calculate margin percentage: ((total_charge - total_cost) / total_charge) * 100
-  const margin_percentage =
-    total_charge > 0 ? ((total_charge - total_cost) / total_charge) * 100 : 0;
+  const result = calculateTemplateTotals(items);
 
   return {
-    total_cost: Math.round(total_cost * 100) / 100, // Round to 2 decimal places
-    total_charge: Math.round(total_charge * 100) / 100, // Round to 2 decimal places
-    margin_percentage: Math.round(margin_percentage * 10) / 10, // Round to 1 decimal place
+    total_cost: result.totalCost,
+    total_charge: result.totalCharge,
+    margin_percentage: result.marginPercentage,
   };
 }
