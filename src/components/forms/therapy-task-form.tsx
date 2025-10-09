@@ -3,11 +3,17 @@
 import React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
+import {
+  TextField,
+  Switch,
+  FormControlLabel,
+  MenuItem,
+  CircularProgress,
+} from '@mui/material';
 
 import {
   TherapyTaskFormData,
-  therapyTaskSchema,
+  therapyTaskFormSchema,
 } from '@/lib/validations/therapy-task';
 import BaseForm from './base-form';
 import {
@@ -15,6 +21,7 @@ import {
   useUpdateTherapyTask,
 } from '@/lib/hooks/use-therapy-tasks';
 import { useActiveTherapies } from '@/lib/hooks/use-therapies';
+import { useActiveTherapyTypes } from '@/lib/hooks/use-therapy-types';
 
 interface TherapyTaskFormProps {
   initialValues?: Partial<TherapyTaskFormData> & { task_id?: number };
@@ -28,7 +35,9 @@ export default function TherapyTaskForm({
   mode = 'create',
 }: TherapyTaskFormProps) {
   const isEdit = mode === 'edit';
-  const { data: therapies = [], isLoading: therapiesLoading } =
+  const { data: therapyTypes = [], isLoading: therapyTypesLoading } =
+    useActiveTherapyTypes();
+  const { data: allTherapies = [], isLoading: therapiesLoading } =
     useActiveTherapies();
 
   const {
@@ -39,21 +48,39 @@ export default function TherapyTaskForm({
     watch,
     control,
   } = useForm<TherapyTaskFormData>({
-    resolver: zodResolver(therapyTaskSchema) as any,
+    resolver: zodResolver(therapyTaskFormSchema) as any,
     defaultValues: {
+      therapy_type_id: initialValues?.therapy_type_id || 0,
+      therapy_id: initialValues?.therapy_id || 0,
       task_name: initialValues?.task_name || '',
       description: initialValues?.description || '',
-      therapy_id: initialValues?.therapy_id || 0,
       task_delay: initialValues?.task_delay || 0,
       active_flag: initialValues?.active_flag ?? true,
     },
   });
 
+  const selectedTherapyTypeId = watch('therapy_type_id');
+  const selectedTherapyId = watch('therapy_id');
+
   const createTherapyTask = useCreateTherapyTask();
   const updateTherapyTask = useUpdateTherapyTask();
 
+  // Filter therapies based on selected therapy type
+  const filteredTherapies = selectedTherapyTypeId
+    ? allTherapies.filter(
+        t => t.therapy_type_id === selectedTherapyTypeId && t.active_flag
+      )
+    : [];
+
+  // Reset therapy selection when therapy type changes (only in create mode)
+  const handleTherapyTypeChange = (therapyTypeId: number) => {
+    if (!isEdit) {
+      setValue('therapy_id', 0);
+    }
+  };
+
   // Show loading state while data is being fetched
-  if (therapiesLoading) {
+  if (therapiesLoading || therapyTypesLoading) {
     return (
       <BaseForm<TherapyTaskFormData>
         onSubmit={() => {}}
@@ -67,13 +94,16 @@ export default function TherapyTaskForm({
   }
 
   const onSubmit = async (values: TherapyTaskFormData) => {
+    // Remove therapy_type_id from the data sent to the API since it's not stored in therapy_tasks
+    const { therapy_type_id, ...apiData } = values;
+    
     if (isEdit && initialValues?.task_id) {
       await updateTherapyTask.mutateAsync({
-        ...values,
+        ...apiData,
         id: String(initialValues.task_id),
       });
     } else {
-      await createTherapyTask.mutateAsync(values);
+      await createTherapyTask.mutateAsync(apiData as any);
     }
     if (onSuccess) onSuccess();
   };
@@ -90,6 +120,43 @@ export default function TherapyTaskForm({
       submitText={isEdit ? 'Update' : 'Create'}
     >
       <Controller
+        name="therapy_type_id"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            label="Therapy Type"
+            fullWidth
+            select
+            required
+            {...field}
+            value={field.value || 0}
+            error={!!errors.therapy_type_id}
+            helperText={errors.therapy_type_id?.message}
+            disabled={isEdit}
+            onChange={e => {
+              const value = Number(e.target.value);
+              field.onChange(value);
+              handleTherapyTypeChange(value);
+            }}
+          >
+            <MenuItem value={0}>Select a therapy type...</MenuItem>
+            {therapyTypes
+              .sort((a, b) =>
+                a.therapy_type_name.localeCompare(b.therapy_type_name)
+              )
+              .map(therapyType => (
+                <MenuItem
+                  key={therapyType.therapy_type_id}
+                  value={therapyType.therapy_type_id}
+                >
+                  {therapyType.therapy_type_name}
+                </MenuItem>
+              ))}
+          </TextField>
+        )}
+      />
+
+      <Controller
         name="therapy_id"
         control={control}
         render={({ field }) => (
@@ -101,14 +168,27 @@ export default function TherapyTaskForm({
             {...field}
             value={field.value || 0}
             error={!!errors.therapy_id}
-            helperText={errors.therapy_id?.message}
+            helperText={
+              errors.therapy_id?.message ||
+              (!selectedTherapyTypeId && !isEdit
+                ? 'Select a therapy type first'
+                : undefined)
+            }
+            disabled={isEdit || !selectedTherapyTypeId}
+            InputProps={{
+              endAdornment: therapiesLoading ? (
+                <CircularProgress size={20} />
+              ) : null,
+            }}
           >
             <MenuItem value={0}>Select a therapy...</MenuItem>
-            {therapies.map((therapy: any) => (
-              <MenuItem key={therapy.therapy_id} value={therapy.therapy_id}>
-                {therapy.therapy_name}
-              </MenuItem>
-            ))}
+            {filteredTherapies
+              .sort((a, b) => a.therapy_name.localeCompare(b.therapy_name))
+              .map(therapy => (
+                <MenuItem key={therapy.therapy_id} value={therapy.therapy_id}>
+                  {therapy.therapy_name}
+                </MenuItem>
+              ))}
           </TextField>
         )}
       />
@@ -119,7 +199,13 @@ export default function TherapyTaskForm({
         required
         {...register('task_name')}
         error={!!errors.task_name}
-        helperText={errors.task_name?.message}
+        helperText={
+          errors.task_name?.message ||
+          (!selectedTherapyId && !isEdit
+            ? 'Select a therapy first'
+            : undefined)
+        }
+        disabled={!selectedTherapyId}
       />
 
       <TextField
@@ -129,7 +215,13 @@ export default function TherapyTaskForm({
         rows={3}
         {...register('description')}
         error={!!errors.description}
-        helperText={errors.description?.message}
+        helperText={
+          errors.description?.message ||
+          (!selectedTherapyId && !isEdit
+            ? 'Select a therapy first'
+            : undefined)
+        }
+        disabled={!selectedTherapyId}
       />
 
       <TextField
@@ -141,9 +233,12 @@ export default function TherapyTaskForm({
         error={!!errors.task_delay}
         helperText={
           errors.task_delay?.message ||
-          'Negative values mean before therapy, positive values mean after therapy'
+          (!selectedTherapyId && !isEdit
+            ? 'Select a therapy first'
+            : 'Negative values mean before therapy, positive values mean after therapy')
         }
         inputProps={{ min: -365, max: 365 }}
+        disabled={!selectedTherapyId}
       />
 
       <FormControlLabel
@@ -152,6 +247,7 @@ export default function TherapyTaskForm({
             color="primary"
             checked={!!watch('active_flag')}
             onChange={(_, checked) => setValue('active_flag', checked)}
+            disabled={!selectedTherapyId}
           />
         }
         label="Active"

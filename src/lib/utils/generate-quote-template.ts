@@ -1,4 +1,5 @@
 import docxmarks from 'docxmarks';
+import createReport from 'docx-templates';
 
 interface QuoteData {
   member: {
@@ -85,14 +86,25 @@ async function downloadDocumentFromTemplate(
     // Convert ArrayBuffer to Buffer (for docxmarks)
     const buffer = Buffer.from(templateBuffer);
     
-    // Replace bookmarks in template with font size option
-    let updatedDocxBuffer = await docxmarks(buffer, replacements, 11);
+    // First pass: Replace bookmarks in template with font size option
+    const updatedDocxBuffer = await docxmarks(buffer, replacements, 11);
     
-           // Handle payment schedule as formatted text
-           if (data.payments && data.payments.length > 0) {
-             const formattedTable = formatPaymentScheduleAsText(data.payments);
-             updatedDocxBuffer = await docxmarks(updatedDocxBuffer, { 'PAYMENT_SCHEDULE': formattedTable });
-           }
+    // Second pass: Render payments table loop using docx-templates
+    const intermediateDoc = Buffer.from(updatedDocxBuffer);
+    
+    // Pre-format payment amounts as currency strings
+    const formattedPayments = data.payments.map(payment => ({
+      paymentId: payment.paymentId,
+      amount: `$${payment.amount.toFixed(2)}`,
+      dueDate: payment.dueDate,
+      paymentDate: payment.paymentDate,
+    }));
+    
+    const finalDocxBuffer = await createReport({
+      template: intermediateDoc,
+      data: { payments: formattedPayments },
+      cmdDelimiter: '+++', // matches your template syntax
+    });
     
     // Create filename by removing special characters
     const memberName = data.member.name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
@@ -100,7 +112,7 @@ async function downloadDocumentFromTemplate(
     const filename = `${prefix}-${memberName} - ${programName}.docx`;
     
     // Create blob and trigger download
-    const blob = new Blob([new Uint8Array(updatedDocxBuffer)], {
+    const blob = new Blob([new Uint8Array(finalDocxBuffer)], {
       type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
     
@@ -116,26 +128,5 @@ async function downloadDocumentFromTemplate(
     throw new Error(`Failed to generate document from template: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
-
-
-function formatPaymentScheduleAsText(payments: QuoteData['payments']): string {
-  if (!payments || payments.length === 0) {
-    return 'No payment schedule available.';
-  }
-
-  // Create tab-separated text that Word can convert to a table
-  const header = 'Payment #\tDate\tAmount\tStatus';
-  
-  const rows = payments.map((payment, index) => {
-    const status = payment.paymentDate ? 'Paid' : 'Pending';
-    const paymentNumber = (index + 1).toString();
-    const amount = `$${payment.amount.toFixed(2)}`;
-    
-    return `${paymentNumber}\t${payment.dueDate}\t${amount}\t${status}`;
-  });
-
-  return `${header}\t\n${rows.join('\t\n')}`;
-}
-
 
 

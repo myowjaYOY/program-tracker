@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_cb111a96c1a6cf84a04dda407bb8418b4cd233bb"
+      ]
+    },
+    "supabase-db": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "set NODE_OPTIONS=--dns-result-order=ipv4first && npx -y @modelcontextprotocol/server-postgres@latest postgresql://postgres.mxktlbhiknpdauzoitnm:pTWAm1LHN2Too0yN@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=no-verify"
+      ]
+    }
+  }
+}

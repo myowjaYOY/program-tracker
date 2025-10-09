@@ -128,9 +128,10 @@ export default function TherapyTaskTable() {
     const formData: Partial<TherapyTaskFormData> & { task_id?: number } =
       initialValues
         ? {
+            therapy_type_id: (initialValues as any).therapy_type_id || 0,
+            therapy_id: initialValues.therapy_id || 0,
             task_name: initialValues.task_name || '',
             description: initialValues.description || '',
-            therapy_id: initialValues.therapy_id || 0,
             task_delay: initialValues.task_delay || 0,
             active_flag: initialValues.active_flag ?? true,
             ...(initialValues.task_id && {

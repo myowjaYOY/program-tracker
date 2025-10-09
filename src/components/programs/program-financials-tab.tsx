@@ -698,14 +698,13 @@ export default function ProgramFinancialsTab({
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
-                label="Remaining Balance"
+                label="Credit"
                 fullWidth
                 disabled
                 value={formatCurrency(
-                  Number((derivedProgramPrice || 0) - paidTotal)
+                  Number(-(existingFinances?.variance || 0))
                 )}
                 InputProps={{ readOnly: true }}
-                helperText="Program Price minus total paid"
               />
             </Grid>
           </Grid>

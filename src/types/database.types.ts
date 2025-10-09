@@ -193,6 +193,8 @@ export interface MemberProgramFinances {
   final_total_price: number | null;
   margin: number | null;
   financing_type_id: number | null;
+  contracted_at_margin: number | null;
+  variance: number | null;
   created_at: string | null;
   created_by: string | null;
   updated_at: string | null;

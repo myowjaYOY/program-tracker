@@ -21,7 +21,7 @@ export async function GET(
 
     const { data, error } = await supabase
       .from('member_program_finances')
-      .select('*')
+      .select('*, contracted_at_margin, variance')
       .eq('member_program_id', id)
       .single();
 
@@ -133,7 +133,7 @@ export async function PUT(
     // Load current finances to compare for regeneration pre-check
     const { data: currentFinances } = await supabase
       .from('member_program_finances')
-      .select('financing_type_id, finance_charges, discounts, taxes')
+      .select('financing_type_id, finance_charges, discounts, taxes, contracted_at_margin, variance')
       .eq('member_program_id', id)
       .single();
 
