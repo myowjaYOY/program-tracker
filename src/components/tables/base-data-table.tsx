@@ -29,6 +29,9 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 
+// Using built-in toolbar via showToolbar prop
+
+
 // Common column renderers
 export const renderActiveFlag = (params: GridRenderCellParams) => (
   <Chip
@@ -142,6 +145,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   gridHeight?: string | number;
   // Initial sort model
   sortModel?: Array<{ field: string; sort: 'asc' | 'desc' }>;
+  // Export functionality
+  enableExport?: boolean;
 }
 
 export default function BaseDataTable<T extends BaseEntity>({
@@ -172,7 +177,10 @@ export default function BaseDataTable<T extends BaseEntity>({
   getDetailPanelHeight,
   gridHeight,
   sortModel,
+  enableExport = false,
 }: BaseDataTableProps<T>) {
+  
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
@@ -346,6 +354,7 @@ export default function BaseDataTable<T extends BaseEntity>({
           autoHeight={autoHeight}
           getRowId={getRowId || (row => row.id)}
           pagination={true}
+          showToolbar={enableExport}
           initialState={{
             pagination: {
               paginationModel: { page: 0, pageSize },

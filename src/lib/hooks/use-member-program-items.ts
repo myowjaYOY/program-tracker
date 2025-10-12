@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MemberProgramItems } from '@/types/database.types';
 import { memberProgramKeys } from './use-member-programs';
+import { memberProgramFinancesKeys } from './use-member-program-finances';
 
 export const memberProgramItemKeys = {
   all: ['member-program-items'] as const,
@@ -45,8 +46,11 @@ export function useCreateMemberProgramItem() {
         }
       );
       const json = await res.json();
-      if (!res.ok)
-        throw new Error(json.error || 'Failed to create member program item');
+      if (!res.ok) {
+        const error = new Error(json.error || 'Failed to create member program item');
+        (error as any).status = res.status;
+        throw error;
+      }
       return json.data as MemberProgramItems;
     },
     onSuccess: data => {
@@ -57,6 +61,10 @@ export function useCreateMemberProgramItem() {
         // Also invalidate the member program to update calculated fields
         queryClient.invalidateQueries({
           queryKey: memberProgramKeys.detail(data.member_program_id),
+        });
+        // Invalidate finances to update variance and margin calculations
+        queryClient.invalidateQueries({
+          queryKey: memberProgramFinancesKeys.byProgram(data.member_program_id),
         });
       }
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
@@ -83,8 +91,11 @@ export function useUpdateMemberProgramItem() {
         }
       );
       const json = await res.json();
-      if (!res.ok)
-        throw new Error(json.error || 'Failed to update member program item');
+      if (!res.ok) {
+        const error = new Error(json.error || 'Failed to update member program item');
+        (error as any).status = res.status;
+        throw error;
+      }
       return json.data as MemberProgramItems;
     },
     onSuccess: (data, variables) => {
@@ -99,6 +110,10 @@ export function useUpdateMemberProgramItem() {
         queryKey: memberProgramKeys.detail(variables.programId),
       });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
+      // Invalidate finances to update variance and margin calculations
+      queryClient.invalidateQueries({
+        queryKey: memberProgramFinancesKeys.byProgram(variables.programId),
+      });
     },
   });
 }
@@ -117,7 +132,9 @@ export function useDeleteMemberProgramItem() {
       );
       if (!res.ok) {
         const json = await res.json();
-        throw new Error(json.error || 'Failed to delete member program item');
+        const error = new Error(json.error || 'Failed to delete member program item');
+        (error as any).status = res.status;
+        throw error;
       }
     },
     onSuccess: (_, variables) => {
@@ -132,6 +149,10 @@ export function useDeleteMemberProgramItem() {
         queryKey: memberProgramKeys.detail(variables.programId),
       });
       queryClient.invalidateQueries({ queryKey: memberProgramKeys.list() });
+      // Invalidate finances to update variance and margin calculations
+      queryClient.invalidateQueries({
+        queryKey: memberProgramFinancesKeys.byProgram(variables.programId),
+      });
     },
   });
 }

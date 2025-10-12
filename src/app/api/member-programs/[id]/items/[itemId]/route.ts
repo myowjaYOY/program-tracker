@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { 
+  calculateVariance, 
+  validateActiveProgramChanges,
+  calculateProjectedPrice,
+  calculateProjectedMargin,
+  calculateTaxesOnTaxableItems,
+  validateActiveProgramItemAddition,
+  validateAndUpdateActiveProgramFinances
+} from '@/lib/utils/financial-calculations';
 
 export async function PUT(
   req: NextRequest,
@@ -46,6 +55,16 @@ export async function PUT(
     // Add audit fields
     updateData.updated_by = session.user.id;
 
+    // Check if this is an Active program and validate against bounds BEFORE updating the item
+    try {
+      await validateActiveProgramItemAddition(supabase, parseInt(id), { ...updateData, itemId, operation: 'update' });
+    } catch (validationError: any) {
+      return NextResponse.json(
+        { error: validationError.message },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase
       .from('member_program_items')
       .update(updateData)
@@ -64,10 +83,13 @@ export async function PUT(
     // Update the member program's calculated fields
     await updateMemberProgramCalculatedFields(supabase, parseInt(id));
 
+    // Update Active program variance and margin if needed
+    await validateAndUpdateActiveProgramFinances(supabase, parseInt(id));
+
     return NextResponse.json({ data });
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error?.message || 'Internal server error' },
       { status: 500 }
     );
   }
@@ -90,6 +112,16 @@ export async function DELETE(
   try {
     const { id, itemId } = await context.params;
 
+    // Check if this is an Active program and validate against bounds BEFORE deleting the item
+    try {
+      await validateActiveProgramItemAddition(supabase, parseInt(id), { itemId, operation: 'delete' });
+    } catch (validationError: any) {
+      return NextResponse.json(
+        { error: validationError.message },
+        { status: 400 }
+      );
+    }
+
     const { error } = await supabase
       .from('member_program_items')
       .delete()
@@ -106,10 +138,13 @@ export async function DELETE(
     // Update the member program's calculated fields
     await updateMemberProgramCalculatedFields(supabase, parseInt(id));
 
+    // Update Active program variance and margin if needed
+    await validateAndUpdateActiveProgramFinances(supabase, parseInt(id));
+
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: error?.message || 'Internal server error' },
       { status: 500 }
     );
   }
@@ -171,6 +206,19 @@ async function updateMemberProgramCalculatedFields(
       .eq('member_program_id', memberProgramId)
       .select();
 
+    if (updateError) {
+      throw new Error(`Failed to update member_programs calculated fields: ${updateError.message}`);
+    }
+
+    // Check if program is Active to skip margin calculation
+    const { data: programStatus } = await supabase
+      .from('member_programs')
+      .select('program_status(status_name)')
+      .eq('member_program_id', memberProgramId)
+      .single();
+    
+    const isActive = (programStatus?.program_status as any)?.status_name?.toLowerCase() === 'active';
+
     // Calculate and update Program Price and Margin in finances table using shared utility
     let financeCharges = 0;
     let discounts = 0;
@@ -221,17 +269,27 @@ async function updateMemberProgramCalculatedFields(
         .select();
     } else {
       // Update existing finances record
+      // For Active programs, skip margin and final_total_price updates - they will be handled by validateAndUpdateActiveProgramFinances
+      const updateData: any = {
+        taxes: calculatedTaxes,
+        updated_by: (await supabase.auth.getUser()).data.user?.id,
+      };
+      
+      // Only update margin and final_total_price for non-Active programs
+      if (!isActive) {
+        updateData.margin = margin;
+        updateData.final_total_price = finalTotal;
+      }
+      
       const { data: updatedFinances, error: updateFinancesError } =
         await supabase
           .from('member_program_finances')
-          .update({
-            taxes: calculatedTaxes,
-            final_total_price: finalTotal,
-            margin: margin,
-            updated_by: (await supabase.auth.getUser()).data.user?.id,
-          })
+          .update(updateData)
           .eq('member_program_id', memberProgramId)
           .select();
     }
-  } catch (error) {}
+  } catch (error: any) {
+    // Re-throw the error so the parent route can handle it
+    throw error;
+  }
 }

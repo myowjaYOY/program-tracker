@@ -66,6 +66,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'History',
   },
   {
+    path: '/dashboard/admin/program-audit',
+    label: 'Program Audit',
+    section: 'admin',
+    icon: 'FactCheck',
+  },
+  {
     path: '/dashboard/admin/program-templates',
     label: 'Program Templates',
     section: 'admin',

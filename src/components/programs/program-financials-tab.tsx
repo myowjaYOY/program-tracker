@@ -221,6 +221,16 @@ export default function ProgramFinancialsTab({
     return amount;
   };
 
+  // Determine if program is Active
+  const statusName = (
+    allStatuses.find(
+      s =>
+        s.program_status_id ===
+        (freshProgram?.program_status_id ?? program.program_status_id)
+    )?.status_name || ''
+  ).toLowerCase();
+  const isActiveProgramStatus = statusName === 'active';
+
   // Derived values via shared hook
   const { programPrice: derivedProgramPrice, margin: derivedMargin, taxes: derivedTaxes } =
     useFinancialsDerived({
@@ -230,6 +240,9 @@ export default function ProgramFinancialsTab({
       discounts: Number(watchedValues.discounts || 0),
       taxes: Number(existingFinances?.taxes || 0),
       totalTaxableCharge: totalTaxableCharge,
+      isActive: isActiveProgramStatus,
+      lockedPrice: Number(existingFinances?.final_total_price || 0),
+      variance: Number(existingFinances?.variance || 0),
     });
 
   // Load existing data when available
@@ -476,19 +489,20 @@ export default function ProgramFinancialsTab({
           )}
           {/* Items/Program Price banner removed per simplified rules */}
           <Grid container spacing={3}>
-            {/* Row 1: Total Cost, Total Charge, Margin */}
+            {/* Row 1: Items Cost, Items Charge, Margin */}
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
-                label="Total Cost"
+                label="Items Cost"
                 fullWidth
                 disabled
                 value={formatCurrency(Number(program.total_cost || 0))}
                 InputProps={{ readOnly: true }}
+                helperText="Sum of all item costs"
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
-                label="Total Charge"
+                label="Items Charge"
                 fullWidth
                 disabled
                 value={formatCurrency(Number(program.total_charge || 0))}
@@ -504,6 +518,7 @@ export default function ProgramFinancialsTab({
                 disabled
                 value={`${Number(watchedValues.margin || 0).toFixed(1)}%`}
                 InputProps={{ readOnly: true }}
+                helperText="Calculated on pre-tax revenue"
                 sx={{
                   '& .MuiInputBase-input.Mui-disabled': {
                     WebkitTextFillColor: marginColor,
@@ -568,9 +583,9 @@ export default function ProgramFinancialsTab({
                       helperText={
                         errors.finance_charges?.message ||
                         (Number(watchedValues.finance_charges || 0) > 0
-                          ? 'Positive: Included in Program Price'
+                          ? 'Positive: Added to revenue (increases margin)'
                           : Number(watchedValues.finance_charges || 0) < 0
-                            ? 'Negative: Treated as Financing Fee (affects margin)'
+                            ? 'Negative: Added to costs (decreases margin)'
                             : 'Enter amount or % (e.g., 5%)')
                       }
                       value={financeChargesInput}

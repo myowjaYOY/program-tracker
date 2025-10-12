@@ -1,8 +1,14 @@
 import React from 'react';
-import { calculateProgramFinancials, type FinancialCalculationParams } from '@/lib/utils/financial-calculations';
+import { 
+  calculateProgramFinancials, 
+  calculateProjectedMargin,
+  type FinancialCalculationParams 
+} from '@/lib/utils/financial-calculations';
 
 /**
  * Derive program price and margin using shared calculation utility
+ * For Active programs, uses locked price for margin calculation
+ * Program Price = Projected Price + |Variance|
  */
 export function useFinancialsDerived(options: {
   totalCharge: number;
@@ -11,8 +17,21 @@ export function useFinancialsDerived(options: {
   discounts: number;
   taxes?: number;
   totalTaxableCharge?: number;
+  isActive?: boolean;
+  lockedPrice?: number;
+  variance?: number;
 }) {
-  const { totalCharge, totalCost, financeCharges, discounts, taxes = 0, totalTaxableCharge = 0 } = options;
+  const { 
+    totalCharge, 
+    totalCost, 
+    financeCharges, 
+    discounts, 
+    taxes = 0, 
+    totalTaxableCharge = 0,
+    isActive = false,
+    lockedPrice = 0,
+    variance = 0
+  } = options;
   
   return React.useMemo(() => {
     try {
@@ -26,9 +45,52 @@ export function useFinancialsDerived(options: {
 
       const result = calculateProgramFinancials(params);
       
+      // For Active programs, recalculate margin using locked price
+      let finalMargin = result.margin;
+      if (isActive && lockedPrice > 0) {
+        finalMargin = calculateProjectedMargin(
+          lockedPrice,
+          Number(totalCost || 0),
+          Number(financeCharges || 0),
+          result.taxes
+        );
+      }
+      
+      // Calculate Program Price based on program status
+      const varianceValue = Number(variance || 0);
+      let programPrice: number;
+      
+      if (isActive && lockedPrice > 0) {
+        // For Active programs: Program Price = Locked Price (always)
+        // The variance tracks the difference between projected and locked
+        programPrice = lockedPrice;
+        
+        // Validation: Variance should NEVER be positive (would mean over-delivering)
+        if (varianceValue > 0.01) {
+          console.error('⚠️ CRITICAL: Positive variance detected!', {
+            variance: varianceValue,
+            projectedPrice: result.programPrice,
+            lockedPrice: lockedPrice,
+          });
+        }
+        
+        // Validation: Projected price should not exceed locked price
+        if (result.programPrice > lockedPrice + 0.01) {
+          console.error('⚠️ CRITICAL: Projected price exceeds locked price!', {
+            projectedPrice: result.programPrice,
+            lockedPrice: lockedPrice,
+            difference: result.programPrice - lockedPrice,
+          });
+        }
+      } else {
+        // For Quote programs: Program Price = Projected Price + |Variance|
+        // This accounts for any variance from previous Active status
+        programPrice = result.programPrice + Math.abs(varianceValue);
+      }
+      
       return {
-        programPrice: result.programPrice,
-        margin: result.margin,
+        programPrice: programPrice,
+        margin: finalMargin,
         taxes: result.taxes,
       };
     } catch (error) {
@@ -40,5 +102,5 @@ export function useFinancialsDerived(options: {
         taxes: Number(taxes || 0),
       };
     }
-  }, [totalCharge, totalCost, financeCharges, discounts, taxes, totalTaxableCharge]);
+  }, [totalCharge, totalCost, financeCharges, discounts, taxes, totalTaxableCharge, isActive, lockedPrice, variance]);
 }

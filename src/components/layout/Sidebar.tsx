@@ -42,6 +42,7 @@ import {
   AccountBalance as FinancingTypesIcon,
   Payment as PaymentMethodsIcon,
   CheckCircle as PaymentStatusIcon,
+  FactCheck as FactCheckIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -78,6 +79,11 @@ const adminNav = [
     label: 'Audit Report',
     icon: <AuditIcon />,
     path: '/dashboard/audit-report',
+  },
+  {
+    label: 'Program Audit',
+    icon: <FactCheckIcon />,
+    path: '/dashboard/admin/program-audit',
   },
   {
     label: 'Program Templates',

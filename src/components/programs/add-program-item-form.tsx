@@ -30,6 +30,7 @@ interface AddProgramItemFormProps {
   onCancel: () => void;
   initialValues?: Partial<MemberProgramItemFormData>;
   mode?: 'create' | 'edit';
+  validationError?: string | null;
 }
 
 export default function AddProgramItemForm({
@@ -38,6 +39,7 @@ export default function AddProgramItemForm({
   onCancel: _onCancel,
   initialValues,
   mode = 'create',
+  validationError,
 }: AddProgramItemFormProps) {
   const { data: therapyTypes = [] } = useTherapyTypes();
   const usedCount = Number((initialValues as any)?.used_count || 0);
@@ -192,6 +194,33 @@ export default function AddProgramItemForm({
       submitHandler={handleSubmit(onSubmit)}
       buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
     >
+      {validationError && (
+        <Box sx={{ 
+          mb: 2, 
+          p: 2, 
+          bgcolor: 'error.main', 
+          borderRadius: 1,
+          width: '100%',
+          maxWidth: '100%',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word'
+        }}>
+          <Typography 
+            variant="body2" 
+            color="white" 
+            sx={{ 
+              fontWeight: 600,
+              wordWrap: 'break-word',
+              overflowWrap: 'break-word',
+              whiteSpace: 'normal',
+              lineHeight: 1.4
+            }}
+          >
+            {validationError}
+          </Typography>
+        </Box>
+      )}
+      
       <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_type_id"

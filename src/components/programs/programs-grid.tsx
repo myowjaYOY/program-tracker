@@ -269,6 +269,7 @@ export default function ProgramsGrid({
       selectedRowId={selectedProgram?.member_program_id || null}
       showActionsColumn={false}
       sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
+      enableExport={false}
     />
   );
 }
