@@ -135,20 +135,43 @@ export async function GET(_req: NextRequest) {
     const nextDay = new Date(weekEnd);
     nextDay.setDate(weekEnd.getDate() + 1);
     const nextDayStr = nextDay.toISOString().slice(0, 10);
-    const { count: programChangesThisWeek } = await supabase
-      .from('vw_audit_member_changes')
-      .select('*', { count: 'exact', head: true })
-      .gte('changed_at', weekStartStr)
-      .lt('changed_at', nextDayStr)
-      .not('source', 'in', '(Script,To Do)')
-      .not('change_description', 'ilike', '%completed_flag%');
+    // Limit to Active and Paused programs for this metric to match the grid
+    const activePausedStatusIds = (statuses || [])
+      .filter(
+        s => ['active', 'paused'].includes((s as any).status_name?.toLowerCase())
+      )
+      .map(s => (s as any).program_status_id);
+
+    let activePausedProgramIds: number[] = [];
+    if (activePausedStatusIds.length > 0) {
+      const { data: apPrograms } = await supabase
+        .from('member_programs')
+        .select('member_program_id, program_status_id')
+        .in('program_status_id', activePausedStatusIds);
+      activePausedProgramIds = (apPrograms || []).map(
+        (p: any) => p.member_program_id
+      );
+    }
+
+    let programChangesThisWeek = 0;
+    if (activePausedProgramIds.length > 0) {
+      const { count } = await supabase
+        .from('vw_audit_member_items')
+        .select('*', { count: 'exact', head: true })
+        .gte('event_at', weekStartStr)
+        .lt('event_at', nextDayStr)
+        .in('program_id', activePausedProgramIds);
+      programChangesThisWeek = count || 0;
+    } else {
+      programChangesThisWeek = 0;
+    }
 
     return NextResponse.json({
       data: {
         lateTasks,
         tasksDueToday,
         apptsDueToday,
-        programChangesThisWeek: programChangesThisWeek || 0,
+        programChangesThisWeek: programChangesThisWeek,
       },
     });
   } catch (e: any) {

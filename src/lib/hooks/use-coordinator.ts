@@ -92,17 +92,16 @@ export function useCoordinatorToDo(params: {
 }
 
 export function useCoordinatorProgramChanges(params: {
+  memberId?: number | null;
   range?: string;
   start?: string | null;
   end?: string | null;
-  sources?: string[];
 }) {
   const sp = new URLSearchParams();
+  if (params.memberId) sp.set('memberId', String(params.memberId));
   if (params.range && params.range !== 'all') sp.set('range', params.range);
   if (params.start) sp.set('start', params.start);
   if (params.end) sp.set('end', params.end);
-  if (params.sources && params.sources.length > 0)
-    sp.set('sources', params.sources.join(','));
   const qs = sp.toString();
   const url = `/api/coordinator/program-changes${qs ? `?${qs}` : ''}`;
   return useQuery({

@@ -15,18 +15,20 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const range = (searchParams.get('range') || 'all').toLowerCase();
+  const memberIdParam = searchParams.get('memberId');
+  const memberId = memberIdParam ? parseInt(memberIdParam, 10) : null;
   const start = searchParams.get('start');
   const end = searchParams.get('end');
-  const sourcesParam = searchParams.get('sources');
+  // Source filtering removed
   const uniqueOnly = searchParams.get('unique_only') === 'true';
   const limitParam = searchParams.get('limit');
   const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
   try {
     let query = supabase
-      .from('vw_audit_member_changes')
+      .from('vw_audit_member_items')
       .select('*')
-      .order('changed_at', { ascending: false });
+      .order('event_at', { ascending: false });
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -64,18 +66,14 @@ export async function GET(req: NextRequest) {
                 .toISOString()
                 .slice(0, 10)
             : undefined);
-    if (startStr) query = query.gte('changed_at', startStr);
-    if (endStr) query = query.lte('changed_at', endStr);
+    if (startStr) query = query.gte('event_at', startStr);
+    if (endStr) query = query.lte('event_at', endStr);
 
-    // Filter by sources if provided (values are display names in the view)
-    if (sourcesParam) {
-      const list = sourcesParam
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-      if (list.length > 0) {
-        query = query.in('source', list);
-      }
+    // Source filtering removed
+
+    // Filter by member if provided (lead_id via view member_id)
+    if (memberId) {
+      query = query.eq('member_id', memberId);
     }
 
     const { data, error } = await query;
@@ -90,6 +88,11 @@ export async function GET(req: NextRequest) {
       );
 
     let rows = (data as any[]) || [];
+
+    // Defensive filter by member in case DB-level filter is bypassed by the view
+    if (memberId) {
+      rows = rows.filter(r => Number(r?.member_id) === memberId);
+    }
 
     // Filter for Active and Paused programs only (IDs 1 and 3)
     if (rows.length > 0) {
@@ -141,7 +144,7 @@ export async function GET(req: NextRequest) {
           const key = `${row.member_id}-${row.program_id}`;
           const existing = grouped.get(key);
           
-          if (!existing || new Date(row.changed_at) > new Date(existing.changed_at)) {
+          if (!existing || new Date(row.event_at) > new Date(existing.event_at)) {
             grouped.set(key, row);
           }
         }
@@ -160,47 +163,14 @@ export async function GET(req: NextRequest) {
       const simplified = rows.map(r => ({
         member_name: r.member_name,
         program_name: r.program_name,
-        changed_at: r.changed_at,
+        // keep response key as changed_at for UI compatibility
+        changed_at: r.event_at,
       }));
       return NextResponse.json({ data: simplified });
     }
 
-    // For full mode, enrich with user data as before
-    const changedByIds = Array.from(
-      new Set(rows.map(r => r.changed_by).filter(Boolean))
-    );
-
-    let userMap = new Map<
-      string,
-      { id: string; email: string | null; full_name: string | null }
-    >();
-    if (changedByIds.length > 0) {
-      const { data: users, error: usersErr } = await supabase
-        .from('users')
-        .select('id, email, full_name')
-        .in('id', changedByIds);
-      if (!usersErr && Array.isArray(users)) {
-        userMap = new Map(
-          users.map((u: any) => [
-            u.id,
-            {
-              id: u.id,
-              email: u.email || null,
-              full_name: u.full_name || null,
-            },
-          ])
-        );
-      }
-    }
-
-    const enriched = rows.map(r => ({
-      ...r,
-      changed_by_email: r.changed_by
-        ? (userMap.get(r.changed_by)?.email ?? null)
-        : null,
-    }));
-
-    return NextResponse.json({ data: enriched });
+    // Return rows directly (user enrichment removed)
+    return NextResponse.json({ data: rows });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || 'Internal server error' },

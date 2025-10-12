@@ -16,6 +16,7 @@ export default [
       'dist/**',
       '.vercel/**',
       'public/docs-screens/**',
+      'supabase/functions/**',
     ],
   },
 

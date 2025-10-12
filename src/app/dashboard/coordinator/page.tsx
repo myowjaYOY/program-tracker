@@ -70,13 +70,13 @@ export default function CoordinatorPage() {
   return (
     <Box sx={{ p: 2 }}>
       {/* Header (match Reports page style) */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 1 }}>
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: 2,
+            mb: 1,
           }}
         >
           <Typography
@@ -88,9 +88,6 @@ export default function CoordinatorPage() {
             Coordinator Dashboard
           </Typography>
         </Box>
-        <Typography variant="body1" color="text.secondary">
-          Work from Script and To Do across active programs.
-        </Typography>
       </Box>
 
       {/* Summary Cards */}
@@ -456,6 +453,7 @@ export default function CoordinatorPage() {
             )}
             {tab === 2 && (
               <ProgramChangesTab
+                memberId={memberFilter}
                 range={range}
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}

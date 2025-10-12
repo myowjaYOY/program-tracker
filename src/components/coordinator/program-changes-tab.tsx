@@ -9,101 +9,64 @@ import type { GridColDef } from '@mui/x-data-grid-pro';
 import { useCoordinatorProgramChanges } from '@/lib/hooks/use-coordinator';
 
 interface ProgramChangesTabProps {
+  memberId?: number | null;
   range?: 'all' | 'today' | 'week' | 'month' | 'custom';
   start?: string | undefined;
   end?: string | undefined;
+  showMemberColumn?: boolean;
 }
 
 export default function ProgramChangesTab({
+  memberId = null,
   range = 'all',
   start,
   end,
+  showMemberColumn = true,
 }: ProgramChangesTabProps) {
-  const [sources, setSources] = useState<string[]>([]);
   const {
     data = [],
     isLoading,
     error,
   } = useCoordinatorProgramChanges({
+    memberId,
     range,
     start: start ?? null,
     end: end ?? null,
-    sources,
   });
 
-  const sourceOptions = [
-    'Payments',
-    'Script',
-    'Items',
-    'Tasks',
-    'Finance',
-    'To Do',
-    'Information',
-  ];
+  // Source filtering removed
 
   const rows = (data as any[]).map((r, idx) => ({
-    id: r.id ?? `${r.changed_at}-${idx}`,
-    source: r.source,
+    id: r.id ?? `${r.event_at}-${idx}`,
     member_name: r.member_name,
     program_name: r.program_name,
-    change_description: r.change_description,
-    changed_by_email: r.changed_by_email,
-    changed_at: r.changed_at,
+    type: r.operation,
+    item: r.item_name,
+    column: r.changed_column,
+    from: r.from_value,
+    to: r.to_value,
+    changed_by: r.changed_by_user,
+    changed_at: r.event_at,
   }));
 
   const cols: GridColDef[] = [
-    { field: 'member_name', headerName: 'Member', width: 220 },
+    ...(showMemberColumn
+      ? ([{ field: 'member_name', headerName: 'Member', width: 160 }] as GridColDef[])
+      : ([] as GridColDef[])),
     { field: 'program_name', headerName: 'Program', width: 240 },
-    { field: 'source', headerName: 'Source', width: 160 },
-    {
-      field: 'change_description',
-      headerName: 'Change',
-      flex: 1,
-      minWidth: 360,
-    },
-    { field: 'changed_by_email', headerName: 'Changed By', width: 260 },
-    {
-      field: 'changed_at',
-      headerName: 'Changed At',
-      width: 200,
-      renderCell: renderDateTime as any,
-    },
+    { field: 'type', headerName: 'Type', width: 100 },
+    { field: 'item', headerName: 'Item', width: 240 },
+    { field: 'column', headerName: 'Column', width: 140 },
+    // From/To take remaining width ~25% each via flex
+    { field: 'from', headerName: 'From', flex: 1, minWidth: 220 },
+    { field: 'to', headerName: 'To', flex: 1, minWidth: 220 },
+    { field: 'changed_by', headerName: 'Changed By', width: 140 },
+    { field: 'changed_at', headerName: 'Changed At', width: 180, renderCell: renderDateTime as any },
   ];
 
   return (
     <Box>
-      <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
-        <TextField
-          select
-          label="Source"
-          value={sources}
-          onChange={e => {
-            const value = e.target.value;
-            setSources(
-              typeof value === 'string'
-                ? value.split(',').filter(Boolean)
-                : (value as string[])
-            );
-          }}
-          size="small"
-          sx={{ minWidth: 240 }}
-          SelectProps={{
-            multiple: true,
-            renderValue: selected => (selected as string[]).join(', '),
-          }}
-        >
-          {sourceOptions.map(opt => (
-            <MenuItem key={opt} value={opt}>
-              {opt}
-            </MenuItem>
-          ))}
-        </TextField>
-        {sources.length > 0 && (
-          <Button variant="text" size="small" onClick={() => setSources([])}>
-            Clear
-          </Button>
-        )}
-      </Box>
+      {/* Source filter removed */}
       <BaseDataTable<any>
         title=""
         data={rows}
@@ -115,6 +78,7 @@ export default function ProgramChangesTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        sortModel={[{ field: 'changed_at', sort: 'desc' }]}
       />
     </Box>
   );

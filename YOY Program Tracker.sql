@@ -4226,3 +4226,106 @@ CREATE OR REPLACE VIEW public.vw_member_audit_events AS
 CREATE OR REPLACE VIEW vault.decrypted_secrets AS
 null;
 
+
+-- View: vw_audit_member_items
+CREATE OR REPLACE VIEW public.vw_audit_member_items AS
+WITH base AS (
+  SELECT
+    e.event_id,
+    e.event_at,
+    e.operation,
+    e.related_program_id AS program_id,
+    e.record_id AS member_program_item_id,
+    e.old_row,
+    e.new_row,
+    e.actor_user_id
+  FROM audit_events e
+  WHERE e.table_name = 'member_program_items'
+),
+-- Updates: one row per changed column
+upd AS (
+  SELECT
+    b.event_id,
+    b.event_at,
+    b.operation,
+    b.program_id,
+    b.member_program_item_id,
+    b.actor_user_id,
+    c.column_name,
+    c.old_value #>> '{}' AS from_value,
+    c.new_value #>> '{}' AS to_value
+  FROM base b
+  JOIN audit_event_changes c ON c.event_id = b.event_id
+  WHERE b.operation = 'UPDATE'
+    AND c.column_name NOT IN (
+      'member_program_item_id','member_program_id','created_at','created_by','updated_at','updated_by'
+    )
+),
+-- Inserts: single row per event (no column/from/to)
+ins AS (
+  SELECT
+    b.event_id,
+    b.event_at,
+    b.operation,
+    b.program_id,
+    b.member_program_item_id,
+    b.actor_user_id,
+    NULL::text AS column_name,
+    NULL::text AS from_value,
+    NULL::text AS to_value
+  FROM base b
+  WHERE b.operation = 'INSERT'
+),
+-- Deletes: single row per event (no column/from/to)
+del AS (
+  SELECT
+    b.event_id,
+    b.event_at,
+    b.operation,
+    b.program_id,
+    b.member_program_item_id,
+    b.actor_user_id,
+    NULL::text AS column_name,
+    NULL::text AS from_value,
+    NULL::text AS to_value
+  FROM base b
+  WHERE b.operation = 'DELETE'
+)
+SELECT
+  (l.first_name || ' ' || l.last_name)            AS member_name,
+  x.operation                                      AS operation,
+  mp.program_template_name                         AS program_name,
+  COALESCE(
+    t.therapy_name,
+    'therapy_id=' ||
+    COALESCE(b_new.new_row->>'therapy_id', b_old.old_row->>'therapy_id')
+  )                                                AS item_name,
+  x.column_name                                    AS changed_column,
+  x.from_value,
+  x.to_value,
+  x.event_at,
+  COALESCE(u.full_name, u.email, x.actor_user_id::text) AS changed_by_user
+FROM (
+  SELECT * FROM upd
+  UNION ALL
+  SELECT * FROM ins
+  UNION ALL
+  SELECT * FROM del
+) x
+LEFT JOIN base b_new
+  ON b_new.event_id = x.event_id AND x.operation IN ('INSERT','UPDATE')
+LEFT JOIN base b_old
+  ON b_old.event_id = x.event_id AND x.operation IN ('UPDATE','DELETE')
+LEFT JOIN member_programs mp ON mp.member_program_id = x.program_id
+LEFT JOIN leads l ON l.lead_id = mp.lead_id
+LEFT JOIN therapies t ON t.therapy_id = COALESCE(
+  NULLIF(b_new.new_row->>'therapy_id','')::int,
+  NULLIF(b_old.old_row->>'therapy_id','')::int
+)
+LEFT JOIN users u ON u.id = x.actor_user_id
+ORDER BY x.event_at DESC, member_name, program_name, x.member_program_item_id, x.column_name;
+
+-- Security: restrict to authenticated and service roles
+REVOKE ALL ON VIEW public.vw_audit_member_items FROM PUBLIC;
+GRANT SELECT ON VIEW public.vw_audit_member_items TO authenticated, service_role;
+

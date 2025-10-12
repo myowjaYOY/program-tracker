@@ -29,6 +29,7 @@ import { MemberPrograms } from '@/types/database.types';
 import DashboardProgramInfoTab from '@/components/dashboard/dashboard-program-info-tab';
 import DashboardProgramScriptTab from '@/components/dashboard/dashboard-program-script-tab';
 import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-todo-tab';
+import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -97,7 +98,7 @@ export default function DashboardPage() {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
         <Typography
           variant="h4"
           component="h1"
@@ -106,9 +107,6 @@ export default function DashboardPage() {
           gutterBottom
         >
           Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Overview of your program tracking metrics
         </Typography>
       </Box>
 
@@ -417,14 +415,7 @@ export default function DashboardPage() {
               </MenuItem>
               {members.map((member) => (
                 <MenuItem key={member.lead_id} value={member.lead_id}>
-                  <Box>
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                      {member.lead_name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {member.programs.length} program{member.programs.length !== 1 ? 's' : ''}
-                    </Typography>
-                  </Box>
+                  {member.lead_name}
                 </MenuItem>
               ))}
             </TextField>
@@ -501,6 +492,11 @@ export default function DashboardPage() {
                     label="To Do"
                     iconPosition="start"
                   />
+                <Tab
+                  icon={<AutoGraphIcon />}
+                  label="Changes"
+                  iconPosition="start"
+                />
                 </Tabs>
               </Box>
 
@@ -514,6 +510,14 @@ export default function DashboardPage() {
 
               <TabPanel value={tabValue} index={2}>
                 <DashboardProgramToDoTab program={selectedProgram} />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={3}>
+                <ProgramChangesTab
+                  memberId={selectedMember?.lead_id ?? null}
+                  range="all"
+                  showMemberColumn={false}
+                />
               </TabPanel>
             </Box>
           )}
