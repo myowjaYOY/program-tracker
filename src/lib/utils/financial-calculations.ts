@@ -57,6 +57,9 @@ export function validateActiveProgramChanges(params: ActiveProgramValidationPara
 
 /**
  * Calculate projected price from items, taxes, finance charges, and discounts
+ * Business rule (Quote/Projected):
+ * - Positive finance charges INCREASE price (revenue)
+ * - Negative finance charges DO NOT reduce price (already embedded in price); they are handled in margin as an expense
  */
 export function calculateProjectedPrice(
   totalCharge: number,
@@ -64,7 +67,8 @@ export function calculateProjectedPrice(
   financeCharges: number,
   discounts: number
 ): number {
-  return totalCharge + taxes + financeCharges + discounts;
+  const financeRevenue = Math.max(Number(financeCharges || 0), 0);
+  return totalCharge + taxes + financeRevenue + discounts;
 }
 
 /**
@@ -94,7 +98,9 @@ export function calculateProjectedMargin(
     ? totalCost + Math.abs(financeCharges)
     : totalCost;
   
-  return ((preTaxRevenue - adjustedCost) / preTaxRevenue) * 100;
+  const margin = ((preTaxRevenue - adjustedCost) / preTaxRevenue) * 100;
+  // Do not allow negative margins per business rule
+  return Math.max(margin, 0);
 }
 
 /**

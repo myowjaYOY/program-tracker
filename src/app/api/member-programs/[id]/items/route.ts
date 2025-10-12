@@ -207,6 +207,12 @@ export async function POST(
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {
+    if (error?.message === 'FINANCE_CHARGES_MARGIN_FLOOR') {
+      return NextResponse.json(
+        { error: 'Finance charges would reduce margin below 0%. Please adjust values.' },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(
       { error: error?.message || 'Internal server error' },
       { status: 500 }
@@ -217,7 +223,7 @@ export async function POST(
 async function updateMemberProgramCalculatedFields(
   supabase: any,
   memberProgramId: number
-) {
+): Promise<void> {
   try {
     // Get all items for this member program with therapy data
     const { data: items, error: itemsError } = await supabase
@@ -309,6 +315,11 @@ async function updateMemberProgramCalculatedFields(
     const finalTotal = financialResult.programPrice;
     const margin = financialResult.margin;
     const calculatedTaxes = financialResult.taxes;
+
+    // Prevent negative margin for Quote (non-Active) when finance charges are negative
+    if (!isActive && margin <= 0 && financeCharges < 0) {
+      throw new Error('FINANCE_CHARGES_MARGIN_FLOOR');
+    }
 
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase

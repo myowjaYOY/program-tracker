@@ -469,6 +469,14 @@ export default function ProgramFinancialsTab({
   const isSaving = createFinances.isPending || updateFinances.isPending;
   const isLoading = isLoadingFinances;
 
+  // Warn if discounts changed after finance charges were populated (percent base changed)
+  const financeChargesNeedsRecalc = React.useMemo(() => {
+    const fc = Number(watchedValues.finance_charges || 0);
+    const currDisc = roundToCents(Number(watchedValues.discounts || 0));
+    const origDisc = roundToCents(originalDiscountsRef.current);
+    return !isLocked && fc !== 0 && currDisc !== origDisc;
+  }, [watchedValues.finance_charges, watchedValues.discounts, isLocked]);
+
   if (financesError) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
@@ -583,9 +591,9 @@ export default function ProgramFinancialsTab({
                       helperText={
                         errors.finance_charges?.message ||
                         (Number(watchedValues.finance_charges || 0) > 0
-                          ? 'Positive: Added to revenue (increases margin)'
+                          ? 'Positive: Increases Program Price; already counted in revenue'
                           : Number(watchedValues.finance_charges || 0) < 0
-                            ? 'Negative: Added to costs (decreases margin)'
+                            ? 'Negative: Does not reduce price, but lowers margin'
                             : 'Enter amount or % (e.g., 5%)')
                       }
                       value={financeChargesInput}
@@ -602,7 +610,9 @@ export default function ProgramFinancialsTab({
                         }
                       }}
                       onBlur={() => {
-                        const base = Number(program.total_charge || 0);
+                        const itemsCharge = Number(program.total_charge || 0);
+                        const discounts = Number(watchedValues.discounts || 0);
+                        const base = Math.max(0, itemsCharge + discounts);
                         const converted = convertPercentStringToAmount(
                           financeChargesInput,
                           base,
@@ -687,6 +697,11 @@ export default function ProgramFinancialsTab({
                   />
                 )}
               />
+              {financeChargesNeedsRecalc && (
+                <Typography variant="caption" color="warning.main" sx={{ mt: 0.5 }}>
+                  Discount changed: Finance Charges may be outdated. Recalculate.
+                </Typography>
+              )}
             </Grid>
 
             {/* Row 3: Final Total Price and Taxes */}

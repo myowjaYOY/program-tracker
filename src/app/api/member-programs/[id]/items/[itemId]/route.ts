@@ -153,7 +153,7 @@ export async function DELETE(
 async function updateMemberProgramCalculatedFields(
   supabase: any,
   memberProgramId: number
-) {
+): Promise<void> {
   try {
     // Get all items for this member program with therapy data
     const { data: items, error: itemsError } = await supabase
@@ -246,6 +246,11 @@ async function updateMemberProgramCalculatedFields(
     const margin = financialResult.margin;
     const calculatedTaxes = financialResult.taxes;
 
+    // Prevent negative margin for Quote (non-Active) when finance charges are negative
+    if (!isActive && margin <= 0 && financeCharges < 0) {
+      throw new Error('FINANCE_CHARGES_MARGIN_FLOOR');
+    }
+
     // Check if finances record exists
     const { data: existingFinances, error: financesFetchError } = await supabase
       .from('member_program_finances')
@@ -289,7 +294,6 @@ async function updateMemberProgramCalculatedFields(
           .select();
     }
   } catch (error: any) {
-    // Re-throw the error so the parent route can handle it
     throw error;
   }
 }
