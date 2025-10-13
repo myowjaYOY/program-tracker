@@ -1,5 +1,6 @@
 import docxmarks from 'docxmarks';
 import createReport from 'docx-templates';
+import { buildContractOptions } from './contract-options';
 
 interface QuoteData {
   member: {
@@ -20,6 +21,7 @@ interface QuoteData {
     discounts: number;
     finalTotalPrice: number;
     margin: number;
+    totalTaxableCharge?: number; // optional, used for contract options
   };
   payments: {
     paymentId: number;
@@ -51,6 +53,13 @@ async function downloadDocumentFromTemplate(
 ): Promise<void> {
   try {
     // Prepare bookmark replacements
+    // Compute optional contract options if taxable base is provided
+    const options = buildContractOptions({
+      programPrice: Number(data.financials.finalTotalPrice || 0),
+      taxes: Number(data.financials.taxes || 0),
+      taxablePreTax: Number(data.financials.totalTaxableCharge || 0),
+    });
+
     const replacements: Record<string, string> = {
       // Member Information
       'MEMBER_NAME': data.member.name || 'N/A',
@@ -70,6 +79,14 @@ async function downloadDocumentFromTemplate(
       'DISCOUNTS': `$${data.financials.discounts.toFixed(2)}`,
       'FINAL_TOTAL_PRICE': `$${data.financials.finalTotalPrice.toFixed(2)}`,
       'MARGIN': `${data.financials.margin.toFixed(2)}%`,
+
+      // New Contract Option Bookmarks
+      'DISCOUNTED_PRETAX_5_AMOUNT': `$${options.discountedPreTax5Amount.toFixed(2)}`,
+      'DISCOUNTED_PROGRAM_PRICE_5': `$${options.discountedProgramPrice5.toFixed(2)}`,
+      'FINANCE_FULL_AMOUNT': `$${options.financeFullAmount.toFixed(2)}`,
+      'FINANCE_DOWN_PAYMENT': `$${options.financeDownPayment.toFixed(2)}`,
+      'FINANCE_MONTHLY_PAYMENT': `$${options.financeMonthlyPayment.toFixed(2)}`,
+      'THREE_EQUAL_PAYMENTS': `$${options.threeEqualPayments.toFixed(2)}`,
       
       // Payment Schedule - will be handled separately as Word elements
       

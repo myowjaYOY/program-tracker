@@ -12,6 +12,8 @@ import {
   TextField,
   Divider,
   Grid,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
@@ -42,6 +44,7 @@ export default function CoordinatorPage() {
   >('all');
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
+  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
 
 
   // Members: only leads with programs that are Active or Paused
@@ -411,6 +414,16 @@ export default function CoordinatorPage() {
                   />
                 </>
               )}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={hideCompleted}
+                    onChange={e => setHideCompleted(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label="Hide completed"
+              />
             </Box>
           </Box>
 
@@ -441,6 +454,7 @@ export default function CoordinatorPage() {
                 range={range}
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
+                hideCompleted={hideCompleted}
               />
             )}
             {tab === 1 && (
@@ -449,6 +463,7 @@ export default function CoordinatorPage() {
                 range={range}
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
+                hideCompleted={hideCompleted}
               />
             )}
             {tab === 2 && (

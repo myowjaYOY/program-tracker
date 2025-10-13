@@ -4,8 +4,8 @@
 
 1. **Create a Word document** with your desired layout and formatting
 2. **Add bookmarks** where you want dynamic content to appear
-3. **Save as** `quote-template.docx` in this directory
-4. **Test** the Quote button functionality
+3. **Save as** `quote-template.docx` (quotes) or `New-Contract-Template.docx` (options) in this directory
+4. **Test** the Quote/Contract/Options buttons on the Programs page
 
 ## Required Bookmarks
 
@@ -30,6 +30,19 @@ TOTAL_PAYMENTS
 PAID_PAYMENTS
 PENDING_PAYMENTS
 GENERATED_DATE
+```
+
+### Additional Bookmarks (New Contract Options template)
+
+Use these in `New-Contract-Template.docx` to display payment options at consult time. All values are currency, 2 decimals.
+
+```
+DISCOUNTED_PRETAX_5_AMOUNT        // 5% of pre‑tax (discount amount)
+DISCOUNTED_PROGRAM_PRICE_5        // Program price after 5% pre‑tax discount with taxes recomputed on taxable items
+FINANCE_FULL_AMOUNT               // Program price + 6% of pre‑tax
+FINANCE_DOWN_PAYMENT              // 25% of finance full amount
+FINANCE_MONTHLY_PAYMENT           // (finance full amount − down payment) / 5
+THREE_EQUAL_PAYMENTS              // Program price / 3
 ```
 
 ## Template Example
@@ -85,9 +98,9 @@ Generated: [GENERATED_DATE]
 ## Testing
 
 Once you create the template:
-1. Save it as `quote-template.docx` in this directory
-2. Go to a program with "Quote" status
-3. Click the Quote button
+1. Save it as `quote-template.docx`, `contract-template.docx`, or `New-Contract-Template.docx` in this directory
+2. Go to the Programs page
+3. Click the corresponding button (Quote / Contract / New Contract Options)
 4. Your formatted document will be generated!
 
 ## Troubleshooting

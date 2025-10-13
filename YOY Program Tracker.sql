@@ -2903,6 +2903,7 @@ declare
   v_remaining numeric(10,2);
   v_base_each numeric(10,2);
   v_residual numeric(10,2);
+  v_start_date date;
   v_anchor_day int;
   v_target_month date;
   v_target_last_day date;
@@ -2931,6 +2932,17 @@ begin
   delete from public.member_program_payments
   where member_program_id = p_program_id;
 
+  -- Fetch program start date
+  select start_date
+  into v_start_date
+  from public.member_programs
+  where member_program_id = p_program_id;
+
+  -- Validate start date exists
+  if v_start_date is null then
+    raise exception 'Program must have a start date to generate payments';
+  end if;
+
   -- Gather finance info
   select f.final_total_price,
          ft.financing_type_name,
@@ -2957,7 +2969,7 @@ begin
     return;
   end if;
 
-  -- External or Full Payment -> single payment today
+  -- External or Full Payment -> single payment on start date
   if v_financing_source = 'external'::financing_source_enum
      or (v_financing_type_name is not null and v_financing_type_name ilike 'full payment') then
     insert into public.member_program_payments (
@@ -2977,7 +2989,7 @@ begin
     ) values (
       p_program_id,
       coalesce(v_final_total, 0),
-      current_date,
+      v_start_date,
       null,
       v_pending_status_id,
       null,
@@ -3002,11 +3014,11 @@ begin
       v_count := 1;
     end if;
 
-    -- Monthly due date anchor (day of month)
-    v_anchor_day := extract(day from current_date)::int;
+    -- Monthly due date anchor (day of month from start date)
+    v_anchor_day := extract(day from v_start_date)::int;
 
     if v_count <= 1 then
-      -- Single payment today for full amount
+      -- Single payment on start date for full amount
       insert into public.member_program_payments (
         member_program_id,
         payment_amount,
@@ -3024,7 +3036,7 @@ begin
       ) values (
         p_program_id,
         coalesce(v_final_total, 0),
-        current_date,
+        v_start_date,
         null,
         v_pending_status_id,
         null,
@@ -3055,8 +3067,8 @@ begin
     -- Generate payments with monthly increments and end-of-month clamping
     i := 1;
     while i <= v_count loop
-      -- Month i-1 from current month
-      v_target_month := (date_trunc('month', current_date)::date + make_interval(months => (i - 1)))::date;
+      -- Month i-1 from start date month
+      v_target_month := (date_trunc('month', v_start_date)::date + make_interval(months => (i - 1)))::date;
       v_target_last_day := (date_trunc('month', (v_target_month + interval '1 month'))::date - 1);
       v_due := v_target_month + (least(v_anchor_day, extract(day from v_target_last_day)::int) - 1);
 

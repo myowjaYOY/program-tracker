@@ -30,6 +30,8 @@ import DashboardProgramInfoTab from '@/components/dashboard/dashboard-program-in
 import DashboardProgramScriptTab from '@/components/dashboard/dashboard-program-script-tab';
 import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-todo-tab';
 import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
+import DashboardProgramItemsTab from '@/components/dashboard/dashboard-program-items-tab';
+import DashboardProgramNotesTab from '@/components/dashboard/dashboard-program-notes-tab';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -483,6 +485,16 @@ export default function DashboardPage() {
                     iconPosition="start"
                   />
                   <Tab
+                    icon={<AssignmentIcon />}
+                    label="Items"
+                    iconPosition="start"
+                  />
+                  <Tab
+                    icon={<AssignmentIcon />}
+                    label="Notes"
+                    iconPosition="start"
+                  />
+                  <Tab
                     icon={<AssignmentTurnedInIcon />}
                     label="Script"
                     iconPosition="start"
@@ -505,14 +517,25 @@ export default function DashboardPage() {
               </TabPanel>
 
               <TabPanel value={tabValue} index={1}>
-                <DashboardProgramScriptTab program={selectedProgram} />
+                <DashboardProgramItemsTab program={selectedProgram} />
               </TabPanel>
 
               <TabPanel value={tabValue} index={2}>
-                <DashboardProgramToDoTab program={selectedProgram} />
+                <DashboardProgramNotesTab
+                  program={selectedProgram}
+                  memberId={selectedMember?.lead_id ?? null}
+                />
               </TabPanel>
 
               <TabPanel value={tabValue} index={3}>
+                <DashboardProgramScriptTab program={selectedProgram} />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={4}>
+                <DashboardProgramToDoTab program={selectedProgram} />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={5}>
                 <ProgramChangesTab
                   memberId={selectedMember?.lead_id ?? null}
                   range="all"

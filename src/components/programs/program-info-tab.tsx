@@ -219,6 +219,54 @@ export default function ProgramInfoTab({
     await performSave(data);
   };
 
+  const handleGenerateNewContractOptions = async () => {
+    try {
+      setIsGenerating(true);
+      if (!finances) throw new Error('Program financial information not found.');
+
+      const contractData = {
+        member: {
+          name: program.lead_name || 'N/A',
+          email: program.lead_email || 'N/A',
+          phone: 'N/A',
+          address: 'N/A',
+        },
+        program: {
+          name: program.program_template_name || 'Program',
+          description: program.description || 'No description available',
+          startDate: program.start_date ? new Date(program.start_date).toLocaleDateString() : 'Not set',
+          duration: 'Program duration not specified',
+        },
+        financials: {
+          financeCharges: finances?.finance_charges || 0,
+          taxes: finances?.taxes || 0,
+          discounts: finances?.discounts || 0,
+          finalTotalPrice: finances?.final_total_price || 0,
+          margin: finances?.margin || 0,
+          // pass taxable base (from member_programs.total_charge filtered by taxable items already stored in finances is not available)
+          // derive from current items if present in program totals
+          totalTaxableCharge: (program as any)?.total_taxable_charge || 0,
+        },
+        payments: (payments || []).map(payment => ({
+          paymentId: payment.member_program_payment_id,
+          amount: payment.payment_amount || 0,
+          dueDate: payment.payment_due_date ? new Date(payment.payment_due_date).toLocaleDateString() : 'Not set',
+          ...(payment.payment_date && { paymentDate: new Date(payment.payment_date).toLocaleDateString() }),
+        })),
+        generatedDate: new Date().toLocaleDateString(),
+      } as const;
+
+      const templateBuffer = await loadTemplate(TEMPLATE_PATHS.NEW_CONTRACT);
+      await downloadContractFromTemplate(contractData as any, templateBuffer);
+      toast.success('New Contract Options document generated successfully!');
+    } catch (error) {
+      const errorMessage = (error as any)?.message || 'Failed to generate document';
+      toast.error(errorMessage);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleGenerateQuote = async () => {
     try {
       setIsGeneratingQuote(true);
@@ -552,31 +600,16 @@ export default function ProgramInfoTab({
             alignItems: 'center',
           }}
         >
-          {/* Left side: Quote and Contract Buttons */}
+          {/* Left side: Contract Options Button */}
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
-              disabled={program.status_name?.toLowerCase() !== 'quote' || isGeneratingQuote}
-              sx={{ 
-                minWidth: 100,
-                borderRadius: 0,
-              }}
-              onClick={handleGenerateQuote}
-              startIcon={isGeneratingQuote ? <CircularProgress size={16} /> : undefined}
+              onClick={handleGenerateNewContractOptions}
+              disabled={isGenerating}
+              sx={{ minWidth: 100, borderRadius: 0 }}
+              startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
             >
-              {isGeneratingQuote ? 'Generating...' : 'Quote'}
-            </Button>
-            <Button
-              variant="outlined"
-              disabled={program.status_name?.toLowerCase() !== 'quote' || isGeneratingContract}
-              sx={{ 
-                minWidth: 100,
-                borderRadius: 0,
-              }}
-              onClick={handleGenerateContract}
-              startIcon={isGeneratingContract ? <CircularProgress size={16} /> : undefined}
-            >
-              {isGeneratingContract ? 'Generating...' : 'Contract'}
+              {isGenerating ? 'Generating...' : 'Contract Options'}
             </Button>
           </Box>
 

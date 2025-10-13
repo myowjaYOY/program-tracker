@@ -19,6 +19,7 @@ interface CoordinatorToDoTabProps {
   range?: 'all' | 'today' | 'week' | 'month' | 'custom';
   start?: string | undefined;
   end?: string | undefined;
+  hideCompleted?: boolean;
 }
 
 export default function CoordinatorToDoTab({
@@ -26,6 +27,7 @@ export default function CoordinatorToDoTab({
   range = 'all',
   start,
   end,
+  hideCompleted = false,
 }: CoordinatorToDoTabProps) {
   const {
     data = [],
@@ -108,7 +110,7 @@ export default function CoordinatorToDoTab({
     }
   }
 
-  const rows = (data as any[]).map(r => {
+  let rows = (data as any[]).map(r => {
     const tt =
       r?.member_program_item_tasks?.therapy_tasks?.therapies?.therapytype
         ?.therapy_type_name || '—';
@@ -128,6 +130,10 @@ export default function CoordinatorToDoTab({
       updated_by: r.updated_by_email ?? r.updated_by ?? '-',
     };
   });
+
+  if (hideCompleted) {
+    rows = rows.filter(r => !r.completed_flag);
+  }
 
   const cols: GridColDef[] = [
     {

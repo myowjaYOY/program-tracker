@@ -19,6 +19,7 @@ interface CoordinatorScriptTabProps {
   range?: 'all' | 'today' | 'week' | 'month' | 'custom';
   start?: string | undefined;
   end?: string | undefined;
+  hideCompleted?: boolean;
 }
 
 type Row = {
@@ -44,6 +45,7 @@ export default function CoordinatorScriptTab({
   range = 'all',
   start,
   end,
+  hideCompleted = false,
 }: CoordinatorScriptTabProps) {
   const {
     data = [],
@@ -126,7 +128,7 @@ export default function CoordinatorScriptTab({
     });
   };
 
-  const rows: any[] = (data as any[]).map((r: any) => ({
+  let rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
     id: r.member_program_item_schedule_id,
     therapy_name: r.therapy_name ?? '',
@@ -134,6 +136,10 @@ export default function CoordinatorScriptTab({
     created_by: r.created_by_email ?? r.created_by ?? '-',
     updated_by: r.updated_by_email ?? r.updated_by ?? '-',
   }));
+
+  if (hideCompleted) {
+    rows = rows.filter(r => !r.completed_flag);
+  }
 
   const cols: GridColDef<Row>[] = [
     {

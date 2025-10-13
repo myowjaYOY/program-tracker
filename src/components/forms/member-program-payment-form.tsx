@@ -67,7 +67,7 @@ export default function MemberProgramPaymentForm({
 
   // Check if program status allows payment amount editing AND payment is not already paid
   const statusName = programStatus?.toLowerCase() || '';
-  const isPaymentPaid = initialValues?.payment_date && initialValues.payment_date.trim() !== '';
+  const isPaymentPaid = !!(initialValues?.payment_date && initialValues.payment_date.trim() !== '');
   const canEditAmount = (statusName === 'quote' || statusName === 'active') && !isPaymentPaid;
 
   const normalizeDateInput = (value?: string | null): string => {
@@ -362,10 +362,10 @@ export default function MemberProgramPaymentForm({
             type="date"
             fullWidth
             InputLabelProps={{ shrink: true }}
-            disabled
+            disabled={isPaymentPaid}
             {...register('payment_due_date')}
             error={!!errors.payment_due_date}
-            helperText={errors.payment_due_date?.toString()}
+            helperText={errors.payment_due_date?.message || (isPaymentPaid ? 'Due date cannot be changed for paid payments' : '')}
           />
           <TextField
             label="Amount"
