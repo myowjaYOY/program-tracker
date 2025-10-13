@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date();
-    const today = new Date().toISOString().split('T')[0];
+    const todayStr: string = new Date().toISOString().slice(0, 10);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
       .toISOString()
       .slice(0, 10);
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
     );
 
     const dueTodayPayments = unpaidPayments.filter(
-      (p: any) => p.payment_due_date && p.payment_due_date <= today
+      (p: any) => p.payment_due_date && p.payment_due_date <= todayStr
     );
 
     // Card 2 requirement change: Amount paid THIS MONTH for ALL programs regardless of status
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     );
 
     const latePayments = unpaidPayments.filter(
-      (p: any) => p.payment_due_date && p.payment_due_date < today
+      (p: any) => p.payment_due_date && p.payment_due_date < todayStr
     );
 
     const totalAmountLate = latePayments.reduce(
