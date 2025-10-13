@@ -81,6 +81,11 @@ const adminNav = [
     path: '/dashboard/audit-report',
   },
   {
+    label: 'Payments',
+    icon: <PaymentMethodsIcon />,
+    path: '/dashboard/payments',
+  },
+  {
     label: 'Program Audit',
     icon: <FactCheckIcon />,
     path: '/dashboard/admin/program-audit',

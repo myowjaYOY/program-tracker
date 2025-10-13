@@ -43,11 +43,12 @@ export async function POST(
     for (const update of paymentUpdates) {
       const { member_program_payment_id, ...updateData } = update;
       
-      // Remove payment_method_id if it's 0 (not selected for pending payments)
+      // Normalize payment_method_id: treat 0/undefined as null to avoid FK violation
       const { payment_method_id, ...cleanUpdateData } = updateData;
-      const finalUpdateData = payment_method_id === 0 
-        ? cleanUpdateData 
-        : updateData;
+      const finalUpdateData =
+        payment_method_id && Number(payment_method_id) > 0
+          ? { ...updateData, payment_method_id }
+          : { ...cleanUpdateData, payment_method_id: null };
       
       const { data, error } = await supabase
         .from('member_program_payments')

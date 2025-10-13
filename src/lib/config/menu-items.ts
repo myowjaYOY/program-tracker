@@ -66,6 +66,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'History',
   },
   {
+    path: '/dashboard/payments',
+    label: 'Payments',
+    section: 'admin',
+    icon: 'Payment',
+  },
+  {
     path: '/dashboard/admin/program-audit',
     label: 'Program Audit',
     section: 'admin',

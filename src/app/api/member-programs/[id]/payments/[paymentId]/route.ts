@@ -19,8 +19,13 @@ export async function PUT(
     const { id, paymentId } = await context.params;
     const body = await req.json();
 
+    // Sanitize payment_method_id: allow null, disallow 0 to avoid FK violation
+    const { payment_method_id, ...rest } = body || {};
     const updateData: any = {
-      ...body,
+      ...rest,
+      ...(payment_method_id && Number(payment_method_id) > 0
+        ? { payment_method_id }
+        : { payment_method_id: null }),
       updated_by: session.user.id,
     };
 
