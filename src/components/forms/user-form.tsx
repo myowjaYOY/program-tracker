@@ -370,7 +370,7 @@ export default function UserForm({
             ) : (
               <>
                 {/* Main sections */}
-                {['main', 'marketing', 'sales'].map(section => {
+                {['main', 'marketing', 'operations', 'sales'].map(section => {
                   const sectionItems = getSectionItems(section);
                   if (sectionItems.length === 0) return null;
 

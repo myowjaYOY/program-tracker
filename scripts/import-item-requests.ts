@@ -126,6 +126,7 @@ async function importItemRequests(): Promise<ImportResult> {
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
+      if (!row) continue;
       
       try {
         // Validate required fields

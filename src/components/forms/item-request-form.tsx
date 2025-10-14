@@ -96,7 +96,7 @@ export default function ItemRequestForm({
   return (
     <BaseForm<ItemRequestFormData>
       onSubmit={onSubmit}
-      onCancel={onCancel}
+      onCancel={onCancel || (() => {})}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={isSubmitting || createRequest.isPending || updateRequest.isPending}
       submitText={isEdit ? 'Update' : 'Create'}

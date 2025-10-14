@@ -74,17 +74,20 @@ const salesNav = [
   { label: 'Documents', icon: <DocumentsIcon />, path: '/documents' },
 ];
 
+const operationsNav = [
+  {
+    label: 'Item Requests',
+    icon: <ItemRequestsIcon />,
+    path: '/dashboard/item-requests',
+  },
+];
+
 // Admin navigation with nested Lookup submenu
 const adminNav = [
   {
     label: 'Audit Report',
     icon: <AuditIcon />,
     path: '/dashboard/audit-report',
-  },
-  {
-    label: 'Item Requests',
-    icon: <ItemRequestsIcon />,
-    path: '/dashboard/item-requests',
   },
   {
     label: 'Payments',
@@ -221,7 +224,7 @@ export default function Sidebar({ user }: SidebarProps) {
   // Filter navigation based on permissions
   const getFilteredNavigation = () => {
     if (!userPermissions || permissionsLoading) {
-      return { main: [], marketing: [], sales: [], admin: [] };
+      return { main: [], marketing: [], sales: [], operations: [], admin: [] };
     }
 
     const { isAdmin, permissions } = userPermissions;
@@ -254,6 +257,7 @@ export default function Sidebar({ user }: SidebarProps) {
       main: mainNav.filter(item => hasPermission(item.path)),
       marketing: marketingNav.filter(item => hasPermission(item.path)),
       sales: salesNav.filter(item => hasPermission(item.path)),
+      operations: operationsNav.filter(item => hasPermission(item.path)),
       admin: filteredAdminNav,
     };
   };
@@ -389,6 +393,76 @@ export default function Sidebar({ user }: SidebarProps) {
         <Collapse in={openSection === 'marketing'} timeout="auto" unmountOnExit>
           <List sx={{ pt: 0 }}>
             {filteredNav.marketing.map(item => (
+              <ListItem disablePadding key={item.label}>
+                <ListItemButton
+                  selected={pathname === item.path}
+                  onClick={() => router.push(item.path)}
+                  sx={{
+                    // Use theme default borderRadius
+                    mx: 1,
+                    my: 0.5,
+                    color:
+                      pathname === item.path ? 'primary.main' : 'text.primary',
+                    backgroundColor:
+                      pathname === item.path ? '#f5f2ff' : 'transparent',
+                    '&:hover': {
+                      backgroundColor: '#f5f2ff',
+                    },
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      color:
+                        pathname === item.path
+                          ? 'primary.main'
+                          : 'text.secondary',
+                      minWidth: 36,
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{ fontWeight: 500, fontSize: 15 }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+        {/* Operations Section (Collapsible) */}
+        {filteredNav.operations.length > 0 && (
+          <ListSubheader
+            sx={{
+              color: 'text.secondary',
+              fontWeight: 600,
+              fontSize: 13,
+              mt: 2,
+              mb: 0.5,
+              pl: 2,
+              background: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'pointer',
+            }}
+            onClick={() =>
+              setOpenSection(openSection === 'operations' ? undefined : 'operations')
+            }
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+              <Box sx={{ flex: 1 }}>Operations</Box>
+              {openSection === 'operations' ? (
+                <ExpandLess fontSize="small" />
+              ) : (
+                <ExpandMore fontSize="small" />
+              )}
+            </Box>
+          </ListSubheader>
+        )}
+        <Collapse in={openSection === 'operations'} timeout="auto" unmountOnExit>
+          <List sx={{ pt: 0 }}>
+            {filteredNav.operations.map(item => (
               <ListItem disablePadding key={item.label}>
                 <ListItemButton
                   selected={pathname === item.path}

@@ -6,7 +6,7 @@
 export interface MenuItem {
   path: string;
   label: string;
-  section: 'main' | 'marketing' | 'sales' | 'admin';
+  section: 'main' | 'marketing' | 'sales' | 'operations' | 'admin';
   icon: string;
 }
 
@@ -58,18 +58,20 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'Description',
   },
 
+  // Operations
+  {
+    path: '/dashboard/item-requests',
+    label: 'Item Requests',
+    section: 'operations',
+    icon: 'Inventory',
+  },
+
   // Admin (alphabetical)
   {
     path: '/dashboard/audit-report',
     label: 'Audit Report',
     section: 'admin',
     icon: 'History',
-  },
-  {
-    path: '/dashboard/item-requests',
-    label: 'Item Requests',
-    section: 'admin',
-    icon: 'Inventory',
   },
   {
     path: '/dashboard/payments',

@@ -706,6 +706,7 @@ export default function ItemRequestsPage() {
           </Box>
 
           <BaseDataTable
+            title=""
             data={requests.map((req) => ({
               ...req,
               id: req.item_request_id,
