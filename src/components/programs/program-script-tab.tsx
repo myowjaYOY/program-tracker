@@ -5,11 +5,7 @@ import { Box, Chip } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
-import {
-  useProgramSchedule,
-  useUpdateSchedule,
-} from '@/lib/hooks/use-program-schedule';
-import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { useProgramSchedule } from '@/lib/hooks/use-program-schedule';
 
 interface ProgramScriptTabProps {
   program: MemberPrograms;
@@ -35,17 +31,6 @@ export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
     isLoading,
     error,
   } = useProgramSchedule(program.member_program_id);
-  const update = useUpdateSchedule(program.member_program_id);
-  const { data: statuses = [] } = useProgramStatus();
-  const statusName = (
-    statuses.find(s => s.program_status_id === program.program_status_id)
-      ?.status_name || ''
-  ).toLowerCase();
-  const readOnly =
-    statusName === 'quote' ||
-    statusName === 'paused' ||
-    statusName === 'completed' ||
-    statusName === 'cancelled';
 
   const rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
@@ -83,31 +68,23 @@ export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
         return (
           <Chip
             label={isCompleted ? 'Yes' : 'No'}
-            color={isCompleted ? 'success' : 'default'}
+            color={isCompleted ? 'success' : 'error'}
             size="small"
-            onClick={() => {
-              if (!readOnly)
-                update.mutate({
-                  scheduleId: row.member_program_item_schedule_id,
-                  completed_flag: !isCompleted,
-                });
-            }}
-            sx={{ cursor: 'pointer' }}
           />
         );
       },
-    },
-    {
-      field: 'updated_at',
-      headerName: 'Updated Date',
-      width: 140,
-      renderCell: renderDate as any,
     },
     {
       field: 'updated_by_full_name',
       headerName: 'Updated By',
       width: 150,
       renderCell: (params: any) => params.value || '-',
+    },
+    {
+      field: 'updated_at',
+      headerName: 'Updated Date',
+      width: 140,
+      renderCell: renderDate as any,
     },
   ];
 

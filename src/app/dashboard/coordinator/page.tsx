@@ -67,7 +67,8 @@ export default function CoordinatorPage() {
         uniq.push(pr);
       }
     }
-    return uniq;
+    // Sort alphabetically by name
+    return uniq.sort((a, b) => a.name.localeCompare(b.name));
   }, [programs]);
 
   return (
@@ -385,6 +386,10 @@ export default function CoordinatorPage() {
                     const iso = today.toISOString().slice(0, 10);
                     setStart(prev => prev || iso);
                     setEnd(prev => prev || iso);
+                  } else {
+                    // Clear custom dates when switching to preset ranges
+                    setStart(null);
+                    setEnd(null);
                   }
                 }}
                 size="small"

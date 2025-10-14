@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function GET() {
   try {
@@ -106,15 +107,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in Supabase Auth using regular signup (works with anon key)
-    console.log('Attempting to create user in auth...');
-    const { data: authData, error: authError2 } = await supabase.auth.signUp({
+    // Create user using Supabase Admin API to avoid auto-login
+    console.log('Attempting to create user with admin API...');
+    
+    // Check if service role key is available
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY not found in environment variables');
+      return NextResponse.json(
+        { error: 'Server configuration error: Missing service role key' },
+        { status: 500 }
+      );
+    }
+    
+    // Create admin client with service role key for user creation
+    const adminSupabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: authData, error: authError2 } = await adminSupabase.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: {
-          full_name: full_name || '',
-        },
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: full_name || '',
       },
     });
 
@@ -129,46 +145,43 @@ export async function POST(request: NextRequest) {
     }
 
     if (!authData.user) {
-      console.error('No user returned from signup');
+      console.error('No user returned from admin createUser');
       return NextResponse.json(
         { error: 'Failed to create user' },
         { status: 400 }
       );
     }
 
-    // Upsert user record in users table (handle trigger conflict)
+    // Wait a moment for automatic user record creation, then update it with our settings
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Update the automatically created user record with our settings
     const { data: userData, error: userError2 } = await supabase
       .from('users')
-      .upsert({
-        id: authData.user.id,
-        email: authData.user.email,
+      .update({
         full_name: full_name || '',
         is_admin,
         is_active,
       })
+      .eq('id', authData.user.id)
       .select()
       .single();
 
     if (userError2) {
-      console.error('Error creating user record:', userError2);
+      console.error('Error updating user record:', userError2);
 
-      // Provide user-friendly error messages
-      if (userError2.code === '23505') {
-        return NextResponse.json(
-          { error: 'A user with this email already exists' },
-          { status: 400 }
-        );
-      } else if (userError2.code === 'PGRST116') {
-        return NextResponse.json(
-          { error: 'User creation failed due to permissions' },
-          { status: 500 }
-        );
-      } else {
-        return NextResponse.json(
-          { error: userError2.message || 'Failed to create user record' },
-          { status: 500 }
-        );
+      // If user record update fails, we should clean up the auth user
+      try {
+        await adminSupabase.auth.admin.deleteUser(authData.user.id);
+        console.log('Cleaned up auth user after database update failure');
+      } catch (cleanupError) {
+        console.error('Failed to cleanup auth user:', cleanupError);
       }
+
+      return NextResponse.json(
+        { error: userError2.message || 'Failed to update user record' },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

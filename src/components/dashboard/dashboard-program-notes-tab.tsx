@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Box, Button } from '@mui/material';
+import { Add as AddIcon } from '@mui/icons-material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
@@ -27,7 +28,7 @@ export default function DashboardProgramNotesTab({ program, memberId = null }: D
     { field: 'note_type', headerName: 'Type', width: 140 },
     { field: 'note', headerName: 'Note', width: 520 },
     { field: 'created_by_name', headerName: 'Created By', width: 180 },
-    { field: 'created_at', headerName: 'Created At', width: 160, renderCell: renderDate as any },
+    { field: 'created_at', headerName: 'Created Date', width: 160, renderCell: renderDate as any },
   ];
 
   const [open, setOpen] = React.useState(false);
@@ -37,6 +38,7 @@ export default function DashboardProgramNotesTab({ program, memberId = null }: D
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <Button
           variant="contained"
+          startIcon={<AddIcon />}
           onClick={() => setOpen(true)}
           disabled={!leadId}
           sx={{ borderRadius: 0, fontWeight: 600 }}
@@ -69,6 +71,12 @@ export default function DashboardProgramNotesTab({ program, memberId = null }: D
     </Box>
   );
 }
+
+
+
+
+
+
 
 
 

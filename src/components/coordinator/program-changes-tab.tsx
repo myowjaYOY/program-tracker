@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Box, TextField, MenuItem, Button } from '@mui/material';
 import BaseDataTable, {
-  renderDateTime,
+  renderDate,
 } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { useCoordinatorProgramChanges } from '@/lib/hooks/use-coordinator';
@@ -61,7 +61,7 @@ export default function ProgramChangesTab({
     { field: 'from', headerName: 'From', flex: 1, minWidth: 220 },
     { field: 'to', headerName: 'To', flex: 1, minWidth: 220 },
     { field: 'changed_by', headerName: 'Changed By', width: 140 },
-    { field: 'changed_at', headerName: 'Changed At', width: 180, renderCell: renderDateTime as any },
+    { field: 'changed_at', headerName: 'Changed Date', width: 180, renderCell: renderDate as any },
   ];
 
   return (

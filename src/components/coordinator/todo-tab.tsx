@@ -126,8 +126,8 @@ export default function CoordinatorToDoTab({
       therapy_name: tn,
       task_name: task,
       description: desc,
-      created_by: r.created_by_email ?? r.created_by ?? '-',
-      updated_by: r.updated_by_email ?? r.updated_by ?? '-',
+      created_by: r.created_by_full_name ?? r.created_by_email ?? r.created_by ?? '-',
+      updated_by: r.updated_by_full_name ?? r.updated_by_email ?? r.updated_by ?? '-',
     };
   });
 
@@ -250,20 +250,13 @@ export default function CoordinatorToDoTab({
         </Box>
       ),
     },
-    {
-      field: 'created_at',
-      headerName: 'Created Date',
-      width: 140,
-      renderCell: renderDate as any,
-    } as any,
-    { field: 'created_by', headerName: 'Created By', width: 180 } as any,
+    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
     {
       field: 'updated_at',
       headerName: 'Updated Date',
       width: 140,
       renderCell: renderDate as any,
     } as any,
-    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
   ];
 
   return (
@@ -295,6 +288,7 @@ export default function CoordinatorToDoTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        sortModel={[{ field: 'due_date', sort: 'asc' }]}
       />
 
       {/* Lead Notes Modal */}

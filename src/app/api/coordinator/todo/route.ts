@@ -252,8 +252,14 @@ export async function GET(req: NextRequest) {
         created_by_email: r.created_by
           ? userMap.get(r.created_by)?.email || null
           : null,
+        created_by_full_name: r.created_by
+          ? userMap.get(r.created_by)?.full_name || null
+          : null,
         updated_by_email: r.updated_by
           ? userMap.get(r.updated_by)?.email || null
+          : null,
+        updated_by_full_name: r.updated_by
+          ? userMap.get(r.updated_by)?.full_name || null
           : null,
       };
     });

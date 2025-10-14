@@ -448,6 +448,42 @@ export interface Vendors {
   updated_by_email?: string | null;
 }
 
+export interface ItemRequest {
+  item_request_id: number;
+  lead_id: number | null;
+  item_description: string;
+  quantity: number;
+  notes: string | null;
+  // Requested stage
+  requested_date: string; // ISO timestamp
+  requested_by: string; // UUID
+  // Ordered stage
+  ordered_date: string | null; // ISO timestamp
+  ordered_by: string | null; // UUID
+  // Received stage
+  received_date: string | null; // ISO timestamp
+  received_by: string | null; // UUID
+  // Cancellation
+  is_cancelled: boolean;
+  cancelled_date: string | null; // ISO timestamp
+  cancelled_by: string | null; // UUID
+  cancellation_reason: string | null;
+  // Derived/enriched fields (from view or API)
+  status?: 'Pending' | 'Ordered' | 'Received' | 'Cancelled';
+  status_order?: number;
+  requested_by_email?: string | null;
+  requested_by_name?: string | null;
+  ordered_by_email?: string | null;
+  ordered_by_name?: string | null;
+  received_by_email?: string | null;
+  received_by_name?: string | null;
+  cancelled_by_email?: string | null;
+  cancelled_by_name?: string | null;
+  lead_first_name?: string | null;
+  lead_last_name?: string | null;
+  member_name?: string | null;
+}
+
 export interface PaymentStatus {
   payment_status_id: number;
   payment_status_name: string;

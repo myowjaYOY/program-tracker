@@ -36,6 +36,8 @@ type Row = {
   updated_by?: string | null;
   created_by_email?: string | null;
   updated_by_email?: string | null;
+  created_by_full_name?: string | null;
+  updated_by_full_name?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -133,8 +135,8 @@ export default function CoordinatorScriptTab({
     id: r.member_program_item_schedule_id,
     therapy_name: r.therapy_name ?? '',
     therapy_type: r.therapy_type_name ?? '',
-    created_by: r.created_by_email ?? r.created_by ?? '-',
-    updated_by: r.updated_by_email ?? r.updated_by ?? '-',
+    created_by: r.created_by_full_name ?? r.created_by_email ?? r.created_by ?? '-',
+    updated_by: r.updated_by_full_name ?? r.updated_by_email ?? r.updated_by ?? '-',
   }));
 
   if (hideCompleted) {
@@ -259,20 +261,13 @@ export default function CoordinatorScriptTab({
         );
       },
     },
-    {
-      field: 'created_at',
-      headerName: 'Created Date',
-      width: 140,
-      renderCell: renderDate as any,
-    } as any,
-    { field: 'created_by', headerName: 'Created By', width: 180 } as any,
+    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
     {
       field: 'updated_at',
       headerName: 'Updated Date',
       width: 140,
       renderCell: renderDate as any,
     } as any,
-    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
   ];
 
   return (
@@ -305,6 +300,7 @@ export default function CoordinatorScriptTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        sortModel={[{ field: 'scheduled_date', sort: 'asc' }]}
       />
 
       {/* Lead Notes Modal */}

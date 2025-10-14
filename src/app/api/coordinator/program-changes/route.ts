@@ -67,7 +67,12 @@ export async function GET(req: NextRequest) {
                 .slice(0, 10)
             : undefined);
     if (startStr) query = query.gte('event_at', startStr);
-    if (endStr) query = query.lte('event_at', endStr);
+    if (endStr) {
+      // Include entire end date by filtering up to (but not including) the next day
+      const nextDay = new Date(endStr + 'T00:00:00Z');
+      nextDay.setDate(nextDay.getDate() + 1);
+      query = query.lt('event_at', nextDay.toISOString());
+    }
 
     // Source filtering removed
 
