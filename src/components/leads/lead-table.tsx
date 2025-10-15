@@ -109,6 +109,16 @@ const leadColumns: GridColDef[] = [
     headerName: 'Phone',
     width: 130,
     flex: 1,
+    renderCell: (params) => {
+      const phone = params.value as string;
+      if (!phone) return '-';
+      // Format phone number for display
+      const cleaned = phone.replace(/\D/g, '');
+      if (cleaned.length === 10) {
+        return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6, 10)}`;
+      }
+      return phone; // Return as-is if not 10 digits
+    },
   },
   {
     field: 'status_name',

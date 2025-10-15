@@ -22,12 +22,39 @@ interface QuoteData {
     finalTotalPrice: number;
     margin: number;
     totalTaxableCharge?: number; // optional, used for contract options
+    // Raw data needed for contract options calculation
+    totalCharge?: number; // base charge from items
+    totalCost?: number; // cost of items
   };
   payments: {
     paymentId: number;
     amount: number;
     dueDate: string;
     paymentDate?: string;
+  }[];
+  generatedDate: string;
+}
+
+interface PlanSummaryData {
+  member: {
+    name: string;
+    email: string;
+    phone?: string;
+    address?: string;
+  };
+  program: {
+    name: string;
+    description: string;
+    startDate: string;
+    duration?: string;
+  };
+  therapyTypes: {
+    name: string;
+    items: {
+      name: string;
+      quantity: number;
+      instructions: string;
+    }[];
   }[];
   generatedDate: string;
 }
@@ -46,6 +73,13 @@ export async function downloadContractFromTemplate(
   return downloadDocumentFromTemplate(data, templateBuffer, 'C');
 }
 
+export async function downloadPlanSummaryFromTemplate(
+  data: PlanSummaryData,
+  templateBuffer: ArrayBuffer
+): Promise<void> {
+  return downloadPlanSummaryDocumentFromTemplate(data, templateBuffer, 'PS');
+}
+
 async function downloadDocumentFromTemplate(
   data: QuoteData,
   templateBuffer: ArrayBuffer,
@@ -53,11 +87,13 @@ async function downloadDocumentFromTemplate(
 ): Promise<void> {
   try {
     // Prepare bookmark replacements
-    // Compute optional contract options if taxable base is provided
+    // Compute optional contract options using shared calculation functions
     const options = buildContractOptions({
-      programPrice: Number(data.financials.finalTotalPrice || 0),
-      taxes: Number(data.financials.taxes || 0),
-      taxablePreTax: Number(data.financials.totalTaxableCharge || 0),
+      totalCharge: Number(data.financials.totalCharge || 0),
+      totalCost: Number(data.financials.totalCost || 0),
+      financeCharges: Number(data.financials.financeCharges || 0),
+      discounts: Number(data.financials.discounts || 0),
+      totalTaxableCharge: Number(data.financials.totalTaxableCharge || 0),
     });
 
     const replacements: Record<string, string> = {
@@ -104,7 +140,7 @@ async function downloadDocumentFromTemplate(
     const buffer = Buffer.from(templateBuffer);
     
     // First pass: Replace bookmarks in template with font size option
-    const updatedDocxBuffer = await docxmarks(buffer, replacements, 11);
+    const updatedDocxBuffer = await docxmarks(buffer, replacements, 12);
     
     // Second pass: Render payments table loop using docx-templates
     const intermediateDoc = Buffer.from(updatedDocxBuffer);
@@ -143,6 +179,81 @@ async function downloadDocumentFromTemplate(
     window.URL.revokeObjectURL(url);
   } catch (error) {
     throw new Error(`Failed to generate document from template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function downloadPlanSummaryDocumentFromTemplate(
+  data: PlanSummaryData,
+  templateBuffer: ArrayBuffer,
+  prefix: string
+): Promise<void> {
+  try {
+    // Prepare bookmark replacements for simple data
+    const replacements: Record<string, string> = {
+      // Member Information
+      'MEMBER_NAME': data.member.name || 'N/A',
+      'MEMBER_EMAIL': data.member.email || 'N/A',
+      'MEMBER_PHONE': data.member.phone || 'N/A',
+      'MEMBER_ADDRESS': data.member.address || 'N/A',
+      
+      // Program Information
+      'PROGRAM_NAME': data.program.name || 'N/A',
+      'PROGRAM_DESCRIPTION': data.program.description || 'N/A',
+      'PROGRAM_START_DATE': data.program.startDate || 'N/A',
+      'PROGRAM_DURATION': data.program.duration || 'N/A',
+      
+      // Generated Date
+      'GENERATED_DATE': data.generatedDate,
+    };
+
+    // Convert ArrayBuffer to Buffer (for docxmarks)
+    const buffer = Buffer.from(templateBuffer);
+    
+    // First pass: Replace bookmarks in template with font size option
+    const updatedDocxBuffer = await docxmarks(buffer, replacements, 12);
+    
+    // Second pass: Render therapy types table using docx-templates
+    const intermediateDoc = Buffer.from(updatedDocxBuffer);
+    
+    // Flatten the data structure for table rendering
+    const flattenedData = {
+      therapyTypes: data.therapyTypes.map(tt => ({
+        name: tt.name,
+        items: tt.items.map(item => ({
+          name: item.name,
+          quantity: item.quantity.toString(),
+          instructions: item.instructions
+        }))
+      }))
+    };
+    
+    const finalDocxBuffer = await createReport({
+      template: intermediateDoc,
+      data: flattenedData,
+      cmdDelimiter: '+++',
+      processLineBreaks: true,
+    });
+    
+    // Create filename by removing special characters
+    const memberName = data.member.name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+    const programName = data.program.name.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+    const filename = `${prefix}-${memberName} - ${programName}.docx`;
+    
+    // Create blob and trigger download
+    const blob = new Blob([new Uint8Array(finalDocxBuffer)], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    throw new Error(`Failed to generate plan summary document from template: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

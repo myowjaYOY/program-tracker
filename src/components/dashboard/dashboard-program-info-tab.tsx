@@ -1,14 +1,19 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
   Paper,
   Chip,
+  Button,
+  CircularProgress,
 } from '@mui/material';
 import { MemberPrograms } from '@/types/database.types';
 import { useActiveLeads } from '@/lib/hooks/use-leads';
+import { useMemberProgramItems } from '@/lib/hooks/use-member-program-items';
+import { generatePlanSummary } from '@/lib/utils/generate-plan-summary';
+import { toast } from 'sonner';
 import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 
 interface DashboardProgramInfoTabProps {
@@ -18,8 +23,11 @@ interface DashboardProgramInfoTabProps {
 export default function DashboardProgramInfoTab({
   program,
 }: DashboardProgramInfoTabProps) {
+  const [isGeneratingPlanSummary, setIsGeneratingPlanSummary] = useState(false);
+  
   const { data: leads = [] } = useActiveLeads();
   const { data: programStatuses = [] } = useActiveProgramStatus();
+  const { data: programItems = [] } = useMemberProgramItems(program.member_program_id);
 
   // Get the current lead data
   const currentLead = leads.find(lead => lead.lead_id === program.lead_id);
@@ -27,9 +35,39 @@ export default function DashboardProgramInfoTab({
     status => status.program_status_id === program.program_status_id
   );
 
+  const handleGeneratePlanSummary = async () => {
+    try {
+      setIsGeneratingPlanSummary(true);
+      await generatePlanSummary(program, programItems);
+      toast.success('Plan Summary document generated successfully!');
+    } catch (error) {
+      const errorMessage = (error as any)?.message || 'Failed to generate document';
+      toast.error(errorMessage);
+    } finally {
+      setIsGeneratingPlanSummary(false);
+    }
+  };
+
   return (
     <Box>
       <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Button
+            variant="contained"
+            onClick={handleGeneratePlanSummary}
+            disabled={isGeneratingPlanSummary}
+            sx={{ borderRadius: 0, fontWeight: 600 }}
+          >
+            {isGeneratingPlanSummary ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Generating...
+              </>
+            ) : (
+              'Plan Summary'
+            )}
+          </Button>
+        </Box>
         <Box sx={{ display: 'flex', gap: 4 }}>
           {/* Column 1: Program Name, Member, Status, Start Date */}
           <Box

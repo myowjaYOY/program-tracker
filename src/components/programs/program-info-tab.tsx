@@ -34,8 +34,11 @@ import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
+import { useFinancialsDerived } from '@/lib/hooks/use-financials-derived';
+import { useMemberProgramItems } from '@/lib/hooks/use-member-program-items';
 import { downloadQuoteFromTemplate, downloadContractFromTemplate } from '@/lib/utils/generate-quote-template';
 import { loadTemplate, TEMPLATE_PATHS } from '@/lib/utils/template-loader';
+import { generatePlanSummary } from '@/lib/utils/generate-plan-summary';
 import { toast } from 'sonner';
 
 interface ProgramInfoTabProps {
@@ -62,6 +65,7 @@ export default function ProgramInfoTab({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const [isGeneratingContract, setIsGeneratingContract] = useState(false);
+  const [isGeneratingPlanSummary, setIsGeneratingPlanSummary] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: leads = [] } = useLeadsForProgramCreation();
@@ -72,6 +76,34 @@ export default function ProgramInfoTab({
   const { data: payments = [] } = useMemberProgramPayments(
     program.member_program_id
   );
+  const { data: programItems = [] } = useMemberProgramItems(program.member_program_id);
+
+  // Calculate total taxable charge from items (same as financials tab)
+  const totalTaxableCharge = React.useMemo(() => {
+    return (programItems || []).reduce((sum: number, item: any) => {
+      const quantity = item.quantity || 1;
+      const charge = item.item_charge || 0;
+      const isTaxable = item.therapies?.taxable === true;
+      
+      if (isTaxable) {
+        return sum + (charge * quantity);
+      }
+      return sum;
+    }, 0);
+  }, [programItems]);
+
+  // Use the same financial calculations as the financials tab
+  const { programPrice: derivedProgramPrice, taxes: derivedTaxes } = useFinancialsDerived({
+    totalCharge: Number(program.total_charge || 0),
+    totalCost: Number(program.total_cost || 0),
+    financeCharges: Number(finances?.finance_charges || 0),
+    discounts: Number(finances?.discounts || 0),
+    taxes: Number(finances?.taxes || 0),
+    totalTaxableCharge: totalTaxableCharge,
+    isActive: false, // Contract template is for Quote programs
+    lockedPrice: 0,
+    variance: 0,
+  });
 
   const {
     control,
@@ -224,6 +256,13 @@ export default function ProgramInfoTab({
       setIsGenerating(true);
       if (!finances) throw new Error('Program financial information not found.');
 
+      // Check if there are existing discounts - if so, block generation
+      const existingDiscounts = Number(finances?.discounts || 0);
+      if (existingDiscounts !== 0) {
+        toast.error('Cannot generate contract options when existing discounts are applied. Please remove discounts first.');
+        return;
+      }
+
       const contractData = {
         member: {
           name: program.lead_name || 'N/A',
@@ -239,13 +278,14 @@ export default function ProgramInfoTab({
         },
         financials: {
           financeCharges: finances?.finance_charges || 0,
-          taxes: finances?.taxes || 0,
+          taxes: derivedTaxes, // Use calculated taxes from shared function
           discounts: finances?.discounts || 0,
-          finalTotalPrice: finances?.final_total_price || 0,
+          finalTotalPrice: derivedProgramPrice, // Use calculated program price from shared function
           margin: finances?.margin || 0,
-          // pass taxable base (from member_programs.total_charge filtered by taxable items already stored in finances is not available)
-          // derive from current items if present in program totals
-          totalTaxableCharge: (program as any)?.total_taxable_charge || 0,
+          totalTaxableCharge: totalTaxableCharge, // Use calculated taxable charge from program items
+          // Raw data for contract options calculation
+          totalCharge: Number(program.total_charge || 0),
+          totalCost: Number(program.total_cost || 0),
         },
         payments: (payments || []).map(payment => ({
           paymentId: payment.member_program_payment_id,
@@ -255,6 +295,7 @@ export default function ProgramInfoTab({
         })),
         generatedDate: new Date().toLocaleDateString(),
       } as const;
+
 
       const templateBuffer = await loadTemplate(TEMPLATE_PATHS.NEW_CONTRACT);
       await downloadContractFromTemplate(contractData as any, templateBuffer);
@@ -382,6 +423,19 @@ export default function ProgramInfoTab({
       console.error('Contract generation error:', error);
     } finally {
       setIsGeneratingContract(false);
+    }
+  };
+
+  const handleGeneratePlanSummary = async () => {
+    try {
+      setIsGeneratingPlanSummary(true);
+      await generatePlanSummary(program, programItems);
+      toast.success('Plan Summary document generated successfully!');
+    } catch (error) {
+      const errorMessage = (error as any)?.message || 'Failed to generate document';
+      toast.error(errorMessage);
+    } finally {
+      setIsGeneratingPlanSummary(false);
     }
   };
 
@@ -600,7 +654,7 @@ export default function ProgramInfoTab({
             alignItems: 'center',
           }}
         >
-          {/* Left side: Contract Options Button */}
+          {/* Left side: Document Generation Buttons */}
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
@@ -610,6 +664,15 @@ export default function ProgramInfoTab({
               startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
             >
               {isGenerating ? 'Generating...' : 'Contract Options'}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleGeneratePlanSummary}
+              disabled={isGeneratingPlanSummary}
+              sx={{ minWidth: 100, borderRadius: 0 }}
+              startIcon={isGeneratingPlanSummary ? <CircularProgress size={16} /> : undefined}
+            >
+              {isGeneratingPlanSummary ? 'Generating...' : 'Plan Summary'}
             </Button>
           </Box>
 

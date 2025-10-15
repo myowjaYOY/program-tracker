@@ -1,7 +1,11 @@
+import { calculateTaxesOnTaxableItems, calculateProjectedPrice } from './financial-calculations';
+
 export interface ContractOptionsInput {
-  programPrice: number; // total displayed (includes taxes)
-  taxes: number; // total taxes
-  taxablePreTax: number; // sum of taxable charges before tax
+  totalCharge: number; // base charge from items
+  totalCost: number; // cost of items
+  financeCharges: number; // finance charges
+  discounts: number; // current discounts
+  totalTaxableCharge: number; // taxable charge from items
 }
 
 export interface ContractOptionsResult {
@@ -18,29 +22,39 @@ function round2(value: number): number {
 }
 
 export function buildContractOptions(input: ContractOptionsInput): ContractOptionsResult {
-  const programPrice = Number(input.programPrice || 0);
-  const taxes = Number(input.taxes || 0);
-  const taxablePreTax = Number(input.taxablePreTax || 0);
+  const totalCharge = Number(input.totalCharge || 0);
+  const financeCharges = Number(input.financeCharges || 0);
+  const discounts = Number(input.discounts || 0);
+  const totalTaxableCharge = Number(input.totalTaxableCharge || 0);
 
-  const preTax = Math.max(0, programPrice - taxes);
-  const taxRate = taxablePreTax > 0 ? taxes / taxablePreTax : 0;
+  // Calculate current taxes using shared function
+  const currentTaxes = calculateTaxesOnTaxableItems(totalCharge, totalTaxableCharge, discounts);
+  
+  // Calculate current program price using shared function
+  const currentProgramPrice = calculateProjectedPrice(totalCharge, currentTaxes, financeCharges, discounts);
+  
+  const preTax = Math.max(0, currentProgramPrice - currentTaxes);
 
-  // 5% discount on pre-tax (recompute taxes only on taxable portion)
-  const discountedPreTax = preTax * 0.95;
-  const discountedTaxable = Math.max(0, taxablePreTax * 0.95);
-  const discountedTaxes = discountedTaxable * taxRate;
-  const discountedProgramPrice = discountedPreTax + discountedTaxes;
+  // Calculate 5% discount amount and apply it to existing discounts
+  const fivePercentDiscount = totalCharge * 0.05;
+  const discountedDiscounts = discounts - fivePercentDiscount;
+  
+  // Calculate new taxes with the 5% discount using shared function
+  const discountedTaxes = calculateTaxesOnTaxableItems(totalCharge, totalTaxableCharge, discountedDiscounts);
+  
+  // Calculate new program price with the 5% discount using shared function
+  const discountedProgramPrice = calculateProjectedPrice(totalCharge, discountedTaxes, financeCharges, discountedDiscounts);
 
   // Financing scenario: add 6% of pre-tax to current program price
-  const financeFullAmount = programPrice + preTax * 0.06;
+  const financeFullAmount = currentProgramPrice + preTax * 0.06;
   const financeDownPayment = financeFullAmount * 0.25; // 25%
   const financeMonthlyPayment = (financeFullAmount - financeDownPayment) / 5; // 5 months
 
   // Three equal payments based on current program price
-  const threeEqualPayments = programPrice / 3;
+  const threeEqualPayments = currentProgramPrice / 3;
 
   return {
-    discountedPreTax5Amount: round2(preTax * 0.05),
+    discountedPreTax5Amount: round2(fivePercentDiscount),
     discountedProgramPrice5: round2(discountedProgramPrice),
     financeFullAmount: round2(financeFullAmount),
     financeDownPayment: round2(financeDownPayment),
@@ -48,6 +62,7 @@ export function buildContractOptions(input: ContractOptionsInput): ContractOptio
     threeEqualPayments: round2(threeEqualPayments),
   };
 }
+
 
 
 
