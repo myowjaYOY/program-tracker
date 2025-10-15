@@ -24,6 +24,12 @@ export const MENU_ITEMS: MenuItem[] = [
     section: 'main',
     icon: 'AssignmentTurnedIn',
   },
+  {
+    path: '/dashboard/order-items',
+    label: 'Order Items',
+    section: 'main',
+    icon: 'ShoppingCart',
+  },
   // Marketing
   {
     path: '/dashboard/campaigns',
@@ -59,6 +65,12 @@ export const MENU_ITEMS: MenuItem[] = [
   },
 
   // Operations
+  {
+    path: '/dashboard/inventory-forecast',
+    label: 'Inventory Forecast',
+    section: 'operations',
+    icon: 'Assessment',
+  },
   {
     path: '/dashboard/item-requests',
     label: 'Item Requests',

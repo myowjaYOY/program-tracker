@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
 
     // Parse query parameters for filtering
     const { searchParams } = new URL(req.url);
-    const statusFilter = searchParams.get('status'); // 'Pending', 'Ordered', 'Received', 'Cancelled'
+    const statusParam = searchParams.get('status'); // Can be comma-separated: 'Pending,Ordered'
+    const statusFilter = statusParam ? statusParam.split(',').map(s => s.trim()) : null;
     const requestedBy = searchParams.get('requestedBy'); // user ID
 
     // Build base query - fetch all item requests with user and lead joins
@@ -132,9 +133,9 @@ export async function GET(req: NextRequest) {
     });
 
     // Apply client-side status filter (since status is derived)
-    if (statusFilter) {
+    if (statusFilter && statusFilter.length > 0) {
       mappedData = mappedData.filter(
-        (request: any) => request.status === statusFilter
+        (request: any) => statusFilter.includes(request.status)
       );
     }
 

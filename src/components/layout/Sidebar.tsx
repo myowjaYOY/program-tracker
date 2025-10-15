@@ -44,6 +44,8 @@ import {
   CheckCircle as PaymentStatusIcon,
   FactCheck as FactCheckIcon,
   Inventory as ItemRequestsIcon,
+  ShoppingCart as OrderItemsIcon,
+  Assessment as InventoryForecastIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -61,6 +63,11 @@ const mainNav = [
     icon: <CoordinatorIcon />,
     path: '/dashboard/coordinator',
   },
+  {
+    label: 'Order Items',
+    icon: <OrderItemsIcon />,
+    path: '/dashboard/order-items',
+  },
 ];
 
 const marketingNav = [
@@ -75,6 +82,11 @@ const salesNav = [
 ];
 
 const operationsNav = [
+  {
+    label: 'Inventory Forecast',
+    icon: <InventoryForecastIcon />,
+    path: '/dashboard/inventory-forecast',
+  },
   {
     label: 'Item Requests',
     icon: <ItemRequestsIcon />,

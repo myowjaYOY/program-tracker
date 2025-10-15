@@ -12,12 +12,6 @@ import {
   MenuItem,
   Chip,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Button,
   Divider,
   Checkbox,
   ListItemText,
@@ -32,21 +26,13 @@ import {
   LocalShipping as ShippingIcon,
   CheckCircle as ReceivedIcon,
   Cancel as CancelledIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  Close as CloseIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon,
-  CheckCircleOutline as CheckCircleOutlineIcon,
 } from '@mui/icons-material';
 import {
   useItemRequests,
   useItemRequestMetrics,
-  useMarkOrdered,
-  useMarkReceived,
 } from '@/lib/hooks/use-item-requests';
 import { useAuditUsers } from '@/lib/hooks/use-audit-logs';
-import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid-pro';
+import { GridColDef } from '@mui/x-data-grid-pro';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import {
   getStatusColor,
@@ -54,11 +40,9 @@ import {
   isItemRequestLate,
   isItemRequestOverdue,
 } from '@/lib/utils/item-request-status';
-import type { ItemRequest } from '@/types/database.types';
 import ItemRequestForm from '@/components/forms/item-request-form';
-import CancelRequestDialog from '@/components/item-requests/cancel-request-dialog';
 
-export default function ItemRequestsPage() {
+export default function OrderItemsPage() {
   // Filter state
   const [statusFilter, setStatusFilter] = useState<
     ('Pending' | 'Ordered' | 'Received' | 'Cancelled')[]
@@ -66,14 +50,6 @@ export default function ItemRequestsPage() {
   const [requestedByFilter, setRequestedByFilter] = useState<string | null>(
     null
   );
-
-  // Dialog state for forms and actions
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [confirmOrderedDialogOpen, setConfirmOrderedDialogOpen] = useState(false);
-  const [confirmReceivedDialogOpen, setConfirmReceivedDialogOpen] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
 
   // Fetch data
   const { data: requests = [], isLoading: requestsLoading } = useItemRequests({
@@ -86,11 +62,7 @@ export default function ItemRequestsPage() {
   // Fetch active users for "Requested By" filter
   const { data: users = [] } = useAuditUsers();
 
-  // Mutation hooks for actions
-  const markOrdered = useMarkOrdered();
-  const markReceived = useMarkReceived();
-
-  // Define data grid columns
+  // Define data grid columns (without actions column)
   const columns: GridColDef[] = [
     {
       field: 'status',
@@ -186,204 +158,18 @@ export default function ItemRequestsPage() {
       ),
     },
     {
-      field: 'ordered',
-      headerName: 'Ordered',
-      width: 100,
-      align: 'center',
-      headerAlign: 'center',
-      renderCell: (params: any) => {
-        const request = params.row;
-        const isOrdered = request.ordered_date && request.ordered_by_name;
-        const canOrder = request.status === 'Pending';
-        
-        if (isOrdered) {
-          const tooltipText = `Ordered on: ${new Date(request.ordered_date).toLocaleDateString()} by ${request.ordered_by_name}`;
-          return (
-            <Tooltip title={tooltipText} arrow>
-              <span>
-                <IconButton
-                  size="small"
-                  color="success"
-                  disabled={true}
-                  sx={{ cursor: 'default' }}
-                >
-                  <CheckCircleOutlineIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-          );
-        }
-        
-        return (
-          <Tooltip title="Click to mark as ordered" arrow>
-            <IconButton
-              size="small"
-              color="primary"
-              disabled={!canOrder}
-              onClick={() => handleOrderedCircleClick(request)}
-              sx={{ cursor: canOrder ? 'pointer' : 'default' }}
-            >
-              <RadioButtonUncheckedIcon />
-            </IconButton>
-          </Tooltip>
-        );
-      },
+      field: 'ordered_date',
+      headerName: 'Ordered Date',
+      width: 140,
+      renderCell: renderDate,
     },
     {
-      field: 'received',
-      headerName: 'Received',
-      width: 100,
-      align: 'center',
-      headerAlign: 'center',
-      renderCell: (params: any) => {
-        const request = params.row;
-        const isReceived = request.received_date && request.received_by_name;
-        const canReceive = request.status === 'Ordered';
-        
-        if (isReceived) {
-          const tooltipText = `Received on: ${new Date(request.received_date).toLocaleDateString()} by ${request.received_by_name}`;
-          return (
-            <Tooltip title={tooltipText} arrow>
-              <span>
-                <IconButton
-                  size="small"
-                  color="success"
-                  disabled={true}
-                  sx={{ cursor: 'default' }}
-                >
-                  <CheckCircleOutlineIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-          );
-        }
-        
-        return (
-          <Tooltip title="Click to mark as received" arrow>
-            <IconButton
-              size="small"
-              color="primary"
-              disabled={!canReceive}
-              onClick={() => handleReceivedCircleClick(request)}
-              sx={{ cursor: canReceive ? 'pointer' : 'default' }}
-            >
-              <RadioButtonUncheckedIcon />
-            </IconButton>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      getActions: (params: any) => {
-        const request = params.row as ItemRequest;
-        const actions: React.ReactElement<any>[] = [];
-
-        // Edit action - only available for Pending requests (before ordered)
-        if (request.status === 'Pending') {
-          actions.push(
-            <GridActionsCellItem
-              key="edit"
-              icon={
-                <Tooltip title="Edit Request" placement="top">
-                  <EditIcon color="primary" />
-                </Tooltip>
-              }
-              label="Edit Request"
-              onClick={() => handleEditClick(request)}
-              showInMenu={false}
-            />
-          );
-        }
-
-        // Cancel action - only available for Pending requests (before ordered)
-        if (request.status === 'Pending') {
-          actions.push(
-            <GridActionsCellItem
-              key="cancel"
-              icon={
-                <Tooltip title="Cancel Request" placement="top">
-                  <CancelIcon color="error" />
-                </Tooltip>
-              }
-              label="Cancel Request"
-              onClick={() => handleCancelClick(request)}
-              showInMenu={false}
-            />
-          );
-        }
-
-        return actions;
-      },
+      field: 'received_date',
+      headerName: 'Received Date',
+      width: 140,
+      renderCell: renderDate,
     },
   ];
-
-  // Handler functions
-  const handleCreateClick = () => {
-    setCreateDialogOpen(true);
-  };
-
-  const handleEditClick = (request: any) => {
-    setSelectedRequest(request);
-    setEditDialogOpen(true);
-  };
-
-  const handleMarkOrdered = async (request: ItemRequest) => {
-    await markOrdered.mutateAsync(request.item_request_id);
-  };
-
-  const handleMarkReceived = async (request: ItemRequest) => {
-    await markReceived.mutateAsync(request.item_request_id);
-  };
-
-  const handleCancelClick = (request: any) => {
-    setSelectedRequest(request);
-    setCancelDialogOpen(true);
-  };
-
-  const handleOrderedCircleClick = (request: any) => {
-    setSelectedRequest(request);
-    setConfirmOrderedDialogOpen(true);
-  };
-
-  const handleReceivedCircleClick = (request: any) => {
-    setSelectedRequest(request);
-    setConfirmReceivedDialogOpen(true);
-  };
-
-  const handleConfirmOrdered = async () => {
-    if (selectedRequest) {
-      try {
-        await markOrdered.mutateAsync(selectedRequest.item_request_id);
-        handleCloseDialogs();
-      } catch (error) {
-        console.error('Error marking as ordered:', error);
-      }
-    }
-  };
-
-  const handleConfirmReceived = async () => {
-    if (selectedRequest) {
-      try {
-        await markReceived.mutateAsync(selectedRequest.item_request_id);
-        handleCloseDialogs();
-      } catch (error) {
-        console.error('Error marking as received:', error);
-      }
-    }
-  };
-
-  const handleCloseDialogs = () => {
-    setCreateDialogOpen(false);
-    setEditDialogOpen(false);
-    setCancelDialogOpen(false);
-    setConfirmOrderedDialogOpen(false);
-    setConfirmReceivedDialogOpen(false);
-    setSelectedRequest(null);
-  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -395,7 +181,7 @@ export default function ItemRequestsPage() {
           fontWeight="bold"
           color="primary.main"
         >
-          Item Requests
+          Order Items
         </Typography>
       </Box>
 
@@ -745,7 +531,6 @@ export default function ItemRequestsPage() {
                 bgcolor: (theme: Theme) => alpha(theme.palette.error.main, 0.15),
               },
             }}
-            onEdit={handleEditClick}
             renderForm={({ onClose, initialValues, mode }) => (
               <ItemRequestForm
                 initialValues={initialValues as any}
@@ -759,131 +544,6 @@ export default function ItemRequestsPage() {
           />
         </CardContent>
       </Card>
-
-      {/* Edit Request Dialog */}
-      <Dialog
-        open={editDialogOpen}
-        onClose={handleCloseDialogs}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Edit Item Request
-          <IconButton
-            edge="end"
-            color="inherit"
-            onClick={handleCloseDialogs}
-            aria-label="close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <ItemRequestForm
-            initialValues={selectedRequest}
-            onSuccess={handleCloseDialogs}
-            mode="edit"
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Cancel Request Dialog */}
-      {selectedRequest && (
-        <CancelRequestDialog
-          open={cancelDialogOpen}
-          onClose={handleCloseDialogs}
-          requestId={selectedRequest.item_request_id}
-          itemDescription={selectedRequest.item_description}
-        />
-      )}
-
-      {/* Confirm Ordered Dialog */}
-      <Dialog
-        open={confirmOrderedDialogOpen}
-        onClose={handleCloseDialogs}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Confirm Order
-          <IconButton
-            edge="end"
-            color="inherit"
-            onClick={handleCloseDialogs}
-            aria-label="close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Are you sure you want to mark this item as ordered?
-          </Typography>
-          {selectedRequest && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              <strong>Item:</strong> {selectedRequest.item_description}
-            </Typography>
-          )}
-          <Typography variant="body2" color="error" sx={{ fontWeight: 'medium' }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={handleConfirmOrdered}
-            variant="contained"
-            color="info"
-            disabled={markOrdered.isPending}
-            sx={{ borderRadius: 0 }}
-          >
-            {markOrdered.isPending ? 'Marking as Ordered...' : 'Confirm Order'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Confirm Received Dialog */}
-      <Dialog
-        open={confirmReceivedDialogOpen}
-        onClose={handleCloseDialogs}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          Confirm Receipt
-          <IconButton
-            edge="end"
-            color="inherit"
-            onClick={handleCloseDialogs}
-            aria-label="close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" sx={{ mb: 2 }}>
-            Are you sure you want to mark this item as received?
-          </Typography>
-          {selectedRequest && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              <strong>Item:</strong> {selectedRequest.item_description}
-            </Typography>
-          )}
-          <Typography variant="body2" color="error" sx={{ fontWeight: 'medium' }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={handleConfirmReceived}
-            variant="contained"
-            color="success"
-            disabled={markReceived.isPending}
-            sx={{ borderRadius: 0 }}
-          >
-            {markReceived.isPending ? 'Marking as Received...' : 'Confirm Receipt'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

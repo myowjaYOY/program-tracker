@@ -83,6 +83,30 @@ export function isItemRequestLate(request: Partial<ItemRequest>): boolean {
 }
 
 /**
+ * Checks if an item request is overdue (requested more than 10 days ago and not yet cancelled/received)
+ */
+export function isItemRequestOverdue(request: any): boolean {
+  // Skip if already cancelled or received
+  if (request.status === 'Cancelled' || request.status === 'Received') {
+    return false;
+  }
+
+  // Check if request date exists
+  if (!request.requested_date) {
+    return false;
+  }
+
+  const requestedDate = new Date(request.requested_date);
+  const today = new Date();
+  const daysDiff = Math.floor(
+    (today.getTime() - requestedDate.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  // Overdue if more than 10 days old
+  return daysDiff > 10;
+}
+
+/**
  * Gets a user-friendly display name from request user fields
  */
 export function getUserDisplayName(

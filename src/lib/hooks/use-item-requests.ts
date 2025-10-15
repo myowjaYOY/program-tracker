@@ -19,12 +19,12 @@ export const itemRequestKeys = {
 
 // Fetch all item requests with optional filters
 export function useItemRequests(params?: {
-  status?: 'Pending' | 'Ordered' | 'Received' | 'Cancelled' | null;
+  status?: ('Pending' | 'Ordered' | 'Received' | 'Cancelled')[] | null;
   requestedBy?: string | null;
 }) {
   const queryParams = new URLSearchParams();
-  if (params?.status) {
-    queryParams.append('status', params.status);
+  if (params?.status && params.status.length > 0) {
+    queryParams.append('status', params.status.join(','));
   }
   if (params?.requestedBy) {
     queryParams.append('requestedBy', params.requestedBy);

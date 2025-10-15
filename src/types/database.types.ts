@@ -703,3 +703,26 @@ export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row'];
 export type Enums<T extends keyof Database['public']['Enums']> =
   Database['public']['Enums'][T];
+
+// Inventory Forecast Report Types
+export interface InventoryForecastRow {
+  id: string | number;               // Required ID for data grid (generated in frontend)
+  therapy_type_name: string;
+  therapy_name: string;
+  dispensed_count: number;
+  owed_count: number;
+  total_count: number;
+  item_cost: number;
+}
+
+export interface InventoryForecastMetrics {
+  total_cost_owed: number;          // Total cost of all undispensed items
+  total_products_owed: number;       // Total count of all undispensed items
+  cost_owed_this_month: number;      // Cost of undispensed items scheduled this month
+  cost_owed_next_month: number;      // Cost of undispensed items scheduled next month
+}
+
+export interface InventoryForecastResponse {
+  data: InventoryForecastRow[];
+  metrics: InventoryForecastMetrics;
+}
