@@ -7,7 +7,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   IconButton,
+  Typography,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import {
@@ -43,6 +45,10 @@ export default function TemplateItemsTab({
   const [editingItem, setEditingItem] = useState<ProgramTemplateItems | null>(
     null
   );
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<ProgramTemplateItems | null>(
+    null
+  );
 
   const {
     data: templateItems = [],
@@ -63,15 +69,6 @@ export default function TemplateItemsTab({
       onTemplateUpdate(updatedTemplate);
     }
   }, [updatedTemplate, onTemplateUpdate]);
-
-  // Debug logging
-  console.log('TemplateItemsTab render:', {
-    templateId: template.program_template_id,
-    templateItems,
-    isLoading,
-    error,
-    updatedTemplate,
-  });
 
   // Map template items to include id field for DataGrid
   const mappedTemplateItems = templateItems.map(item => ({
@@ -109,20 +106,23 @@ export default function TemplateItemsTab({
     }
   };
 
-  const handleDeleteItem = async (item: ProgramTemplateItems) => {
-    if (
-      window.confirm(
-        'Are you sure you want to remove this item from the template?'
-      )
-    ) {
-      try {
-        await deleteItem.mutateAsync({
-          templateId: template.program_template_id,
-          itemId: item.program_template_items_id,
-        });
-      } catch (error) {
-        console.error('Error deleting template item:', error);
-      }
+  const handleDeleteItem = (item: ProgramTemplateItems) => {
+    setDeletingItem(item);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!deletingItem) return;
+
+    try {
+      await deleteItem.mutateAsync({
+        templateId: template.program_template_id,
+        itemId: deletingItem.program_template_items_id,
+      });
+      setIsDeleteModalOpen(false);
+      setDeletingItem(null);
+    } catch (error) {
+      console.error('Error deleting template item:', error);
     }
   };
 
@@ -378,6 +378,58 @@ export default function TemplateItemsTab({
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingItem(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Confirm Delete
+          <IconButton
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletingItem(null);
+            }}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to remove this item from the template?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletingItem(null);
+            }}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDeleteItem}
+            color="error"
+            variant="contained"
+            autoFocus
+          >
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   IconButton,
   Chip,
   Typography,
@@ -80,6 +81,10 @@ export default function ProgramItemsTab({
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [modalValidationError, setModalValidationError] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<MemberProgramItems | null>(
+    null
+  );
 
   const { data: programItems = [], isLoading } = useMemberProgramItems(
     program.member_program_id
@@ -156,28 +161,31 @@ export default function ProgramItemsTab({
     }
   };
 
-  const handleDeleteItem = async (item: MemberProgramItems) => {
-    if (
-      window.confirm(
-        'Are you sure you want to remove this item from the program?'
-      )
-    ) {
-      try {
-        setValidationError(null);
-        setModalValidationError(null);
-        await deleteItem.mutateAsync({
-          programId: program.member_program_id,
-          itemId: item.member_program_item_id,
-        });
-        } catch (error: any) {
-          // Only show non-validation errors on the tab
-          const isValidationError = error?.status === 400 || error?.response?.status === 400;
-          if (isValidationError) {
-            setModalValidationError(error?.message || 'Validation failed');
-          } else {
-            setValidationError(error?.message || 'Failed to delete item');
-          }
-        }
+  const handleDeleteItem = (item: MemberProgramItems) => {
+    setDeletingItem(item);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!deletingItem) return;
+
+    try {
+      setValidationError(null);
+      setModalValidationError(null);
+      await deleteItem.mutateAsync({
+        programId: program.member_program_id,
+        itemId: deletingItem.member_program_item_id,
+      });
+      setIsDeleteModalOpen(false);
+      setDeletingItem(null);
+    } catch (error: any) {
+      // Only show non-validation errors on the tab
+      const isValidationError = error?.status === 400 || error?.response?.status === 400;
+      if (isValidationError) {
+        setModalValidationError(error?.message || 'Validation failed');
+      } else {
+        setValidationError(error?.message || 'Failed to delete item');
+      }
     }
   };
 
@@ -502,6 +510,58 @@ export default function ProgramItemsTab({
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setDeletingItem(null);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Confirm Delete
+          <IconButton
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletingItem(null);
+            }}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to remove this item from the program?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setIsDeleteModalOpen(false);
+              setDeletingItem(null);
+            }}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDeleteItem}
+            color="error"
+            variant="contained"
+            autoFocus
+          >
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

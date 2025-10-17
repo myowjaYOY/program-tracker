@@ -341,6 +341,54 @@ export interface ProgramTemplateItems {
   updated_by: string | null;
 }
 
+export interface ProgramTemplateRasha {
+  program_template_rasha_id: number;
+  program_template_id: number;
+  rasha_list_id: number;
+  group_name: string | null;
+  type: 'individual' | 'group';
+  order_number: number;
+  active_flag: boolean;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  // API-mapped fields (from joins)
+  rasha_name?: string | null;
+  rasha_length?: number | null;
+}
+
+export interface MemberProgramRasha {
+  member_program_rasha_id: number;
+  member_program_id: number;
+  rasha_list_id: number;
+  group_name: string | null;
+  type: 'individual' | 'group';
+  order_number: number;
+  active_flag: boolean;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  // API-mapped fields (from joins)
+  rasha_name?: string | null;
+  rasha_length?: number | null;
+}
+
+export interface RashaList {
+  rasha_list_id: number;
+  name: string;
+  length: number;
+  active_flag: boolean;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  // API-mapped fields
+  created_by_email?: string | null;
+  updated_by_email?: string | null;
+}
+
 export interface Status {
   status_id: number;
   status_name: string;

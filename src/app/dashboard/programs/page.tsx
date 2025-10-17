@@ -22,6 +22,7 @@ import {
   Assignment as AssignmentIcon,
   Payment as PaymentIcon,
   AssignmentTurnedIn as AssignmentTurnedInIcon,
+  List as ListIcon,
 } from '@mui/icons-material';
 import ProgramsGrid from '@/components/programs/programs-grid';
 import ProgramInfoTab from '@/components/programs/program-info-tab';
@@ -31,6 +32,7 @@ import ProgramTasksTab from '@/components/programs/program-tasks-tab';
 import ProgramToDoTab from '@/components/programs/program-todo-tab';
 import ProgramScriptTab from '@/components/programs/program-script-tab';
 import ProgramPaymentsTab from '@/components/programs/program-payments-tab';
+import MemberProgramRashaTab from '@/components/programs/member-program-rasha-tab';
 import { MemberPrograms } from '@/types/database.types';
 import { useUpdateMemberProgram } from '@/lib/hooks/use-member-programs';
 
@@ -193,6 +195,11 @@ export default function ProgramsPage() {
                     label="To Do"
                     iconPosition="start"
                   />
+                  <Tab
+                    icon={<ListIcon />}
+                    label="RASHA"
+                    iconPosition="start"
+                  />
                 </Tabs>
               </Box>
 
@@ -236,6 +243,9 @@ export default function ProgramsPage() {
               </TabPanel>
               <TabPanel value={tabValue} index={6}>
                 <ProgramToDoTab program={selectedProgram} />
+              </TabPanel>
+              <TabPanel value={tabValue} index={7}>
+                <MemberProgramRashaTab program={selectedProgram} />
               </TabPanel>
             </CardContent>
           </Card>

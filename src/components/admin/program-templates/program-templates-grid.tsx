@@ -103,13 +103,6 @@ export default function ProgramTemplatesGrid({
   const { data: templates, isLoading, error } = useProgramTemplates();
   const deleteTemplate = useDeleteProgramTemplate();
 
-  // Debug logging
-  console.log('ProgramTemplatesGrid render:', {
-    templates,
-    isLoading,
-    error,
-  });
-
   const handleDelete = (id: string | number) => {
     deleteTemplate.mutate(Number(id));
   };

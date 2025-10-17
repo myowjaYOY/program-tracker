@@ -19,11 +19,13 @@ import {
   Description as DescriptionIcon,
   Inventory as InventoryIcon,
   Assignment as AssignmentIcon,
+  List as ListIcon,
 } from '@mui/icons-material';
 import ProgramTemplatesGrid from '@/components/admin/program-templates/program-templates-grid';
 import TemplateInfoTab from '@/components/admin/program-templates/template-info-tab';
 import TemplateItemsTab from '@/components/admin/program-templates/template-items-tab';
 import TemplateTasksTab from '@/components/admin/program-templates/template-tasks-tab';
+import TemplateRashaTab from '@/components/admin/program-templates/template-rasha-tab';
 import { ProgramTemplate } from '@/types/database.types';
 import { useUpdateProgramTemplate } from '@/lib/hooks/use-program-templates';
 
@@ -59,15 +61,9 @@ export default function ProgramTemplatesPage() {
   const updateTemplate = useUpdateProgramTemplate();
 
   const handleTemplateSelect = (template: ProgramTemplate | null) => {
-    console.log('Template selected:', template);
     setSelectedTemplate(template);
     setTabValue(0); // Reset to first tab when selecting new template
   };
-
-  // Debug logging for template changes
-  React.useEffect(() => {
-    console.log('Selected template changed:', selectedTemplate);
-  }, [selectedTemplate]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     // If there are unsaved changes, show warning instead of changing tabs
@@ -167,6 +163,11 @@ export default function ProgramTemplatesPage() {
                     label="Tasks"
                     iconPosition="start"
                   />
+                  <Tab
+                    icon={<ListIcon />}
+                    label="RASHA"
+                    iconPosition="start"
+                  />
                 </Tabs>
               </Box>
 
@@ -189,6 +190,10 @@ export default function ProgramTemplatesPage() {
 
               <TabPanel value={tabValue} index={2}>
                 <TemplateTasksTab template={selectedTemplate} />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={3}>
+                <TemplateRashaTab template={selectedTemplate} />
               </TabPanel>
             </CardContent>
           </Card>

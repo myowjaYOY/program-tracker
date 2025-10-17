@@ -172,6 +172,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'AssignmentTurnedIn',
   },
   {
+    path: '/dashboard/rasha-list',
+    label: 'RASHA',
+    section: 'admin',
+    icon: 'List',
+  },
+  {
     path: '/dashboard/therapy-type',
     label: 'Therapy Types',
     section: 'admin',

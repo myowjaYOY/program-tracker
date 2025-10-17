@@ -46,6 +46,7 @@ import {
   Inventory as ItemRequestsIcon,
   ShoppingCart as OrderItemsIcon,
   Assessment as InventoryForecastIcon,
+  List as ListIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -160,6 +161,7 @@ const adminNav = [
         icon: <ProgramStatusIcon />,
         path: '/dashboard/program-status',
       },
+      { label: 'RASHA', icon: <ListIcon />, path: '/dashboard/rasha-list' },
       {
         label: 'Therapy Types',
         icon: <TherapiesIcon />,

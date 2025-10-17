@@ -41,8 +41,6 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    console.log('Raw program template data from database:', data);
-
     // Map to flat fields for frontend (same pattern as vendors API)
     const mapped = (data || []).map(template => ({
       ...template,
@@ -51,8 +49,6 @@ export async function GET(req: NextRequest) {
       updated_by_email: template.updated_user?.email || null,
       updated_by_full_name: template.updated_user?.full_name || null,
     }));
-
-    console.log('Mapped program template data:', mapped);
 
     return NextResponse.json({ data: mapped });
   } catch (error) {

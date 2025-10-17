@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   IconButton,
   Tooltip,
   Chip,
@@ -185,6 +186,8 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [expandedRow, setExpandedRow] = useState<GridRowId | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
   // Actions column
   const actionsColumn: GridColDef = useMemo(
@@ -243,11 +246,25 @@ export default function BaseDataTable<T extends BaseEntity>({
     setFormOpen(true);
   };
 
-  // Handle delete
+  // Handle delete - open confirmation modal
   const handleDelete = (id: GridRowId) => {
-    if (window.confirm(deleteConfirmMessage)) {
-      onDelete?.(id);
+    setDeletingId(id);
+    setDeleteModalOpen(true);
+  };
+
+  // Confirm delete - actual deletion
+  const confirmDelete = () => {
+    if (deletingId !== null) {
+      onDelete?.(deletingId);
+      setDeleteModalOpen(false);
+      setDeletingId(null);
     }
+  };
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setDeleteModalOpen(false);
+    setDeletingId(null);
   };
 
   // Handle create
@@ -479,6 +496,44 @@ export default function BaseDataTable<T extends BaseEntity>({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={deleteModalOpen}
+        onClose={cancelDelete}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Confirm Delete
+          <IconButton
+            onClick={cancelDelete}
+            sx={{
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography>{deleteConfirmMessage}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDelete} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDelete}
+            color="error"
+            variant="contained"
+            autoFocus
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
