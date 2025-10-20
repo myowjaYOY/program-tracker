@@ -230,7 +230,7 @@ function getSeverityColor(severity: string): string {
 /**
  * Get trend icon based on domain trend type
  */
-function getTrendIcon(trend: string): JSX.Element {
+function getTrendIcon(trend: string): React.JSX.Element {
   const iconStyle = { fontSize: 16 };
   
   switch (trend.toLowerCase()) {

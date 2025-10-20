@@ -576,7 +576,7 @@ function getClinicalInterpretation(firstScore: number, lastScore: number): strin
   return 'Stable - minimal change';
 }
 
-function getTrendIcon(trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'): JSX.Element {
+function getTrendIcon(trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'): React.JSX.Element {
   switch (trend) {
     case 'improving':
       return <TrendingUpIcon sx={{ fontSize: 20, color: 'success.main' }} />;

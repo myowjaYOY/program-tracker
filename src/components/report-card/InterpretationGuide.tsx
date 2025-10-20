@@ -23,7 +23,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 interface InterpretationGuideProps {
   totalScore: number;
-  trendInterpretation?: string;
+  trendInterpretation?: string | undefined;
 }
 
 /**
