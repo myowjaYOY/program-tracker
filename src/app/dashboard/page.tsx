@@ -21,6 +21,7 @@ import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import DescriptionIcon from '@mui/icons-material/Description';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useDashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
@@ -372,13 +373,16 @@ export default function DashboardPage() {
                     <AutoGraphIcon sx={{ fontSize: 40 }} />
                   </Box>
                 </Box>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.875rem' }}
-                >
-                  Program modifications this week
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Program modifications this week
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </ProgramChangesHoverTooltip>

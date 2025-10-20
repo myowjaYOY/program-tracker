@@ -144,6 +144,10 @@ const memberProgramColumns: GridColDef[] = [
       }
       return `${Number(value).toFixed(1)}%`;
     },
+    valueFormatter: (value?: number) => {
+      if (value == null) return '-';
+      return `${Number(value).toFixed(1)}%`;
+    },
   },
   {
     field: 'active_flag',
@@ -266,10 +270,12 @@ export default function ProgramsGrid({
       pageSize={5}
       pageSizeOptions={[5, 10, 25, 50]}
       autoHeight={true}
-      selectedRowId={selectedProgram?.member_program_id || null}
       showActionsColumn={false}
       sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
       enableExport={false}
+      aggregationModel={{ margin: 'avg' }}
+      showAggregationFooter={true}
+      aggregationLabel="Average Margin:"
     />
   );
 }

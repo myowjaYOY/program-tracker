@@ -30,6 +30,12 @@ export const MENU_ITEMS: MenuItem[] = [
     section: 'main',
     icon: 'ShoppingCart',
   },
+  {
+    path: '/dashboard/report-card',
+    label: 'Report Card',
+    section: 'main',
+    icon: 'Assessment',
+  },
   // Marketing
   {
     path: '/dashboard/campaigns',

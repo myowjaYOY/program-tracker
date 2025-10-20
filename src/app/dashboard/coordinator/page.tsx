@@ -22,6 +22,7 @@ import { Today as TodayIcon } from '@mui/icons-material';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useMemberPrograms } from '@/lib/hooks/use-member-programs';
 import CoordinatorScriptTab from '@/components/coordinator/script-tab';
 import CoordinatorToDoTab from '@/components/coordinator/todo-tab';
@@ -335,13 +336,16 @@ export default function CoordinatorPage() {
                     <AutoGraphIcon sx={{ fontSize: 40 }} />
                   </Box>
                 </Box>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.875rem' }}
-                >
-                  Program modifications this week
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Program modifications this week
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </ProgramChangesHoverTooltip>

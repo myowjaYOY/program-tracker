@@ -20,6 +20,7 @@ import {
   TrendingUp as TrendingUpIcon,
   Warning as WarningIcon,
   People as PeopleIcon,
+  InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material';
 import { usePayments, usePaymentMetrics } from '@/lib/hooks/use-payments';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
@@ -359,13 +360,16 @@ export default function PaymentsPage() {
                     <WarningIcon sx={{ fontSize: 40 }} />
                   </Box>
                 </Box>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ fontSize: '0.875rem' }}
-                >
-                  Overdue payments (hover for details)
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Total overdue payment amount
+                  </Typography>
+                </Box>
               </CardContent>
             </Card>
           </LatePaymentsHoverTooltip>

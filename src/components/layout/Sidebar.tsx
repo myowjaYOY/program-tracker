@@ -69,6 +69,11 @@ const mainNav = [
     icon: <OrderItemsIcon />,
     path: '/dashboard/order-items',
   },
+  {
+    label: 'Report Card',
+    icon: <InventoryForecastIcon />,
+    path: '/dashboard/report-card',
+  },
 ];
 
 const marketingNav = [

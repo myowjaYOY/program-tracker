@@ -774,3 +774,295 @@ export interface InventoryForecastResponse {
   data: InventoryForecastRow[];
   metrics: InventoryForecastMetrics;
 }
+
+// ============================================
+// REPORT CARD / SURVEY SCORING TYPES
+// ============================================
+
+// MSQ-95 Domain Names (10 symptom categories)
+export type MsqDomain =
+  | 'head'
+  | 'eyes'
+  | 'ears'
+  | 'nose'
+  | 'mouth_throat'
+  | 'skin'
+  | 'lungs_chest'
+  | 'digestive'
+  | 'joints_muscles'
+  | 'energy_mind_emotions';
+
+/**
+ * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
+ * Kept for historical data access only. Report Card now focuses on MSQ-95 analysis.
+ */
+export type PromisDomain =
+  | 'physical_function'
+  | 'anxiety'
+  | 'depression'
+  | 'fatigue'
+  | 'sleep_disturbance'
+  | 'social_roles'
+  | 'pain_interference';
+
+/**
+ * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
+ * Kept for historical data access only. Report Card now focuses on MSQ-95 analysis.
+ */
+export type PromisMilestone = 'baseline' | 'mid' | 'end';
+
+// MSQ-95 Domain Scores (0-4 scale per domain)
+export interface MsqDomainScores {
+  head: number;
+  eyes: number;
+  ears: number;
+  nose: number;
+  mouth_throat: number;
+  skin: number;
+  lungs_chest: number;
+  digestive: number;
+  joints_muscles: number;
+  energy_mind_emotions: number;
+}
+
+/**
+ * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
+ * Kept for historical data access only. Report Card now focuses on MSQ-95 analysis.
+ */
+export interface PromisTScores {
+  physical_function: number;
+  anxiety: number;
+  depression: number;
+  fatigue: number;
+  sleep_disturbance: number;
+  social_roles: number;
+  pain_interference: number;
+}
+
+// MSQ-95 Score Record (weekly data point)
+export interface MsqScore {
+  session_id: number;
+  lead_id: number;
+  lead_name?: string;
+  completed_on: string; // ISO timestamp
+  week_number: number;
+  total_score: number;
+  domain_scores: MsqDomainScores;
+  interpretation?: 'optimal' | 'mild' | 'moderate' | 'severe' | 'very_severe';
+}
+
+/**
+ * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
+ * Kept for historical data access only. Report Card now focuses on MSQ-95 analysis.
+ */
+export interface PromisScore {
+  session_id: number;
+  lead_id: number;
+  lead_name?: string;
+  completed_on: string; // ISO timestamp
+  milestone: PromisMilestone;
+  t_scores: PromisTScores;
+  pain_intensity: number | null; // 0-10 scale
+  overall_mean?: number; // Average of all T-scores
+}
+
+// Report Card Summary Metrics (for top 4 cards)
+export interface ReportCardSummary {
+  total_participants: number;
+  participants_with_baseline: number;
+  avg_msq_improvement: number; // % change from first to latest
+  avg_promis_improvement: number; // T-score change baseline to end
+  completion_rate: number; // % of expected surveys completed
+  recent_surveys_count: number; // Last 7 days
+  recent_surveys_change: number; // % change vs prior 7 days
+}
+
+// Participant Filter Option (for dropdowns)
+// Uses survey_user_mappings as source (only users with actual survey data)
+export interface ParticipantOption {
+  external_user_id: number; // Primary identifier from survey system
+  lead_id: number | null; // Secondary reference to CRM lead
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  survey_count: number; // Count of MSQ-95 surveys completed
+  latest_survey_date: string | null;
+}
+
+// Program Filter Option (for dropdowns)
+export interface ProgramOption {
+  program_id: number;
+  program_name: string;
+  participant_count: number;
+  survey_count: number;
+}
+
+// Auto-Generated Insights
+export interface ReportCardInsight {
+  type: 'improvement' | 'stable' | 'worsening' | 'info';
+  category: 'msq' | 'promis' | 'overall';
+  title: string;
+  message: string;
+  change_value?: number; // Numeric change (score or %)
+  significance?: 'small' | 'moderate' | 'large'; // Clinical significance
+}
+
+export interface ReportCardInsights {
+  improvements: ReportCardInsight[];
+  concerns: ReportCardInsight[];
+  stable_areas: ReportCardInsight[];
+  summary: string; // Overall narrative summary
+}
+
+// Survey Response Data (from database)
+export interface SurveyResponse {
+  response_id: number;
+  session_id: number;
+  question_id: number;
+  answer_text: string | null;
+  answer_numeric: number | null;
+  answer_date: string | null;
+  answer_boolean: boolean | null;
+  created_at: string | null;
+  created_by: string | null;
+  // Joined fields
+  question_text?: string;
+  question_order?: number;
+  form_id?: number;
+  form_name?: string;
+}
+
+// Survey Response Session (from database)
+export interface SurveyResponseSession {
+  session_id: number;
+  lead_id: number;
+  external_user_id: number | null;
+  form_id: number;
+  completed_on: string; // ISO timestamp
+  import_batch_id: number | null;
+  session_status: string | null;
+  total_questions: number | null;
+  answered_questions: number | null;
+  completion_percentage: number | null;
+  created_at: string | null;
+  created_by: string | null;
+  // Joined fields
+  form_name?: string;
+  form_type?: string;
+  lead_first_name?: string;
+  lead_last_name?: string;
+}
+
+// ============================================
+// MSQ CLINICAL DASHBOARD TYPES
+// ============================================
+
+// Clinical Alert Types
+export type ClinicalAlertType = 'critical' | 'warning' | 'improving';
+
+export interface ClinicalAlert {
+  type: ClinicalAlertType;
+  icon: string; // Emoji icon (🚨, ⚠️, ✅)
+  title: string;
+  message: string;
+}
+
+// MSQ Assessment Summary (for header section inside MSQ Assessment tab)
+export interface MsqAssessmentSummary {
+  member_name: string;
+  external_user_id: number;
+  lead_id: number | null;
+  program_name?: string | null;
+  period_start: string; // First assessment date
+  period_end: string; // Last assessment date
+  total_symptoms_count: number; // Total number of unique symptoms (95 max)
+  assessment_dates: string[]; // Array of all assessment dates (ISO format)
+  
+  // 4 Header Cards
+  total_msq_score: number; // Latest total MSQ score
+  total_score_trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'; // Trend of total MSQ score
+  all_total_scores: number[]; // Array of total scores for each assessment
+  active_symptoms: number; // Count of symptoms with score > 0
+  worsening_count: number; // Count of symptoms that increased (first vs last)
+  improving_count: number; // Count of symptoms that decreased (first vs last)
+  
+  // Clinical Alerts (3 cards)
+  clinical_alerts: ClinicalAlert[];
+}
+
+// MSQ Domain Card Data
+export type DomainTrendType = 'improving' | 'worsening' | 'stable' | 'fluctuating';
+export type SeverityLevel = 'none' | 'mild' | 'moderate' | 'severe';
+
+export interface MsqSymptomProgression {
+  symptom_name: string;
+  question_text: string;
+  scores: number[]; // Array of scores across all assessments (0-4)
+  trend: DomainTrendType;
+}
+
+export interface MsqDomainCard {
+  domain: MsqDomain;
+  domain_label: string; // Human-readable (e.g., "Head/Neurological")
+  emoji: string; // Domain icon
+  average_score: number; // Average of all symptoms in this domain for latest assessment
+  severity: SeverityLevel; // Color coding
+  trend: DomainTrendType; // Overall domain trend
+  trend_description: string; // Human-readable trend (e.g., "Improving - dark circles decreasing")
+  symptoms: MsqSymptomProgression[]; // Individual symptoms with progression
+  border_color: string; // CSS color for card top border
+}
+
+// Food Trigger Categories
+export type FoodTriggerPriority = 'high' | 'moderate' | 'consider' | 'safe';
+
+export interface FoodTriggerCategory {
+  priority: FoodTriggerPriority;
+  title: string; // e.g., "🚨 High Priority"
+  foods: string[]; // List of foods with reasoning (e.g., "Dairy products (constipation pattern)")
+}
+
+export interface FoodTriggerAnalysis {
+  categories: FoodTriggerCategory[];
+  explanation: string; // Overall explanation text
+}
+
+// Clinical Action Plan (AI-generated)
+export type RecommendationType = 'dietary' | 'testing' | 'lifestyle' | 'followup';
+
+export interface ClinicalRecommendation {
+  type: RecommendationType;
+  title: string;
+  description: string;
+}
+
+export interface ClinicalActionPlan {
+  action_plan: ClinicalRecommendation[]; // Left panel (4 cards)
+  progress_monitoring: ClinicalRecommendation[]; // Right panel (4 cards)
+  generated_at: string; // Timestamp of AI generation
+}
+
+// Complete MSQ Assessment Data (returned by API)
+export interface MsqAssessmentData {
+  summary: MsqAssessmentSummary;
+  domains: MsqDomainCard[];
+  food_triggers: FoodTriggerAnalysis;
+  clinical_plan: ClinicalActionPlan;
+}
+
+// MSQ Interpretation Guide (static content)
+export interface MsqInterpretationGuide {
+  score_ranges: Array<{
+    min: number;
+    max: number;
+    label: string;
+    description: string;
+  }>;
+  key_patterns: string[];
+  patient_profile?: {
+    score: number;
+    pattern: string;
+    primary_system: string;
+    prognosis: string;
+  };
+}

@@ -58,6 +58,8 @@ async function handleFileUpload(req: Request) {
   // Create Supabase client with service role key
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  let jobId: number | undefined;
+
   try {
     const { file_path, bucket_name } = await req.json();
     
@@ -91,7 +93,7 @@ async function handleFileUpload(req: Request) {
       );
     }
 
-    const jobId = jobData.import_batch_id;
+    jobId = jobData.import_batch_id;
     console.log(`Created import job: ${jobId}`);
 
     // Download file from storage
@@ -101,7 +103,9 @@ async function handleFileUpload(req: Request) {
 
     if (downloadError) {
       console.error('Error downloading file:', downloadError);
-      await updateJobStatus(supabase, jobId, 'failed', downloadError.message);
+      if (jobId) {
+        await updateJobStatus(supabase, jobId, 'failed', downloadError.message);
+      }
       return new Response(
         JSON.stringify({ error: 'Failed to download file', details: downloadError.message }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
@@ -117,16 +121,18 @@ async function handleFileUpload(req: Request) {
     // Process the data with timeout
     console.log(`Starting data processing for ${rows.length} rows...`);
     const result = await Promise.race([
-      processSurveyData(supabase, rows, jobId),
+      processSurveyData(supabase, rows, jobId!),
       new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Processing timeout after 60 seconds')), 60000)
+        setTimeout(() => reject(new Error('Processing timeout after 10 minutes')), 600000)
       )
     ]) as ImportJobResult;
 
     console.log('Data processing completed:', result);
 
     // Update job with final results
-    await updateJobStatus(supabase, jobId, 'completed', null, result);
+    if (jobId) {
+      await updateJobStatus(supabase, jobId, 'completed', undefined, result);
+    }
 
     // Rename the processed file with .csv.old extension to prevent re-processing
     try {
@@ -172,7 +178,7 @@ async function handleFileUpload(req: Request) {
     console.error('Processing error:', error);
     
     // Update job status to failed
-    if (jobId) {
+    if (typeof jobId !== 'undefined') {
       try {
         await updateJobStatus(supabase, jobId, 'failed', error.message);
       } catch (updateError) {
@@ -538,8 +544,8 @@ async function processSurveyData(
         // Continue processing - context is nice-to-have but not critical
       }
 
-      // Process questions and insert responses
-      const responsesToInsert = [];
+  // Process questions and insert responses
+  const responsesToInsert: any[] = [];
       
       for (const row of sessionRows) {
         // Skip empty questions
@@ -570,10 +576,18 @@ async function processSurveyData(
           }
         }
 
+        // Convert answer to numeric if possible
+        let answerNumeric: number | null = null;
+        const numericValue = parseFloat(row.answer);
+        if (!isNaN(numericValue) && isFinite(numericValue)) {
+          answerNumeric = numericValue;
+        }
+
         responsesToInsert.push({
           session_id: sessionId,
           question_id: questionId,
-          answer_text: row.answer
+          answer_text: row.answer,
+          answer_numeric: answerNumeric
         });
       }
 
@@ -642,7 +656,198 @@ async function processSurveyData(
 
   console.log('Processing complete:', result);
   console.log(`Summary: ${successfulRows} successful, ${errorRows} errors, ${duplicateRows} duplicates, ${skippedRows} skipped`);
+
+  // Calculate domain scores for MSQ surveys (form_id = 3)
+  if (result.successful_rows > 0) {
+    try {
+      console.log('Starting domain scoring for MSQ surveys...');
+      await calculateDomainScores(supabase, jobId);
+      console.log('Domain scoring completed successfully');
+    } catch (domainError) {
+      console.error('Domain scoring failed:', domainError);
+      console.error('Domain scoring error details:', domainError.message);
+      console.error('Domain scoring error stack:', domainError.stack);
+      // Don't fail the entire import - just log the error
+    }
+  }
+
   return result;
+}
+
+async function calculateDomainScores(supabase: any, jobId: number) {
+  console.log(`Calculating domain scores for import job ${jobId}...`);
+
+  try {
+    // Get all MSQ sessions from this import job
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('survey_response_sessions')
+      .select(`
+        session_id,
+        external_user_id,
+        lead_id,
+        form_id,
+        completed_on
+      `)
+      .eq('import_batch_id', jobId)
+      .eq('form_id', 3) // MSQ surveys only
+      .limit(1000); // Override default PostgREST limit to fetch all sessions
+
+    if (sessionsError) {
+      console.error('Error fetching sessions:', sessionsError);
+      throw new Error(`Failed to fetch sessions: ${sessionsError.message}`);
+    }
+
+    if (!sessions || sessions.length === 0) {
+      console.log('No MSQ sessions found for domain scoring');
+      return;
+    }
+
+    console.log(`Found ${sessions.length} MSQ sessions for domain scoring`);
+
+    // Fetch responses in batches to avoid PostgREST row limits on RPC calls
+    // PostgREST has a ~1000 row limit on RPC responses
+    // With 74 responses per MSQ session: 1000 ÷ 74 = 13.5, so use 13 to be safe
+    const SESSION_BATCH_SIZE = 13; // Process 13 sessions at a time
+    const allResponses: any[] = [];
+    
+    console.log(`Fetching responses for ${sessions.length} sessions in batches of ${SESSION_BATCH_SIZE}...`);
+    
+    for (let i = 0; i < sessions.length; i += SESSION_BATCH_SIZE) {
+      const sessionBatch = sessions.slice(i, i + SESSION_BATCH_SIZE);
+      const sessionIds = sessionBatch.map(s => s.session_id);
+      const batchNum = Math.floor(i / SESSION_BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(sessions.length / SESSION_BATCH_SIZE);
+      
+      console.log(`Fetching batch ${batchNum}/${totalBatches}: sessions ${sessionIds.join(', ')}`);
+      
+      const { data: batchResponses, error: responsesError } = await supabase
+        .rpc('get_responses_with_domains', {
+          session_ids: sessionIds
+        });
+
+      if (responsesError) {
+        console.error(`Error fetching responses for batch ${batchNum}:`, responsesError);
+        throw new Error(`Failed to fetch responses for batch ${batchNum}: ${responsesError.message}`);
+      }
+
+      if (batchResponses && batchResponses.length > 0) {
+        allResponses.push(...batchResponses);
+        console.log(`Batch ${batchNum}/${totalBatches}: fetched ${batchResponses.length} responses`);
+      }
+    }
+
+    if (allResponses.length === 0) {
+      console.log('No numeric responses found for domain scoring');
+      return;
+    }
+
+    console.log(`Found ${allResponses.length} total numeric responses for domain scoring`);
+    const responses = allResponses;
+
+    // Group responses by session and domain
+    const domainScores = new Map<string, { session: any, domainKey: string, totalScore: number, questionCount: number }>();
+    
+    for (const response of responses) {
+      const domainKey = response.domain_key;
+      if (!domainKey) {
+        console.log(`Skipping response with no domain mapping: session_id=${response.session_id}, question_id=${response.question_id}`);
+        continue; // Skip if no domain mapping
+      }
+
+      const sessionKey = `${response.session_id}|${domainKey}`;
+      const score = parseFloat(response.answer_numeric.toString()) || 0;
+
+      if (domainScores.has(sessionKey)) {
+        const existing = domainScores.get(sessionKey)!;
+        existing.totalScore += score;
+        existing.questionCount += 1;
+      } else {
+        const session = sessions.find(s => s.session_id === response.session_id);
+        domainScores.set(sessionKey, {
+          session,
+          domainKey,
+          totalScore: score,
+          questionCount: 1
+        });
+      }
+    }
+
+    console.log(`Grouped into ${domainScores.size} domain score entries`);
+
+    // Calculate severity assessments and prepare inserts
+    const domainScoreInserts: any[] = [];
+    
+    for (const [sessionKey, data] of domainScores) {
+      const { session, domainKey, totalScore, questionCount } = data;
+      
+      // Calculate severity assessment based on quartiles
+      const maxPossibleScore = questionCount * 4;
+      const quartileSize = maxPossibleScore / 4;
+      
+      let severityAssessment: string;
+      if (totalScore <= quartileSize) {
+        severityAssessment = 'minimal';
+      } else if (totalScore <= quartileSize * 2) {
+        severityAssessment = 'mild';
+      } else if (totalScore <= quartileSize * 3) {
+        severityAssessment = 'moderate';
+      } else {
+        severityAssessment = 'severe';
+      }
+
+      domainScoreInserts.push({
+        session_id: session.session_id,
+        external_user_id: session.external_user_id,
+        lead_id: session.lead_id,
+        form_id: session.form_id,
+        completed_on: session.completed_on,
+        domain_key: domainKey,
+        domain_total_score: totalScore,
+        severity_assessment: severityAssessment,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    console.log(`Prepared ${domainScoreInserts.length} domain score inserts`);
+
+    // Batch insert domain scores to avoid payload size limits (1MB limit in Supabase)
+    if (domainScoreInserts.length > 0) {
+      const BATCH_SIZE = 100; // Insert 100 records at a time
+      const totalBatches = Math.ceil(domainScoreInserts.length / BATCH_SIZE);
+      let totalInserted = 0;
+
+      console.log(`Inserting ${domainScoreInserts.length} records in ${totalBatches} batches of ${BATCH_SIZE}`);
+
+      for (let i = 0; i < domainScoreInserts.length; i += BATCH_SIZE) {
+        const batch = domainScoreInserts.slice(i, i + BATCH_SIZE);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+
+        console.log(`Inserting batch ${batchNumber}/${totalBatches} (${batch.length} records)...`);
+
+        const { error: insertError } = await supabase
+          .from('survey_domain_scores')
+          .insert(batch);
+
+        if (insertError) {
+          console.error(`Error inserting batch ${batchNumber}:`, insertError);
+          throw new Error(`Failed to insert batch ${batchNumber}: ${insertError.message}`);
+        }
+
+        totalInserted += batch.length;
+        console.log(`Batch ${batchNumber}/${totalBatches} inserted successfully. Total: ${totalInserted}/${domainScoreInserts.length}`);
+      }
+
+      console.log(`Successfully inserted all ${totalInserted} domain score records in ${totalBatches} batches`);
+    } else {
+      console.log('No domain scores to insert');
+    }
+
+  } catch (error) {
+    console.error('Error in calculateDomainScores:', error);
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    throw error; // Re-throw to be caught by the calling function
+  }
 }
 
 async function updateJobStatus(

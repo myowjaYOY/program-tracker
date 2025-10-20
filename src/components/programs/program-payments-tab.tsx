@@ -57,7 +57,12 @@ export default function ProgramPaymentsTab({
       field: 'payment_amount',
       headerName: 'Amount',
       width: 120,
+      type: 'number',
       renderCell: renderCurrency,
+      valueFormatter: (value?: number) => {
+        if (value == null) return '-';
+        return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      },
     },
     { field: 'payment_status_name', headerName: 'Status', width: 140 },
     { field: 'payment_method_name', headerName: 'Method', width: 140 },
@@ -89,6 +94,9 @@ export default function ProgramPaymentsTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        aggregationModel={{ payment_amount: 'sum' }}
+        showAggregationFooter={true}
+        aggregationLabel="Total of Payments:"
       />
     </Box>
   );

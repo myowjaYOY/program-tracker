@@ -21,7 +21,12 @@ import {
   GridActionsCellItem,
   GridRowId,
   GridRenderCellParams,
+  GridFooterContainer,
+  GridFooter,
 } from '@mui/x-data-grid-pro';
+
+// Custom aggregation model type (not from MUI - we calculate manually)
+type AggregationModel = Record<string, 'sum' | 'avg' | 'min' | 'max' | 'size'>;
 import { alpha } from '@mui/material/styles';
 import {
   Edit as EditIcon,
@@ -32,6 +37,75 @@ import {
 
 // Using built-in toolbar via showToolbar prop
 
+// Custom Footer Component for Aggregation
+function CustomAggregationFooter({
+  data,
+  columns,
+  aggregationModel,
+  aggregationLabel,
+}: {
+  data: any[];
+  columns: GridColDef[];
+  aggregationModel?: AggregationModel;
+  aggregationLabel?: string;
+}) {
+  if (!aggregationModel || Object.keys(aggregationModel).length === 0) {
+    return <GridFooter />;
+  }
+
+  // Calculate aggregations
+  const aggregations: Record<string, number> = {};
+  Object.keys(aggregationModel).forEach(field => {
+    const aggType = aggregationModel[field];
+    const values = data.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
+    
+    if (aggType === 'sum') {
+      aggregations[field] = values.reduce((sum, val) => sum + val, 0);
+    } else if (aggType === 'avg') {
+      aggregations[field] = values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+    } else if (aggType === 'min') {
+      aggregations[field] = values.length > 0 ? Math.min(...values) : 0;
+    } else if (aggType === 'max') {
+      aggregations[field] = values.length > 0 ? Math.max(...values) : 0;
+    } else if (aggType === 'size') {
+      aggregations[field] = values.length;
+    }
+  });
+
+  return (
+    <GridFooterContainer>
+      <Box sx={{ p: 1, display: 'flex', alignItems: 'center', width: '100%' }}>
+        {Object.keys(aggregations).map(field => {
+          const column = columns.find(col => col.field === field);
+          const value = aggregations[field];
+          if (value === undefined) return null;
+          
+          // Format the aggregated value
+          let formattedValue: string | number = value;
+          if (column?.valueFormatter && typeof column.valueFormatter === 'function') {
+            try {
+              // Call valueFormatter with required MUI signature (value, row, column, apiRef)
+              const formatted = (column.valueFormatter as any)(value, {} as any, column as any, {} as any);
+              if (formatted !== undefined) {
+                formattedValue = formatted;
+              }
+            } catch {
+              // Fallback if formatter fails
+              formattedValue = value;
+            }
+          }
+          
+          return (
+            <Typography key={field} variant="body2" fontWeight="bold" sx={{ mr: 3 }}>
+              {aggregationLabel || 'Total:'} {formattedValue}
+            </Typography>
+          );
+        })}
+      </Box>
+      <GridFooter />
+    </GridFooterContainer>
+  );
+}
 
 // Common column renderers
 export const renderActiveFlag = (params: GridRenderCellParams) => (
@@ -148,6 +222,10 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   sortModel?: Array<{ field: string; sort: 'asc' | 'desc' }>;
   // Export functionality
   enableExport?: boolean;
+  // Aggregation functionality (optional, backward-compatible)
+  aggregationModel?: AggregationModel;
+  showAggregationFooter?: boolean;
+  aggregationLabel?: string;
 }
 
 export default function BaseDataTable<T extends BaseEntity>({
@@ -179,6 +257,9 @@ export default function BaseDataTable<T extends BaseEntity>({
   gridHeight,
   sortModel,
   enableExport = false,
+  aggregationModel,
+  showAggregationFooter = false,
+  aggregationLabel,
 }: BaseDataTableProps<T>) {
   
 
@@ -382,6 +463,14 @@ export default function BaseDataTable<T extends BaseEntity>({
           pageSizeOptions={pageSizeOptions}
           {...(onRowClick && {
             onRowClick: (params: any) => onRowClick(params.row),
+          })}
+          {...(showAggregationFooter && aggregationModel && {
+            slots: {
+              footer: CustomAggregationFooter as any,
+            },
+            slotProps: {
+              footer: { data, columns: allColumns, aggregationModel, aggregationLabel } as any,
+            },
           })}
           getRowClassName={params => {
             const selected =
