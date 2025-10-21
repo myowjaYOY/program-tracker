@@ -260,49 +260,92 @@ export default function PromisInterpretationGuide({
               </Typography>
 
               <Grid container spacing={3}>
+                {/* Symptom Domains Column */}
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="body2" fontWeight="bold" color="error.main" gutterBottom>
-                      Symptom Domains (Higher = Worse)
-                    </Typography>
-                    <Box sx={{ pl: 2 }}>
-                      <Typography variant="caption" display="block">• Anxiety</Typography>
-                      <Typography variant="caption" display="block">• Depression</Typography>
-                      <Typography variant="caption" display="block">• Fatigue</Typography>
-                      <Typography variant="caption" display="block">• Sleep Disturbance</Typography>
-                      <Typography variant="caption" display="block">• Pain Interference</Typography>
-                      <Typography variant="caption" display="block">• Pain Intensity</Typography>
-                    </Box>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="body2" fontWeight="bold" color="success.main" gutterBottom>
-                      Function Domains (Higher = Better)
-                    </Typography>
-                    <Box sx={{ pl: 2 }}>
-                      <Typography variant="caption" display="block">• Physical Function</Typography>
-                      <Typography variant="caption" display="block">• Social Roles</Typography>
-                    </Box>
-                  </Box>
+                  <Typography variant="body2" fontWeight="bold" color="error.main" gutterBottom>
+                    Symptom Domains (6): Higher = Worse
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>Domain</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>Measures</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Anxiety</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Fear, anxious misery, hyperarousal, and somatic symptoms</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Depression</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Negative mood, loss of interest, negative views of self</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Fatigue</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Exhaustion, decreased energy, and tiredness</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Sleep Disturbance</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Sleep quality, depth, and restoration</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Pain Interference</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Impact of pain on daily activities and functioning</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Pain Intensity</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Severity of pain experienced (0-10 scale)</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </Grid>
 
+                {/* Function Domains Column */}
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Box sx={{ p: 2, backgroundColor: 'info.50', borderRadius: 1, border: 1, borderColor: 'info.main', height: '100%' }}>
-                    <Typography variant="caption" fontWeight="bold" color="info.main" display="block" gutterBottom>
-                      Key Concept
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      A T-score of 60 means you are 1 standard deviation (SD) from the U.S. average. 
-                      For symptoms, this indicates more severe symptoms. For function, lower scores indicate more limitation.
-                    </Typography>
-                  </Box>
+                  <Typography variant="body2" fontWeight="bold" color="success.main" gutterBottom>
+                    Function Domains (2): Higher = Better
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>Domain</TableCell>
+                          <TableCell sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}>Measures</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Physical Function</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Ability to carry out physical activities and tasks</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell sx={{ fontSize: '0.75rem' }}>Social Roles</TableCell>
+                          <TableCell sx={{ fontSize: '0.7rem' }}>Ability to participate in usual social roles and activities</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </Grid>
               </Grid>
 
-              {/* Reference */}
-              <Box sx={{ mt: 3, p: 2, backgroundColor: 'grey.50', borderRadius: 1 }}>
+              {/* Key Concept + Reference Combined Box */}
+              <Box sx={{ mt: 3, p: 2, backgroundColor: 'info.50', borderRadius: 1, border: 1, borderColor: 'info.main' }}>
+                <Typography variant="caption" fontWeight="bold" color="info.main" display="block" gutterBottom>
+                  Key Concept
+                </Typography>
+                <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+                  A T-score of 60 means you are 1 standard deviation (SD) from the U.S. average. 
+                  For symptoms, this indicates more severe symptoms. For function, lower scores indicate more limitation.
+                </Typography>
+                
+                <Typography variant="caption" fontWeight="bold" color="info.main" display="block" gutterBottom sx={{ mt: 2 }}>
+                  Reference
+                </Typography>
                 <Typography variant="caption" color="textSecondary">
-                  <strong>Reference:</strong> PROMIS Adult Profile Scoring Manual (September 16, 2024) | 
+                  PROMIS Adult Profile Scoring Manual (September 16, 2024) | 
                   HealthMeasures.net | T-scores calibrated to U.S. general population (Mean=50, SD=10)
                 </Typography>
               </Box>
