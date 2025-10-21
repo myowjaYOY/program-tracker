@@ -27,141 +27,6 @@ interface ImportJobResult {
   errors: string[];
 }
 
-interface QuestionDomainMapping {
-  question_id: number;
-  domain_key: string;
-  survey_code: string;
-}
-
-/**
- * Converts PROMIS-29 text answers to numeric scores based on domain-specific mappings
- * @param answerText - The text answer from the survey
- * @param domainKey - The domain key from survey_domains table
- * @param questionText - The question text (used for Sleep Disturbance special cases)
- * @returns Numeric score (1-5 for most domains, 0-10 for pain_intensity) or null if not convertible
- */
-function convertPromisAnswerToNumeric(
-  answerText: string,
-  domainKey: string,
-  questionText: string
-): number | null {
-  // Normalize answer text (case-insensitive, trim spaces)
-  const answer = answerText.trim().toLowerCase();
-  
-  // Domain-specific mappings
-  switch (domainKey) {
-    case 'physical_function':
-      // Higher = better
-      const physicalMap: Record<string, number> = {
-        'without any difficulty': 5,
-        'with a little difficulty': 4,
-        'with some difficulty': 3,
-        'with much difficulty': 2,
-        'unable to do': 1
-      };
-      return physicalMap[answer] ?? null;
-    
-    case 'anxiety':
-      // Higher = worse
-      const anxietyMap: Record<string, number> = {
-        'never': 1,
-        'rarely': 2,
-        'sometimes': 3,
-        'often': 4,
-        'always': 5
-      };
-      return anxietyMap[answer] ?? null;
-    
-    case 'depression':
-      // Higher = worse
-      const depressionMap: Record<string, number> = {
-        'never': 1,
-        'rarely': 2,
-        'sometimes': 3,
-        'often': 4,
-        'always': 5
-      };
-      return depressionMap[answer] ?? null;
-    
-    case 'fatigue':
-      // Higher = worse
-      const fatigueMap: Record<string, number> = {
-        'not at all': 1,
-        'a little bit': 2,
-        'somewhat': 3,
-        'quite a bit': 4,
-        'very much': 5
-      };
-      return fatigueMap[answer] ?? null;
-    
-    case 'sleep_disturbance':
-      // Mixed wording - check question text for special cases
-      const questionLower = questionText.toLowerCase();
-      
-      if (questionLower.includes('sleep quality')) {
-        // "My sleep quality was" - reversed scoring
-        const sleepQualityMap: Record<string, number> = {
-          'very poor': 5,
-          'poor': 4,
-          'fair': 3,
-          'good': 2,
-          'very good': 1
-        };
-        return sleepQualityMap[answer] ?? null;
-      } else if (questionLower.includes('refreshing')) {
-        // "My sleep was refreshing" - reversed scoring
-        const sleepRefreshingMap: Record<string, number> = {
-          'not at all': 5,
-          'a little bit': 4,
-          'somewhat': 3,
-          'quite a bit': 2,
-          'very much': 1
-        };
-        return sleepRefreshingMap[answer] ?? null;
-      } else {
-        // Standard sleep disturbance questions (problem with sleep, difficulty falling asleep)
-        const sleepStandardMap: Record<string, number> = {
-          'not at all': 1,
-          'a little bit': 2,
-          'somewhat': 3,
-          'quite a bit': 4,
-          'very much': 5
-        };
-        return sleepStandardMap[answer] ?? null;
-      }
-    
-    case 'social_roles':
-      // Higher = better (reversed from typical)
-      const socialMap: Record<string, number> = {
-        'never': 5,
-        'rarely': 4,
-        'sometimes': 3,
-        'often': 2,
-        'always': 1
-      };
-      return socialMap[answer] ?? null;
-    
-    case 'pain_interference':
-      // Higher = worse
-      const painInterferenceMap: Record<string, number> = {
-        'not at all': 1,
-        'a little bit': 2,
-        'somewhat': 3,
-        'quite a bit': 4,
-        'very much': 5
-      };
-      return painInterferenceMap[answer] ?? null;
-    
-    case 'pain_intensity':
-      // Single numeric item (0-10) - should already be numeric, return null to use existing value
-      return null;
-    
-    default:
-      // Unknown domain - return null
-      return null;
-  }
-}
-
 Deno.serve(async (req) => {
   try {
     const { method } = req;
@@ -435,37 +300,17 @@ async function processSurveyData(
   console.log(`Processing ${rows.length} rows...`);
 
   // Load existing lookup data
-  const [programsResult, modulesResult, formsResult, questionsResult, domainMappingsResult] = await Promise.all([
+  const [programsResult, modulesResult, formsResult, questionsResult] = await Promise.all([
     supabase.from('survey_programs').select('program_id, program_name'),
     supabase.from('survey_modules').select('module_id, module_name, program_id'),
     supabase.from('survey_forms').select('form_id, form_name'),  // Forms are global, no module_id
-    supabase.from('survey_questions').select('question_id, question_text, form_id'),
-    supabase
-      .from('survey_form_question_domain')
-      .select(`
-        question_id,
-        domain_key,
-        survey_domains!inner(survey_code)
-      `)
+    supabase.from('survey_questions').select('question_id, question_text, form_id')
   ]);
 
   const programs = new Map(programsResult.data?.map(p => [p.program_name, p.program_id]) || []);
   const modules = new Map(modulesResult.data?.map(m => [`${m.program_id}|${m.module_name}`, m.module_id]) || []);
   const forms = new Map(formsResult.data?.map(f => [f.form_name, f.form_id]) || []);  // Forms are global, not module-specific
   const questions = new Map(questionsResult.data?.map(q => [`${q.form_id}|${q.question_text}`, q.question_id]) || []);
-  
-  // Build question-domain mapping lookup: questionId -> { domain_key, survey_code }
-  const questionDomainMap = new Map<number, QuestionDomainMapping>();
-  if (domainMappingsResult.data) {
-    for (const mapping of domainMappingsResult.data) {
-      questionDomainMap.set(mapping.question_id, {
-        question_id: mapping.question_id,
-        domain_key: mapping.domain_key,
-        survey_code: (mapping.survey_domains as any).survey_code
-      });
-    }
-  }
-  console.log(`Loaded ${questionDomainMap.size} question-domain mappings`);
 
   // Group rows by session (completed_on + user_id + form)
   const sessions = new Map<string, SurveyResponseRow[]>();
@@ -733,29 +578,9 @@ async function processSurveyData(
 
         // Convert answer to numeric if possible
         let answerNumeric: number | null = null;
-        
-        // First, check if answer is already numeric (handles Pain Intensity and MSQ numeric responses)
         const numericValue = parseFloat(row.answer);
         if (!isNaN(numericValue) && isFinite(numericValue)) {
           answerNumeric = numericValue;
-        } else {
-          // Answer is text - check if this question has a domain mapping
-          const domainMapping = questionDomainMap.get(questionId);
-          
-          if (domainMapping && domainMapping.survey_code === 'PROMIS') {
-            // This is a PROMIS question - apply text-to-numeric conversion
-            const convertedValue = convertPromisAnswerToNumeric(
-              row.answer,
-              domainMapping.domain_key,
-              row.question
-            );
-            
-            if (convertedValue !== null) {
-              answerNumeric = convertedValue;
-              console.log(`Converted PROMIS answer: "${row.answer}" -> ${convertedValue} (domain: ${domainMapping.domain_key})`);
-            }
-          }
-          // If not PROMIS or conversion failed, answerNumeric remains null (MSQ text responses stay as text)
         }
 
         responsesToInsert.push({
@@ -832,10 +657,10 @@ async function processSurveyData(
   console.log('Processing complete:', result);
   console.log(`Summary: ${successfulRows} successful, ${errorRows} errors, ${duplicateRows} duplicates, ${skippedRows} skipped`);
 
-  // Calculate domain scores for MSQ and PROMIS surveys (form_id = 3 or 6)
+  // Calculate domain scores for MSQ surveys (form_id = 3)
   if (result.successful_rows > 0) {
     try {
-      console.log('Starting domain scoring for MSQ and PROMIS surveys...');
+      console.log('Starting domain scoring for MSQ surveys...');
       await calculateDomainScores(supabase, jobId);
       console.log('Domain scoring completed successfully');
     } catch (domainError) {
@@ -853,7 +678,7 @@ async function calculateDomainScores(supabase: any, jobId: number) {
   console.log(`Calculating domain scores for import job ${jobId}...`);
 
   try {
-    // Get all MSQ and PROMIS sessions from this import job
+    // Get all MSQ sessions from this import job
     const { data: sessions, error: sessionsError } = await supabase
       .from('survey_response_sessions')
       .select(`
@@ -864,7 +689,7 @@ async function calculateDomainScores(supabase: any, jobId: number) {
         completed_on
       `)
       .eq('import_batch_id', jobId)
-      .in('form_id', [3, 6]) // MSQ (form_id=3) and PROMIS (form_id=6) surveys
+      .eq('form_id', 3) // MSQ surveys only
       .limit(1000); // Override default PostgREST limit to fetch all sessions
 
     if (sessionsError) {
@@ -873,11 +698,11 @@ async function calculateDomainScores(supabase: any, jobId: number) {
     }
 
     if (!sessions || sessions.length === 0) {
-      console.log('No MSQ or PROMIS sessions found for domain scoring');
+      console.log('No MSQ sessions found for domain scoring');
       return;
     }
 
-    console.log(`Found ${sessions.length} sessions for domain scoring (MSQ and PROMIS)`);
+    console.log(`Found ${sessions.length} MSQ sessions for domain scoring`);
 
     // Fetch responses in batches to avoid PostgREST row limits on RPC calls
     // PostgREST has a ~1000 row limit on RPC responses

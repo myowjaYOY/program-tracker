@@ -792,10 +792,7 @@ export type MsqDomain =
   | 'joints_muscles'
   | 'energy_mind_emotions';
 
-/**
- * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
- * Kept for historical data access only. Report Card now focuses on MSQ-95 analysis.
- */
+// PROMIS-29 domain types (updated for Report Card implementation)
 export type PromisDomain =
   | 'physical_function'
   | 'anxiety'
@@ -803,7 +800,8 @@ export type PromisDomain =
   | 'fatigue'
   | 'sleep_disturbance'
   | 'social_roles'
-  | 'pain_interference';
+  | 'pain_interference'
+  | 'pain_intensity';
 
 /**
  * @deprecated PROMIS-29 removed from Report Card Dashboard (2025-10-18)
@@ -991,7 +989,7 @@ export interface MsqAssessmentSummary {
 }
 
 // MSQ Domain Card Data
-export type DomainTrendType = 'improving' | 'worsening' | 'stable' | 'fluctuating';
+export type DomainTrendType = 'improving' | 'worsening' | 'stable' | 'fluctuating' | 'insufficient_data';
 export type SeverityLevel = 'none' | 'mild' | 'moderate' | 'severe';
 
 export interface MsqSymptomProgression {
@@ -1065,4 +1063,124 @@ export interface MsqInterpretationGuide {
     primary_system: string;
     prognosis: string;
   };
+}
+
+// ============================================
+// PROMIS-29 ASSESSMENT TYPES
+// ============================================
+
+// PROMIS-29 severity levels (different for symptom vs function domains)
+export type PromisSymptomSeverity =
+  | 'within_normal'
+  | 'mild'
+  | 'moderate'
+  | 'severe'
+  | 'very_severe';
+
+export type PromisFunctionSeverity =
+  | 'within_normal'
+  | 'mild_limitation'
+  | 'moderate_limitation'
+  | 'severe_limitation'
+  | 'very_severe_limitation';
+
+export type PromisSeverity = PromisSymptomSeverity | PromisFunctionSeverity;
+
+// PROMIS-29 Assessment Summary (for top summary card)
+export interface PromisAssessmentSummary {
+  member_name: string;
+  external_user_id: number;
+  lead_id: number | null;
+  program_name?: string | null;
+  
+  // Current assessment (latest)
+  current_mean_t_score: number; // Mean of all 7 domain T-scores (excluding pain_intensity)
+  current_severity: PromisSymptomSeverity;
+  
+  // Trend analysis (first to last assessment)
+  total_score_trend: DomainTrendType; // 'improving' | 'worsening' | 'stable' | 'fluctuating'
+  overall_trend_description: string; // Detailed description with change amount and clinical meaning (for tooltip)
+  overall_change_magnitude: string; // 'Minimal Change' | 'Moderate Change' | 'Substantial Change' (for display)
+  worsening_domains_count: number;
+  improving_domains_count: number;
+  
+  // Assessment history
+  assessment_dates: string[]; // All assessment dates
+  all_mean_t_scores: number[]; // Mean T-score for each assessment
+  
+  // Period info
+  period_start: string; // First assessment date
+  period_end: string; // Last assessment date
+}
+
+// PROMIS-29 Question Progression (for expandable domain cards)
+export interface PromisQuestionProgression {
+  question_text: string;
+  question_order: number;
+  all_raw_scores: number[]; // Raw scores (1-5) across all assessments
+  all_dates: string[]; // Assessment dates
+  trend: DomainTrendType;
+}
+
+// PROMIS-29 Domain Card (for domain cards grid)
+export interface PromisDomainCard {
+  domain_key: PromisDomain;
+  domain_label: string; // Human-readable (e.g., "Physical Function")
+  emoji: string; // Domain icon
+  domain_type: 'symptom' | 'function'; // Determines interpretation direction
+  
+  // Current assessment (latest)
+  current_raw_score: number; // Sum of 4 items (4-20) or single item (0-10 for pain_intensity)
+  current_t_score: number | null; // T-score (null for pain_intensity)
+  current_severity: PromisSeverity;
+  
+  // Trend (first to last assessment)
+  trend: DomainTrendType;
+  trend_description: string; // Human-readable trend
+  
+  // Historical data
+  all_raw_scores: number[]; // Raw scores across all assessments
+  all_t_scores: (number | null)[]; // T-scores across all assessments (null for pain_intensity)
+  assessment_dates: string[]; // Assessment dates
+  
+  // Question-level detail (for expanded view)
+  questions: PromisQuestionProgression[];
+}
+
+// Complete PROMIS-29 Assessment Data (returned by API)
+export interface PromisAssessmentData {
+  summary: PromisAssessmentSummary;
+  domains: PromisDomainCard[];
+}
+
+// PROMIS-29 Interpretation Guide (static content)
+export interface PromisInterpretationGuide {
+  t_score_explanation: string;
+  symptom_domains: {
+    label: string;
+    domains: string[];
+    interpretation: string;
+    severity_ranges: Array<{
+      min: number;
+      max: number | null;
+      label: string;
+      description: string;
+    }>;
+  };
+  function_domains: {
+    label: string;
+    domains: string[];
+    interpretation: string;
+    severity_ranges: Array<{
+      min: number | null;
+      max: number;
+      label: string;
+      description: string;
+    }>;
+  };
+  clinical_significance: Array<{
+    change: number;
+    label: string;
+    description: string;
+  }>;
 }

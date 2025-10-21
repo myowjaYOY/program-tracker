@@ -12,18 +12,25 @@ import {
   InputAdornment,
   IconButton,
   CircularProgress,
+  Alert,
+  Link,
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/hooks/useAuth';
-import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const resetPasswordSchema = z
   .object({
-    password: z.string().min(6, 'Password must be at least 6 characters'),
+    password: z
+      .string()
+      .min(10, 'Password must be at least 10 characters')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/[0-9]/, 'Password must contain at least one digit'),
     confirmPassword: z
       .string()
-      .min(6, 'Password must be at least 6 characters'),
+      .min(10, 'Password must be at least 10 characters'),
   })
   .refine(data => data.password === data.confirmPassword, {
     message: "Passwords don't match",
@@ -36,7 +43,10 @@ export default function ResetPasswordForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidToken, setIsValidToken] = useState(false);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const {
     register,
@@ -47,81 +57,128 @@ export default function ResetPasswordForm() {
   });
 
   useEffect(() => {
-    // Check if this is an email confirmation redirect by looking at the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const type = urlParams.get('type');
+    const type = searchParams.get('type');
+    const code = searchParams.get('code');
 
     if (type === 'signup') {
       toast.success('Email confirmed successfully! You can now sign in.');
       router.push('/login');
+      return;
     }
-  }, [router]);
+
+    if (type === 'recovery' || code) {
+      setIsValidToken(true);
+      setIsCheckingToken(false);
+    } else {
+      toast.error('Invalid or missing reset token.');
+      setTimeout(() => router.push('/forgot-password'), 2000);
+    }
+  }, [searchParams, router]);
 
   const onSubmit = async (data: ResetPasswordFormData) => {
     setIsLoading(true);
     try {
-      toast.success('Redirecting to login...');
-      router.push('/login');
+      const supabase = createClient();
+      const { error } = await supabase.auth.updateUser({
+        password: data.password,
+      });
+
+      if (error) {
+        toast.error(error.message || 'Failed to reset password.');
+        return;
+      }
+
+      toast.success('Password reset successfully!');
+      await supabase.auth.signOut();
+      setTimeout(() => router.push('/login'), 1500);
     } catch (error) {
-      console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred. Please try again.');
+      toast.error('An unexpected error occurred.');
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (isCheckingToken) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%', maxWidth: 400, mx: 'auto', textAlign: 'center' }}>
+        <CircularProgress size={40} />
+        <Typography variant="body1" color="text.secondary">Verifying reset link...</Typography>
+      </Box>
+    );
+  }
+
+  if (!isValidToken) {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', maxWidth: 400, mx: 'auto', textAlign: 'center' }}>
+        <Alert severity="error">Invalid or expired reset link</Alert>
+        <Typography variant="h4" component="h1" gutterBottom>Reset Link Invalid ❌</Typography>
+        <Typography variant="body1" color="text.secondary">Please request a new one.</Typography>
+        <Button variant="contained" fullWidth size="large" onClick={() => router.push('/forgot-password')} sx={{ mt: 2, py: 1.5, fontSize: '1rem', fontWeight: 600 }}>
+          Request New Reset Link
+        </Button>
+      </Box>
+    );
+  }
+
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit(onSubmit)}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 3,
-        width: '100%',
-        maxWidth: 400,
-        mx: 'auto',
-      }}
-    >
+    <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ display: 'flex', flexDirection: 'column', gap: 3, width: '100%', maxWidth: 400, mx: 'auto' }}>
       <Box sx={{ textAlign: 'center', mb: 2 }}>
-        <Typography
-          variant="h4"
-          component="h1"
-          gutterBottom
-          sx={{
-            fontWeight: 700,
-            color: 'text.primary',
-          }}
-        >
-          Email Confirmed! ✅
+        <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 700, color: 'text.primary' }}>
+          Reset Your Password 🔑
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-          Your email has been confirmed. You can now sign in to your account.
+          Enter your new password below
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontSize: '0.875rem' }}>
+          Password must be at least 10 characters and include lowercase, uppercase, and digits
         </Typography>
       </Box>
 
-      <Button
-        type="button"
-        variant="contained"
+      <TextField
+        {...register('password')}
+        label="New Password"
+        type={showPassword ? 'text' : 'password'}
         fullWidth
-        size="large"
-        disabled={isLoading}
-        onClick={() => {
-          router.push('/login');
+        error={!!errors.password}
+        helperText={errors.password?.message}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: 'text.secondary' }}>
+                {showPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
         }}
-        sx={{
-          mt: 2,
-          py: 1.5,
-          fontSize: '1rem',
-          fontWeight: 600,
+      />
+
+      <TextField
+        {...register('confirmPassword')}
+        label="Confirm New Password"
+        type={showConfirmPassword ? 'text' : 'password'}
+        fullWidth
+        error={!!errors.confirmPassword}
+        helperText={errors.confirmPassword?.message}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end" sx={{ color: 'text.secondary' }}>
+                {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+              </IconButton>
+            </InputAdornment>
+          ),
         }}
-      >
-        {isLoading ? (
-          <CircularProgress size={24} color="inherit" />
-        ) : (
-          'Go to Sign In →'
-        )}
+      />
+
+      <Button type="submit" variant="contained" fullWidth size="large" disabled={isLoading} sx={{ mt: 2, py: 1.5, fontSize: '1rem', fontWeight: 600 }}>
+        {isLoading ? <CircularProgress size={24} color="inherit" /> : 'Reset Password'}
       </Button>
+
+      <Box sx={{ textAlign: 'center', mt: 2 }}>
+        <Link href="/login" variant="body2" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+          ← Back to Login
+        </Link>
+      </Box>
     </Box>
   );
 }

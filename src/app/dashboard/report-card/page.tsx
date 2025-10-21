@@ -15,9 +15,11 @@ import {
   Tooltip,
 } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import SummaryCards from '@/components/report-card/SummaryCards';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
+import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
 import { useReportCardSummary, useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
 
@@ -183,13 +185,23 @@ export default function ReportCardPage() {
             id="report-card-tab-0"
             aria-controls="report-card-tabpanel-0"
           />
-          {/* Future tabs: PROMIS-29, Timeline, etc. */}
+          <Tab
+            icon={<HealthAndSafetyIcon />}
+            iconPosition="start"
+            label="PROMIS-29"
+            id="report-card-tab-1"
+            aria-controls="report-card-tabpanel-1"
+          />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <TabPanel value={tabValue} index={0}>
         <MsqAssessmentTab selectedMemberId={selectedMemberId} />
+      </TabPanel>
+      
+      <TabPanel value={tabValue} index={1}>
+        <PromisAssessmentTab selectedMemberId={selectedMemberId} />
       </TabPanel>
       
       {/* Lead Notes Modal */}

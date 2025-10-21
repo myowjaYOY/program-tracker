@@ -12,79 +12,36 @@ import {
 import {
   Assessment as AssessmentIcon,
   TrendingUp as TrendingUpIcon,
-  TrendingDown as WorseningIcon,
-  TrendingUp as ImprovingIcon,
+  TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
-  SwapVert as FluctuatingIcon,
   DateRange as DateRangeIcon,
   InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
-import type { MsqDomainCard, MsqAssessmentSummary } from '@/types/database.types';
+import type { PromisAssessmentSummary, PromisDomainCard } from '@/types/database.types';
+import { interpretMeanTScoreSeverity, getMeanTScoreColor } from '@/lib/utils/promis-assessment';
 
-interface PatientSpecificProfileProps {
-  summary: MsqAssessmentSummary;
-  allDomains: MsqDomainCard[];
-  topDomains: MsqDomainCard[];
+interface PromisProfileProps {
+  summary: PromisAssessmentSummary;
+  domains: PromisDomainCard[];
 }
 
 /**
- * Patient-Specific Profile Component
+ * PROMIS-29 Profile Component
  * 
- * Displays patient-specific MSQ summary at the top of the assessment
+ * Displays summary card at the top of PROMIS assessment with:
+ * - Current mean T-score and severity
+ * - Overall trend
+ * - Worsening/improving domain counts
+ * - Assessment period
  */
-export default function PatientSpecificProfile({
-  summary,
-  allDomains,
-  topDomains,
-}: PatientSpecificProfileProps) {
-  const totalScore = summary.total_msq_score;
-  const scoreRanges = [
-    {
-      range: '0-10',
-      level: 'Optimal',
-      description: 'Minimal to no symptoms',
-      color: '#10b981',
-    },
-    {
-      range: '11-30',
-      level: 'Mild',
-      description: 'Occasional symptoms, lifestyle manageable',
-      color: '#84cc16',
-    },
-    {
-      range: '31-60',
-      level: 'Moderate',
-      description: 'Multiple symptoms, needs attention',
-      color: '#f59e0b',
-    },
-    {
-      range: '61-100',
-      level: 'Severe',
-      description: 'Significant burden, intervention needed',
-      color: '#ef4444',
-    },
-    {
-      range: '101+',
-      level: 'Very Severe',
-      description: 'Critical, urgent intervention required',
-      color: '#991b1b',
-    },
-  ];
+export default function PromisProfile({ summary, domains }: PromisProfileProps) {
+  const meanTScore = summary.current_mean_t_score;
+  const severityLabel = interpretMeanTScoreSeverity(meanTScore);
+  const severityColor = getMeanTScoreColor(meanTScore);
 
-  const currentLevel = scoreRanges.find((range) => {
-    const [min, max] = range.range.includes('+')
-      ? [101, 999]
-      : range.range.split('-').map(Number);
-    return totalScore >= (min ?? 0) && totalScore <= (max ?? 999);
-  });
-
-  // Get worsening domains from ALL domains
-  const worseningDomains = allDomains.filter(d => d.trend === 'worsening');
-  const worseningCount = worseningDomains.length;
-
-  // Get improving domains from ALL domains
-  const improvingDomains = allDomains.filter(d => d.trend === 'improving');
-  const improvingCount = improvingDomains.length;
+  // Filter domains by trend
+  const worseningDomains = domains.filter(d => d.trend === 'worsening');
+  const improvingDomains = domains.filter(d => d.trend === 'improving');
 
   // Format assessment period
   const assessmentPeriod = formatAssessmentPeriod(
@@ -93,10 +50,11 @@ export default function PatientSpecificProfile({
     summary.assessment_dates.length
   );
 
+  // Get trend icon and color
+  const trendConfig = getTrendConfig(summary.total_score_trend, summary.overall_trend_description);
+
   // Get lighter shade of the severity color for background
-  const backgroundColor = currentLevel?.color 
-    ? `${currentLevel.color}15` // Add 15 for ~8% opacity
-    : '#f3f4f615';
+  const backgroundColor = `${severityColor}15`; // Add 15 for ~8% opacity
 
   return (
     <Box sx={{ mb: 4 }}>
@@ -104,12 +62,13 @@ export default function PatientSpecificProfile({
         variant="outlined"
         sx={{
           borderLeft: 4,
-          borderLeftColor: currentLevel?.color || '#6b7280',
+          borderLeftColor: severityColor,
           backgroundColor: backgroundColor,
         }}
       >
         <CardContent>
           <Grid container spacing={2}>
+            {/* Current Mean T-Score */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <AssessmentIcon sx={{ fontSize: 20, color: 'primary.main' }} />
@@ -117,31 +76,31 @@ export default function PatientSpecificProfile({
                   Current Score
                 </Typography>
               </Box>
-              <Tooltip 
+              <Tooltip
                 title={
                   <Box sx={{ p: 1.5, maxWidth: 300 }}>
-                    <Typography 
-                      variant="subtitle2" 
-                      sx={{ 
-                        mb: 1, 
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        mb: 1,
                         fontWeight: 600,
                         color: 'text.primary',
                       }}
                     >
-                      Total MSQ Score History:
+                      Mean T-Score History:
                     </Typography>
                     {summary.assessment_dates.map((date, index) => (
                       <Typography
                         key={index}
                         variant="body2"
-                        sx={{ 
+                        sx={{
                           mb: 0.5,
                           fontSize: '0.8rem',
                           lineHeight: 1.3,
                           color: 'text.primary',
                         }}
                       >
-                        {new Date(date).toLocaleDateString()}: {summary.all_total_scores[index]}
+                        {new Date(date).toLocaleDateString()}: {summary.all_mean_t_scores[index]?.toFixed(1) || 'N/A'}
                       </Typography>
                     ))}
                   </Box>
@@ -155,9 +114,9 @@ export default function PatientSpecificProfile({
                     sx: {
                       bgcolor: 'background.paper',
                       color: 'text.primary',
+                      boxShadow: 3,
                       border: 1,
                       borderColor: 'divider',
-                      boxShadow: 3,
                       '& .MuiTooltip-arrow': {
                         color: 'background.paper',
                         '&::before': {
@@ -169,10 +128,10 @@ export default function PatientSpecificProfile({
                   },
                 }}
               >
-                <Box 
-                  sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 1,
                     cursor: 'pointer',
                     mb: 0.5,
@@ -181,68 +140,64 @@ export default function PatientSpecificProfile({
                     }
                   }}
                 >
-                  <Typography 
-                    variant="h6" 
+                  <Typography
+                    variant="h6"
                     fontWeight="bold"
                     className="score-text"
                   >
-                    {totalScore}
+                    {meanTScore.toFixed(1)}
                   </Typography>
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      color: currentLevel?.color || 'text.secondary',
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: severityColor,
                       fontWeight: 'medium',
                     }}
                   >
-                    ({currentLevel?.level || 'Unknown'})
+                    ({severityLabel})
                   </Typography>
                 </Box>
               </Tooltip>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <InfoIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
                 <Typography variant="caption" color="textSecondary">
-                  Latest total MSQ score
+                  Latest mean T-score
                 </Typography>
               </Box>
             </Grid>
+
+            {/* Trend */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                {getTrendIcon(summary.total_score_trend)}
+                {trendConfig.icon}
                 <Typography variant="body2" color="textSecondary" fontWeight="medium">
                   Trend
                 </Typography>
               </Box>
-              <Tooltip 
+              <Tooltip
                 title={
                   <Box sx={{ p: 1.5, maxWidth: 350 }}>
-                    {summary.all_total_scores.length >= 2 ? (
+                    {summary.assessment_dates.length >= 2 ? (
                       <>
-                        <Typography
-                          variant="body2"
-                          sx={{ 
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            color: 'text.primary',
-                            mb: 1,
-                          }}
-                        >
-                          Change: {getClinicalChange(summary.all_total_scores[0]!, summary.all_total_scores[summary.all_total_scores.length - 1]!)}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ 
-                            fontSize: '0.8rem',
-                            color: 'text.primary',
-                          }}
-                        >
-                          {getClinicalInterpretation(summary.all_total_scores[0]!, summary.all_total_scores[summary.all_total_scores.length - 1]!)}
-                        </Typography>
+                        {trendConfig.description.split('\n').map((line, index) => (
+                          <Typography
+                            key={index}
+                            variant="body2"
+                            sx={{
+                              fontSize: index === 0 ? '0.85rem' : '0.8rem',
+                              fontWeight: index === 0 ? 600 : 400,
+                              color: 'text.primary',
+                              mb: index === 0 ? 1 : 0,
+                            }}
+                          >
+                            {line}
+                          </Typography>
+                        ))}
                       </>
                     ) : (
                       <Typography
                         variant="body2"
-                        sx={{ 
+                        sx={{
                           fontSize: '0.8rem',
                           color: 'text.secondary',
                         }}
@@ -275,10 +230,10 @@ export default function PatientSpecificProfile({
                   },
                 }}
               >
-                <Box 
-                  sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 1,
                     cursor: 'pointer',
                     mb: 0.5,
@@ -287,22 +242,22 @@ export default function PatientSpecificProfile({
                     }
                   }}
                 >
-                  <Typography 
-                    variant="h6" 
+                  <Typography
+                    variant="h6"
                     fontWeight="bold"
                     className="trend-text"
                   >
-                    {getTrendLabel(summary.total_score_trend)}
+                    {trendConfig.label}
                   </Typography>
-                  {summary.all_total_scores.length >= 2 && (
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        color: getTrendColor(summary.total_score_trend),
+                  {summary.overall_change_magnitude !== 'N/A' && (
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: trendConfig.color,
                         fontWeight: 'medium',
                       }}
                     >
-                      ({getTrendDescription(summary.all_total_scores[0]!, summary.all_total_scores[summary.all_total_scores.length - 1]!)})
+                      ({summary.overall_change_magnitude})
                     </Typography>
                   )}
                 </Box>
@@ -314,14 +269,16 @@ export default function PatientSpecificProfile({
                 </Typography>
               </Box>
             </Grid>
+
+            {/* Worsening Domains */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <WorseningIcon sx={{ fontSize: 20, color: 'error.main' }} />
+                <TrendingDownIcon sx={{ fontSize: 20, color: 'error.main' }} />
                 <Typography variant="body2" color="textSecondary" fontWeight="medium">
                   Worsening
                 </Typography>
               </Box>
-              <Tooltip 
+              <Tooltip
                 title={
                   <Box sx={{ p: 1.5, maxWidth: 300 }}>
                     {worseningDomains.length === 0 ? (
@@ -330,10 +287,10 @@ export default function PatientSpecificProfile({
                       </Typography>
                     ) : (
                       <>
-                        <Typography 
-                          variant="subtitle2" 
-                          sx={{ 
-                            mb: 1, 
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            mb: 1,
                             fontWeight: 600,
                             color: 'text.primary',
                           }}
@@ -344,7 +301,7 @@ export default function PatientSpecificProfile({
                           <Typography
                             key={index}
                             variant="body2"
-                            sx={{ 
+                            sx={{
                               mb: 0.5,
                               fontSize: '0.8rem',
                               lineHeight: 1.3,
@@ -381,10 +338,10 @@ export default function PatientSpecificProfile({
                   },
                 }}
               >
-                <Typography 
-                  variant="h6" 
+                <Typography
+                  variant="h6"
                   fontWeight="bold"
-                  sx={{ 
+                  sx={{
                     mb: 0.5,
                     cursor: 'pointer',
                     '&:hover': {
@@ -392,24 +349,26 @@ export default function PatientSpecificProfile({
                     }
                   }}
                 >
-                  {worseningCount}
+                  {summary.worsening_domains_count}
                 </Typography>
               </Tooltip>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <InfoIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
                 <Typography variant="caption" color="textSecondary">
-                  Body systems getting worse
+                  Domains getting worse
                 </Typography>
               </Box>
             </Grid>
+
+            {/* Improving Domains */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <ImprovingIcon sx={{ fontSize: 20, color: 'success.main' }} />
+                <TrendingUpIcon sx={{ fontSize: 20, color: 'success.main' }} />
                 <Typography variant="body2" color="textSecondary" fontWeight="medium">
                   Improving
                 </Typography>
               </Box>
-              <Tooltip 
+              <Tooltip
                 title={
                   <Box sx={{ p: 1.5, maxWidth: 300 }}>
                     {improvingDomains.length === 0 ? (
@@ -418,10 +377,10 @@ export default function PatientSpecificProfile({
                       </Typography>
                     ) : (
                       <>
-                        <Typography 
-                          variant="subtitle2" 
-                          sx={{ 
-                            mb: 1, 
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            mb: 1,
                             fontWeight: 600,
                             color: 'text.primary',
                           }}
@@ -432,7 +391,7 @@ export default function PatientSpecificProfile({
                           <Typography
                             key={index}
                             variant="body2"
-                            sx={{ 
+                            sx={{
                               mb: 0.5,
                               fontSize: '0.8rem',
                               lineHeight: 1.3,
@@ -469,10 +428,10 @@ export default function PatientSpecificProfile({
                   },
                 }}
               >
-                <Typography 
-                  variant="h6" 
+                <Typography
+                  variant="h6"
                   fontWeight="bold"
-                  sx={{ 
+                  sx={{
                     mb: 0.5,
                     cursor: 'pointer',
                     '&:hover': {
@@ -480,16 +439,18 @@ export default function PatientSpecificProfile({
                     }
                   }}
                 >
-                  {improvingCount}
+                  {summary.improving_domains_count}
                 </Typography>
               </Tooltip>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <InfoIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
                 <Typography variant="caption" color="textSecondary">
-                  Body systems getting better
+                  Domains getting better
                 </Typography>
               </Box>
             </Grid>
+
+            {/* Assessment Period */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
                 <DateRangeIcon sx={{ fontSize: 20, color: 'info.main' }} />
@@ -511,10 +472,7 @@ export default function PatientSpecificProfile({
   );
 }
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
+// Helper function to format assessment period
 function formatAssessmentPeriod(
   startDate: string,
   endDate: string,
@@ -540,105 +498,42 @@ function formatAssessmentPeriod(
   return `${formatDate(start)} - ${formatDate(end)}`;
 }
 
-function getClinicalChange(firstScore: number, lastScore: number): string {
-  const change = lastScore - firstScore;
-  const percentChange = firstScore > 0 ? Math.abs((change / firstScore) * 100) : 0;
-  
-  if (change < 0) {
-    return `-${Math.abs(change)} points (${percentChange.toFixed(0)}% reduction)`;
-  } else if (change > 0) {
-    return `+${change} points (${percentChange.toFixed(0)}% increase)`;
-  }
-  return 'No change';
-}
-
-function getClinicalInterpretation(firstScore: number, lastScore: number): string {
-  const change = lastScore - firstScore;
-  const percentChange = firstScore > 0 ? (change / firstScore) * 100 : 0;
-  
-  // Improvement (negative change)
-  if (change <= -50 || percentChange <= -50) {
-    return '🎉 Major transformation - program success marker';
-  } else if (change <= -30) {
-    return '✅ Significant functional improvement';
-  } else if (change <= -10) {
-    return '📈 Measurable clinical improvement';
-  }
-  
-  // Worsening (positive change)
-  if (change >= 30) {
-    return '⚠️ Significant functional decline';
-  } else if (change >= 10) {
-    return '⚠️ Measurable clinical worsening';
-  }
-  
-  // Stable
-  return 'Stable - minimal change';
-}
-
-function getTrendIcon(trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'): React.JSX.Element {
+// Helper function to get trend configuration
+function getTrendConfig(trend: string, trendDescription: string): {
+  icon: React.ReactElement;
+  label: string;
+  description: string;
+  color: string;
+} {
   switch (trend) {
     case 'improving':
-      return <TrendingUpIcon sx={{ fontSize: 20, color: 'success.main' }} />;
+      return {
+        icon: <TrendingUpIcon sx={{ fontSize: 20, color: 'success.main' }} />,
+        label: 'Improving',
+        description: trendDescription || 'Overall health improving',
+        color: '#10b981',
+      };
     case 'worsening':
-      return <WorseningIcon sx={{ fontSize: 20, color: 'error.main' }} />;
-    case 'fluctuating':
-      return <FluctuatingIcon sx={{ fontSize: 20, color: 'warning.main' }} />;
+      return {
+        icon: <TrendingDownIcon sx={{ fontSize: 20, color: 'error.main' }} />,
+        label: 'Worsening',
+        description: trendDescription || 'Overall health declining',
+        color: '#ef4444',
+      };
     case 'stable':
+      return {
+        icon: <TrendingFlatIcon sx={{ fontSize: 20, color: 'info.main' }} />,
+        label: 'Stable',
+        description: trendDescription || 'No clinically meaningful change',
+        color: '#3b82f6',
+      };
     default:
-      return <TrendingFlatIcon sx={{ fontSize: 20, color: 'info.main' }} />;
+      return {
+        icon: <TrendingFlatIcon sx={{ fontSize: 20, color: 'info.main' }} />,
+        label: 'Stable',
+        description: 'No significant change',
+        color: '#06b6d4',
+      };
   }
-}
-
-function getTrendLabel(trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'): string {
-  switch (trend) {
-    case 'improving':
-      return 'Improving';
-    case 'worsening':
-      return 'Worsening';
-    case 'fluctuating':
-      return 'Fluctuating';
-    case 'stable':
-    default:
-      return 'Stable';
-  }
-}
-
-function getTrendColor(trend: 'improving' | 'worsening' | 'stable' | 'fluctuating'): string {
-  switch (trend) {
-    case 'improving':
-      return '#10b981'; // success.main
-    case 'worsening':
-      return '#ef4444'; // error.main
-    case 'fluctuating':
-      return '#f59e0b'; // warning.main
-    case 'stable':
-    default:
-      return '#3b82f6'; // info.main
-  }
-}
-
-function getTrendDescription(firstScore: number, lastScore: number): string {
-  const change = lastScore - firstScore;
-  const percentChange = firstScore > 0 ? (change / firstScore) * 100 : 0;
-  
-  // Improvement (negative change)
-  if (change <= -50 || percentChange <= -50) {
-    return 'Major transformation';
-  } else if (change <= -30) {
-    return 'Significant improvement';
-  } else if (change <= -10) {
-    return 'Measurable improvement';
-  }
-  
-  // Worsening (positive change)
-  if (change >= 30) {
-    return 'Significant decline';
-  } else if (change >= 10) {
-    return 'Measurable worsening';
-  }
-  
-  // Stable
-  return 'Minimal change';
 }
 

@@ -86,7 +86,7 @@ export async function GET(
     const assessmentDates = sessions.map(s => s.completed_on);
     const sessionIds = sessions.map(s => s.session_id);
 
-    // Step 3: Get domain scores from survey_domain_scores table (pre-calculated)
+    // Step 3: Get domain scores from survey_domain_scores table (pre-calculated, MSQ only)
     const { data: domainScores, error: domainScoresError } = await supabase
       .from('survey_domain_scores')
       .select(`
@@ -94,8 +94,10 @@ export async function GET(
         session_id,
         domain_key,
         domain_total_score,
-        severity_assessment
+        severity_assessment,
+        survey_domains!inner(survey_code)
       `)
+      .eq('survey_domains.survey_code', 'MSQ')
       .in('session_id', sessionIds);
 
     if (domainScoresError) {
@@ -110,10 +112,11 @@ export async function GET(
       console.warn('No domain scores found for sessions:', sessionIds);
     }
 
-    // Step 4: Get all domain definitions from database
+    // Step 4: Get all domain definitions from database (MSQ only)
     const { data: domains, error: domainsError } = await supabase
       .from('survey_domains')
       .select('domain_key, domain_label')
+      .eq('survey_code', 'MSQ')
       .order('domain_key');
 
     if (domainsError || !domains) {
@@ -143,11 +146,12 @@ export async function GET(
       );
     }
 
-    // Step 5b: Get question-domain mappings
+    // Step 5b: Get question-domain mappings (MSQ only)
     const questionIds = [...new Set(responses.map(r => r.question_id))];
     const { data: questionDomainMappings, error: mappingError } = await supabase
       .from('survey_form_question_domain')
-      .select('question_id, domain_key')
+      .select('question_id, domain_key, survey_domains!inner(survey_code)')
+      .eq('survey_domains.survey_code', 'MSQ')
       .in('question_id', questionIds);
 
     if (mappingError) {
