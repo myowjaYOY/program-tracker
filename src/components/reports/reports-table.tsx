@@ -393,6 +393,7 @@ export default function ReportsTable() {
             onEdit={handleEdit}
             showCreateButton={false}
             showActionsColumn={false}
+            persistStateKey="campaignReportsGrid"
           />
         </CardContent>
       </Card>

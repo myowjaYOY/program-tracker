@@ -117,6 +117,7 @@ export default function PaymentStatusTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderPaymentStatusForm}
+      persistStateKey="paymentStatusGrid"
       createButtonText="Add Payment Status"
       editButtonText="Edit Payment Status"
       deleteButtonText="Delete Payment Status"

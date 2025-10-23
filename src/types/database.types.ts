@@ -428,6 +428,7 @@ export interface Therapies {
   charge: number | null;
   therapy_type_id: number | null;
   bucket_id: number | null;
+  program_role_id: number;
   active_flag: boolean;
   taxable: boolean;
   created_at: string | null;
@@ -436,9 +437,13 @@ export interface Therapies {
   updated_by: string | null;
   // API-mapped fields
   created_by_email?: string | null;
+  created_by_full_name?: string | null;
   updated_by_email?: string | null;
+  updated_by_full_name?: string | null;
   therapy_type_name?: string | null;
   bucket_name?: string | null;
+  role_name?: string | null;
+  role_display_color?: string | null;
 }
 
 export interface TherapiesBodiesPillars {
@@ -463,6 +468,7 @@ export interface TherapyTasks {
   task_name: string;
   description: string | null;
   task_delay: number;
+  program_role_id: number;
   active_flag: boolean;
   created_at: string | null;
   created_by: string | null;
@@ -474,6 +480,8 @@ export interface TherapyTasks {
   updated_by_email?: string | null;
   updated_by_full_name?: string | null;
   therapy_name?: string | null;
+  role_name?: string | null;
+  role_display_color?: string | null;
 }
 
 export interface TherapyType {

@@ -5,6 +5,7 @@ export const therapySchema = z.object({
   description: z.string().optional().or(z.literal('')),
   therapy_type_id: z.number().min(1, 'Therapy type is required'),
   bucket_id: z.number().min(1, 'Bucket is required'),
+  program_role_id: z.number().min(1, 'Responsible role is required'),
   cost: z.number().min(0, 'Cost must be a positive number'),
   charge: z.number().min(0, 'Charge must be a positive number'),
   active_flag: z.boolean(),

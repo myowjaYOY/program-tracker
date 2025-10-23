@@ -151,6 +151,7 @@ export default function CampaignTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderCampaignForm}
+      persistStateKey="campaignsGrid"
       createButtonText="Add Campaign"
       editButtonText="Edit Campaign"
       deleteButtonText="Delete Campaign"

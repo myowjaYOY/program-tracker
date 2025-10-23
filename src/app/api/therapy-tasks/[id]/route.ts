@@ -16,13 +16,29 @@ export async function GET(
   }
   const { data, error } = await supabase
     .from('therapy_tasks')
-    .select('*')
+    .select(`*,
+      created_user:users!therapy_tasks_created_by_fkey(id,email,full_name),
+      updated_user:users!therapy_tasks_updated_by_fkey(id,email,full_name),
+      therapy:therapies!fk_therapy(therapy_id,therapy_name,therapy_type_id),
+      program_role:program_roles(program_role_id,role_name,display_color)
+    `)
     .eq('task_id', params.id)
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ data }, { status: 200 });
+  const mapped = {
+    ...data,
+    created_by_email: data.created_user?.email || null,
+    created_by_full_name: data.created_user?.full_name || null,
+    updated_by_email: data.updated_user?.email || null,
+    updated_by_full_name: data.updated_user?.full_name || null,
+    therapy_name: data.therapy?.therapy_name || null,
+    therapy_type_id: data.therapy?.therapy_type_id || null,
+    role_name: data.program_role?.role_name || null,
+    role_display_color: data.program_role?.display_color || null,
+  };
+  return NextResponse.json({ data: mapped }, { status: 200 });
 }
 
 export async function PUT(

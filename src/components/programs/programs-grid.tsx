@@ -263,6 +263,7 @@ export default function ProgramsGrid({
       onDelete={handleDelete}
       onRowClick={handleRowClick}
       renderForm={renderProgramForm}
+      persistStateKey="programsGrid"
       createButtonText="Add Program"
       editButtonText="Edit Program"
       deleteButtonText="Delete Program"

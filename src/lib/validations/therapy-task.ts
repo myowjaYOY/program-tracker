@@ -13,6 +13,7 @@ export const therapyTaskFormSchema = z.object({
   task_name: z.string().min(1, 'Task name is required'),
   description: z.string().optional(),
   task_delay: z.number().int('Task delay must be an integer'),
+  program_role_id: z.number().min(1, 'Responsible role is required'),
   active_flag: z.boolean().default(true),
 });
 
@@ -25,6 +26,7 @@ export const therapyTaskSchema = z.object({
   task_name: z.string().min(1, 'Task name is required'),
   description: z.string().optional(),
   task_delay: z.number().int('Task delay must be an integer'),
+  program_role_id: z.number().min(1, 'Responsible role is required'),
   active_flag: z.boolean().default(true),
 });
 

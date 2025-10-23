@@ -117,6 +117,7 @@ export default function PaymentMethodsTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderPaymentMethodsForm}
+      persistStateKey="paymentMethodsGrid"
       createButtonText="Add Payment Method"
       editButtonText="Edit Payment Method"
       deleteButtonText="Delete Payment Method"

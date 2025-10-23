@@ -105,6 +105,7 @@ export default function StatusTable() {
         onEdit={handleEdit}
         onDelete={handleDelete}
         renderForm={renderStatusForm}
+        persistStateKey="leadStatusGrid"
         createButtonText="Add Lead Status"
         editButtonText="Edit Lead Status"
         deleteButtonText="Delete Lead Status"

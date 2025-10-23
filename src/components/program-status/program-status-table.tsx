@@ -113,6 +113,7 @@ export default function ProgramStatusTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderProgramStatusForm}
+      persistStateKey="programStatusGrid"
       createButtonText="Add Program Status"
       editButtonText="Edit Program Status"
       deleteButtonText="Delete Program Status"

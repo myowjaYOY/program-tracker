@@ -99,6 +99,7 @@ export default function BodyTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderBodyForm}
+      persistStateKey="bodiesGrid"
       createButtonText="Add Body"
       editButtonText="Edit Body"
       deleteButtonText="Delete Body"

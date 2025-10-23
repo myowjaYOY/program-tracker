@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -23,7 +23,9 @@ import {
   GridRenderCellParams,
   GridFooterContainer,
   GridFooter,
+  useGridApiRef,
 } from '@mui/x-data-grid-pro';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Custom aggregation model type (not from MUI - we calculate manually)
 type AggregationModel = Record<string, 'sum' | 'avg' | 'min' | 'max' | 'size'>;
@@ -226,6 +228,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   aggregationModel?: AggregationModel;
   showAggregationFooter?: boolean;
   aggregationLabel?: string;
+  // State persistence (optional)
+  persistStateKey?: string;
 }
 
 export default function BaseDataTable<T extends BaseEntity>({
@@ -260,8 +264,20 @@ export default function BaseDataTable<T extends BaseEntity>({
   aggregationModel,
   showAggregationFooter = false,
   aggregationLabel,
+  persistStateKey,
 }: BaseDataTableProps<T>) {
   
+  // Get user for per-user state persistence
+  const { user } = useAuth();
+  
+  // Create API reference for state persistence
+  const apiRef = useGridApiRef();
+  
+  // Debounce timer ref for state saving
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track if we've restored state yet (only restore once)
+  const hasRestoredStateRef = useRef(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
@@ -269,6 +285,71 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [expandedRow, setExpandedRow] = useState<GridRowId | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
+
+  // Save grid state with debouncing (per-user)
+  const handleStateChange = useCallback(() => {
+    if (!persistStateKey || !apiRef.current || !user?.id) return;
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce: wait 500ms after last change before saving
+    saveTimeoutRef.current = setTimeout(() => {
+      if (!apiRef.current) return;
+      
+      const storageKey = `${persistStateKey}_${user.id}`;
+      try {
+        const currentState = apiRef.current.exportState();
+        // Only persist specific parts of state (exclude transient state)
+        const stateToPersist = {
+          columns: currentState.columns,
+          sorting: currentState.sorting,
+          filter: currentState.filter,
+          pagination: currentState.pagination,
+          density: currentState.density,
+          pinnedColumns: currentState.pinnedColumns,
+        };
+        localStorage.setItem(storageKey, JSON.stringify(stateToPersist));
+      } catch (error) {
+        console.error(`Failed to save grid state for ${persistStateKey}:`, error);
+      }
+    }, 500);
+  }, [persistStateKey, user?.id, apiRef]);
+
+  // Restore saved state once user and apiRef are available
+  useEffect(() => {
+    if (hasRestoredStateRef.current) return; // Already restored
+    if (!persistStateKey || !user?.id || !apiRef.current) return;
+
+    const storageKey = `${persistStateKey}_${user.id}`;
+    
+    try {
+      const savedState = localStorage.getItem(storageKey);
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        // Use restoreState method
+        apiRef.current.restoreState(parsedState);
+        hasRestoredStateRef.current = true;
+      } else {
+        hasRestoredStateRef.current = true; // Don't try again
+      }
+    } catch (error) {
+      console.error(`Failed to restore grid state for ${persistStateKey}:`, error);
+      localStorage.removeItem(storageKey);
+      hasRestoredStateRef.current = true; // Don't try again
+    }
+  }, [persistStateKey, user?.id, apiRef]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Actions column
   const actionsColumn: GridColDef = useMemo(
@@ -445,6 +526,7 @@ export default function BaseDataTable<T extends BaseEntity>({
         }}
       >
         <DataGridPro
+          apiRef={apiRef}
           rows={data}
           columns={allColumns}
           loading={loading}
@@ -461,6 +543,7 @@ export default function BaseDataTable<T extends BaseEntity>({
           }}
           {...(sortModel && { initialSortModel: sortModel })}
           pageSizeOptions={pageSizeOptions}
+          {...(persistStateKey && { onStateChange: handleStateChange })}
           {...(onRowClick && {
             onRowClick: (params: any) => onRowClick(params.row),
           })}

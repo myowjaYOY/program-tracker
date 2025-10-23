@@ -44,6 +44,27 @@ const therapyColumns: GridColDef[] = [
     flex: 1,
   },
   {
+    field: 'role_name',
+    headerName: 'Responsible',
+    width: 150,
+    flex: 1,
+    renderCell: (params: any) => {
+      const roleName = params.value || 'Admin';
+      const roleColor = params.row.role_display_color || '#808080';
+      return (
+        <Chip
+          label={roleName}
+          size="small"
+          sx={{
+            backgroundColor: roleColor,
+            color: '#fff',
+            fontWeight: 500,
+          }}
+        />
+      );
+    },
+  },
+  {
     field: 'cost',
     headerName: 'Cost',
     width: 120,
@@ -91,10 +112,8 @@ const therapyColumns: GridColDef[] = [
     ),
   },
   commonColumns.activeFlag,
-  commonColumns.createdAt,
-  commonColumns.createdBy,
-  commonColumns.updatedAt,
   commonColumns.updatedBy,
+  commonColumns.updatedAt,
 ];
 
 export default function TherapyTable() {
@@ -128,6 +147,7 @@ export default function TherapyTable() {
             description: initialValues.description || '',
             therapy_type_id: initialValues.therapy_type_id || 0,
             bucket_id: initialValues.bucket_id || 0,
+            program_role_id: initialValues.program_role_id || 2,
             cost: initialValues.cost || 0,
             charge: initialValues.charge || 0,
             active_flag: initialValues.active_flag ?? true,
@@ -141,6 +161,7 @@ export default function TherapyTable() {
             description: '',
             therapy_type_id: 0,
             bucket_id: 0,
+            program_role_id: 2,
             cost: 0,
             charge: 0,
             active_flag: true,
@@ -155,10 +176,8 @@ export default function TherapyTable() {
     (therapy: any) => ({
       ...therapy,
       id: therapy.therapy_id,
-      created_at: therapy.created_at || new Date().toISOString(),
       updated_at: therapy.updated_at || new Date().toISOString(),
-      created_by: therapy.created_by_email || '-',
-      updated_by: therapy.updated_by_email || '-',
+      updated_by: therapy.updated_by_full_name || therapy.updated_by_email || '-',
     })
   );
 
@@ -178,6 +197,7 @@ export default function TherapyTable() {
       onDelete={handleDelete}
       renderForm={renderTherapyForm}
       renderDetailPanel={renderDetailPanel}
+      persistStateKey="therapiesGrid"
       getDetailPanelHeight={() => 250}
       createButtonText="Add Therapy"
       editButtonText="Edit Therapy"

@@ -9,6 +9,7 @@ import BaseForm from './base-form';
 import { useCreateTherapy, useUpdateTherapy } from '@/lib/hooks/use-therapies';
 import { useActiveTherapyTypes } from '@/lib/hooks/use-therapy-type';
 import { useActiveBuckets } from '@/lib/hooks/use-buckets';
+import { useActiveProgramRoles } from '@/lib/hooks/use-program-roles';
 
 interface TherapyFormProps {
   initialValues?: Partial<TherapyFormData> & { therapy_id?: number };
@@ -25,6 +26,7 @@ export default function TherapyForm({
   const { data: therapyTypes = [], isLoading: therapyTypesLoading } =
     useActiveTherapyTypes();
   const { data: buckets = [], isLoading: bucketsLoading } = useActiveBuckets();
+  const { data: programRoles = [], isLoading: programRolesLoading } = useActiveProgramRoles();
 
   const {
     register,
@@ -40,6 +42,7 @@ export default function TherapyForm({
       description: initialValues?.description || '',
       therapy_type_id: initialValues?.therapy_type_id || 0,
       bucket_id: initialValues?.bucket_id || 0,
+      program_role_id: initialValues?.program_role_id || 2,
       cost: initialValues?.cost || 0,
       charge: initialValues?.charge || 0,
       active_flag: initialValues?.active_flag ?? true,
@@ -50,8 +53,15 @@ export default function TherapyForm({
   const createTherapy = useCreateTherapy();
   const updateTherapy = useUpdateTherapy();
 
+  // Ensure program_role_id is set when editing
+  useEffect(() => {
+    if (isEdit && initialValues?.program_role_id) {
+      setValue('program_role_id', initialValues.program_role_id);
+    }
+  }, [isEdit, initialValues?.program_role_id, setValue]);
+
   // Show loading state while data is being fetched
-  if (therapyTypesLoading || bucketsLoading) {
+  if (therapyTypesLoading || bucketsLoading || programRolesLoading) {
     return (
       <BaseForm<TherapyFormData>
         onSubmit={() => {}}
@@ -145,6 +155,32 @@ export default function TherapyForm({
                 {bucket.bucket_name}
               </MenuItem>
             ))}
+          </TextField>
+        )}
+      />
+      <Controller
+        name="program_role_id"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            label="Responsible Role"
+            fullWidth
+            select
+            required
+            {...field}
+            onChange={(e) => field.onChange(Number(e.target.value))}
+            value={field.value || 2}
+            error={!!errors.program_role_id}
+            helperText={errors.program_role_id?.message}
+          >
+            {programRoles
+              .slice()
+              .sort((a: any, b: any) => a.role_name.localeCompare(b.role_name))
+              .map((role: any) => (
+                <MenuItem key={role.program_role_id} value={role.program_role_id}>
+                  {role.role_name}
+                </MenuItem>
+              ))}
           </TextField>
         )}
       />

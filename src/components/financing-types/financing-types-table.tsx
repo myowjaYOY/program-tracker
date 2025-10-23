@@ -123,6 +123,7 @@ export default function FinancingTypesTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderFinancingTypesForm}
+      persistStateKey="financingTypesGrid"
       createButtonText="Add Financing Type"
       editButtonText="Edit Financing Type"
       deleteButtonText="Delete Financing Type"

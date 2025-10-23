@@ -90,11 +90,30 @@ const therapyTaskColumns: GridColDef[] = [
       />
     ),
   },
+  {
+    field: 'role_name',
+    headerName: 'Responsible',
+    width: 150,
+    flex: 1,
+    renderCell: (params: any) => {
+      const roleName = params.value || 'Admin';
+      const roleColor = params.row.role_display_color || '#808080';
+      return (
+        <Chip
+          label={roleName}
+          size="small"
+          sx={{
+            backgroundColor: roleColor,
+            color: '#fff',
+            fontWeight: 500,
+          }}
+        />
+      );
+    },
+  },
   commonColumns.activeFlag,
-  commonColumns.createdAt,
-  commonColumns.createdBy,
-  commonColumns.updatedAt,
   commonColumns.updatedBy,
+  commonColumns.updatedAt,
 ];
 
 export default function TherapyTaskTable() {
@@ -133,6 +152,7 @@ export default function TherapyTaskTable() {
             task_name: initialValues.task_name || '',
             description: initialValues.description || '',
             task_delay: initialValues.task_delay || 0,
+            program_role_id: initialValues.program_role_id || 2,
             active_flag: initialValues.active_flag ?? true,
             ...(initialValues.task_id && {
               task_id: initialValues.task_id,
@@ -154,10 +174,8 @@ export default function TherapyTaskTable() {
     (task: any) => ({
       ...task,
       id: task.task_id,
-      created_at: task.created_at || new Date().toISOString(),
       updated_at: task.updated_at || new Date().toISOString(),
-      created_by: task.created_by_email || '-',
-      updated_by: task.updated_by_email || '-',
+      updated_by: task.updated_by_full_name || task.updated_by_email || '-',
     })
   );
 
@@ -172,6 +190,7 @@ export default function TherapyTaskTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderTherapyTaskForm}
+      persistStateKey="therapyTasksGrid"
       createButtonText="Add Therapy Task"
       editButtonText="Edit Therapy Task"
       deleteButtonText="Delete Therapy Task"

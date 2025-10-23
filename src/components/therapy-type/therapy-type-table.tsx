@@ -118,6 +118,7 @@ export default function TherapyTypeTable() {
         onEdit={handleEdit}
         onDelete={handleDelete}
         renderForm={renderTherapyTypeForm}
+        persistStateKey="therapyTypesGrid"
         createButtonText="Add Therapy Type"
         editButtonText="Edit Therapy Type"
         deleteButtonText="Delete Therapy Type"

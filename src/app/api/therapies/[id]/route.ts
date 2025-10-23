@@ -25,7 +25,8 @@ export async function GET(
       created_user:users!therapies_created_by_fkey(id,email,full_name),
       updated_user:users!therapies_updated_by_fkey(id,email,full_name),
       therapy_type:therapytype(therapy_type_id,therapy_type_name),
-      bucket:buckets(bucket_id,bucket_name)
+      bucket:buckets(bucket_id,bucket_name),
+      program_role:program_roles(program_role_id,role_name,display_color)
     `
     )
     .eq('therapy_id', id)
@@ -36,9 +37,13 @@ export async function GET(
   const mapped = {
     ...data,
     created_by_email: data.created_user?.email || null,
+    created_by_full_name: data.created_user?.full_name || null,
     updated_by_email: data.updated_user?.email || null,
+    updated_by_full_name: data.updated_user?.full_name || null,
     therapy_type_name: data.therapy_type?.therapy_type_name || null,
     bucket_name: data.bucket?.bucket_name || null,
+    role_name: data.program_role?.role_name || null,
+    role_display_color: data.program_role?.display_color || null,
   };
   return NextResponse.json({ data: mapped }, { status: 200 });
 }

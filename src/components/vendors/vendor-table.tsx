@@ -123,6 +123,7 @@ export default function VendorTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderVendorForm}
+      persistStateKey="vendorsGrid"
       createButtonText="Add Vendor"
       editButtonText="Edit Vendor"
       deleteButtonText="Delete Vendor"

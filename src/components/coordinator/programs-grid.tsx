@@ -111,6 +111,7 @@ export default function CoordinatorProgramsGrid({
       getRowId={row => row.member_program_id}
       onRowClick={handleRowClick}
       showActionsColumn={false}
+      persistStateKey="coordinatorProgramsGrid"
       pageSize={5}
       pageSizeOptions={[5, 10, 25, 50]}
       autoHeight={true}

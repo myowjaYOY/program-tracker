@@ -102,6 +102,7 @@ export default function PillarTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderPillarForm}
+      persistStateKey="pillarsGrid"
       createButtonText="Add Pillar"
       editButtonText="Edit Pillar"
       deleteButtonText="Delete Pillar"

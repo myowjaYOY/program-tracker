@@ -144,6 +144,7 @@ export default function ProgramRoleTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderProgramRoleForm}
+      persistStateKey="programRolesGrid"
       createButtonText="Add Role"
       editButtonText="Edit Role"
       deleteButtonText="Delete Role"

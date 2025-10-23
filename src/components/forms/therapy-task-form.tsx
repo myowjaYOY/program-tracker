@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -22,6 +22,7 @@ import {
 } from '@/lib/hooks/use-therapy-tasks';
 import { useActiveTherapies } from '@/lib/hooks/use-therapies';
 import { useActiveTherapyTypes } from '@/lib/hooks/use-therapy-types';
+import { useActiveProgramRoles } from '@/lib/hooks/use-program-roles';
 
 interface TherapyTaskFormProps {
   initialValues?: Partial<TherapyTaskFormData> & { task_id?: number };
@@ -39,6 +40,8 @@ export default function TherapyTaskForm({
     useActiveTherapyTypes();
   const { data: allTherapies = [], isLoading: therapiesLoading } =
     useActiveTherapies();
+  const { data: programRoles = [], isLoading: programRolesLoading } =
+    useActiveProgramRoles();
 
   const {
     register,
@@ -55,6 +58,7 @@ export default function TherapyTaskForm({
       task_name: initialValues?.task_name || '',
       description: initialValues?.description || '',
       task_delay: initialValues?.task_delay || 0,
+      program_role_id: initialValues?.program_role_id || 2,
       active_flag: initialValues?.active_flag ?? true,
     },
   });
@@ -79,8 +83,15 @@ export default function TherapyTaskForm({
     }
   };
 
+  // Ensure program_role_id is set when editing
+  useEffect(() => {
+    if (isEdit && initialValues?.program_role_id) {
+      setValue('program_role_id', initialValues.program_role_id);
+    }
+  }, [isEdit, initialValues?.program_role_id, setValue]);
+
   // Show loading state while data is being fetched
-  if (therapiesLoading || therapyTypesLoading) {
+  if (therapiesLoading || therapyTypesLoading || programRolesLoading) {
     return (
       <BaseForm<TherapyTaskFormData>
         onSubmit={() => {}}
@@ -239,6 +250,34 @@ export default function TherapyTaskForm({
         }
         inputProps={{ min: -365, max: 365 }}
         disabled={!selectedTherapyId}
+      />
+
+      <Controller
+        name="program_role_id"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            label="Responsible Role"
+            fullWidth
+            select
+            required
+            {...field}
+            onChange={(e) => field.onChange(Number(e.target.value))}
+            value={field.value || 2}
+            error={!!errors.program_role_id}
+            helperText={errors.program_role_id?.message}
+            disabled={!selectedTherapyId}
+          >
+            {programRoles
+              .slice()
+              .sort((a: any, b: any) => a.role_name.localeCompare(b.role_name))
+              .map((role: any) => (
+                <MenuItem key={role.program_role_id} value={role.program_role_id}>
+                  {role.role_name}
+                </MenuItem>
+              ))}
+          </TextField>
+        )}
       />
 
       <FormControlLabel

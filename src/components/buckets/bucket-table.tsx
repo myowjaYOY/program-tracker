@@ -108,6 +108,7 @@ export default function BucketTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderBucketForm}
+      persistStateKey="bucketsGrid"
       createButtonText="Add Bucket"
       editButtonText="Edit Bucket"
       deleteButtonText="Delete Bucket"

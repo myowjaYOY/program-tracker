@@ -79,7 +79,8 @@ export default function PaymentsPage() {
         uniq.push(pr);
       }
     }
-    return uniq;
+    // Sort alphabetically by name
+    return uniq.sort((a, b) => a.name.localeCompare(b.name));
   }, [allPrograms]);
 
   const rows: PaymentRow[] = (payments || []).map((p: any) => ({

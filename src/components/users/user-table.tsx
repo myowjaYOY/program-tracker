@@ -192,6 +192,7 @@ export default function UserTable({
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderUserForm}
+      persistStateKey="usersGrid"
       createButtonText="Add User"
       editButtonText="Edit User"
       deleteButtonText="Delete User"

@@ -110,6 +110,7 @@ export default function RashaListTable() {
       onEdit={handleEdit}
       onDelete={handleDelete}
       renderForm={renderRashaListForm}
+      persistStateKey="rashaListGrid"
       createButtonText="Add RASHA Item"
       editButtonText="Edit RASHA Item"
       deleteButtonText="Delete RASHA Item"
