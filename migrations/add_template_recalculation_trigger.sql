@@ -293,3 +293,5 @@ SELECT tgname FROM pg_trigger WHERE tgname = 'tr_recalculate_templates_on_therap
 -- END OF MIGRATION
 -- ========================================================================================================
 
+
+

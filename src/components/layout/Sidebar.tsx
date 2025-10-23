@@ -47,6 +47,7 @@ import {
   ShoppingCart as OrderItemsIcon,
   Assessment as InventoryForecastIcon,
   List as ListIcon,
+  Badge as ProgramRolesIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -161,6 +162,11 @@ const adminNav = [
         path: '/dashboard/payment-status',
       },
       { label: 'Pillars', icon: <PillarsIcon />, path: '/dashboard/pillars' },
+      {
+        label: 'Program Roles',
+        icon: <ProgramRolesIcon />,
+        path: '/dashboard/program-roles',
+      },
       {
         label: 'Program Status',
         icon: <ProgramStatusIcon />,

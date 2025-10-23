@@ -307,6 +307,22 @@ export interface ProgramStatus {
   updated_by_email?: string | null;
 }
 
+export interface ProgramRoles {
+  program_role_id: number;
+  role_name: string;
+  description: string | null;
+  display_color: string;
+  display_order: number;
+  active_flag: boolean;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  // API-mapped fields
+  created_by_email?: string | null;
+  updated_by_email?: string | null;
+}
+
 export interface ProgramTemplate {
   program_template_id: number;
   program_template_name: string;

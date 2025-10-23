@@ -10,9 +10,14 @@ import {
  * Data Integrity Audit Endpoint
  * 
  * Verifies:
- * 1. Stored margin matches calculated margin
- * 2. Stored total_cost/total_charge match sum of items
- * 3. All financial calculations are consistent
+ * 1. Stored total_cost/total_charge match sum of items
+ * 2. Stored taxes match calculated taxes (with proportional discounts)
+ * 3. Stored final_total_price matches calculated price accounting for variance
+ *    Formula: calculatedPrice - variance = final_total_price
+ * 4. Stored margin matches calculated margin
+ *    - Contracted programs (any status): margin calculated on locked price
+ *    - Non-contracted programs: margin calculated on projected price
+ * 5. Contracted program variance and margins are correct (regardless of status)
  * 
  * Usage: GET /api/debug/verify-data-integrity
  * Optional query params:
@@ -189,8 +194,8 @@ export async function GET(req: NextRequest) {
       // Calculate expected margin (always available)
       let expectedMargin: number;
       
-      if (isActive && finances?.contracted_at_margin) {
-        // For Active programs, margin should be calculated on locked price
+      if (finances?.contracted_at_margin) {
+        // For contracted programs (any status), margin should be calculated on locked price
         const lockedPrice = Number(finances.final_total_price || 0);
         const financeCharges = Number(finances.finance_charges || 0);
         const preTaxLockedPrice = lockedPrice - calculatedTaxes;
@@ -202,7 +207,7 @@ export async function GET(req: NextRequest) {
           ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
           : 0;
       } else {
-        // For Quote programs, margin is calculated on current price
+        // For non-contracted programs (Quote, etc.), margin is calculated on current price
         expectedMargin = calculateProjectedMargin(
           calculatedPrice,
           calculatedCost,
@@ -222,7 +227,24 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        // Check 3: Margin calculation
+        // Check 3: final_total_price vs calculated (accounting for variance)
+        // For Active programs: final_total_price is locked, variance tracks drift
+        // Formula: calculatedPrice - variance = final_total_price
+        // Or equivalently: calculatedPrice = final_total_price + variance
+        const storedFinalPrice = Number(finances.final_total_price || 0);
+        const storedVariance = Number(finances.variance || 0);
+        
+        // Expected final price accounting for variance
+        const expectedFinalPrice = calculatedPrice - storedVariance;
+        const finalPriceDiff = Math.abs(storedFinalPrice - expectedFinalPrice);
+
+        if (finalPriceDiff > 0.01) {
+          issues.push(
+            `final_total_price mismatch: stored $${storedFinalPrice.toFixed(2)} vs expected $${expectedFinalPrice.toFixed(2)} (calculated: $${calculatedPrice.toFixed(2)}, variance: $${storedVariance.toFixed(2)}, diff: $${finalPriceDiff.toFixed(2)})`
+          );
+        }
+
+        // Check 4: Margin calculation
 
         const storedMargin = Number(finances.margin || 0);
         const marginDiff = Math.abs(storedMargin - expectedMargin);
@@ -233,8 +255,8 @@ export async function GET(req: NextRequest) {
           );
         }
 
-        // Check 4: Active program specific checks
-        if (isActive && finances.contracted_at_margin) {
+        // Check 5: Contracted program specific checks
+        if (finances.contracted_at_margin) {
           // Variance should be projectedPrice - lockedPrice
           const expectedVariance = calculatedPrice - Number(finances.final_total_price || 0);
           const storedVariance = Number(finances.variance || 0);
@@ -248,7 +270,7 @@ export async function GET(req: NextRequest) {
             );
           }
 
-          // Check if margins match contracted margin for Active programs
+          // Check if margins match contracted margin (regardless of current status)
           const contractedMargin = Number(finances.contracted_at_margin || 0);
           const storedMarginDiff = Math.abs(storedMargin - contractedMargin);
           const calculatedMarginDiff = Math.abs(expectedMargin - contractedMargin);
@@ -263,11 +285,6 @@ export async function GET(req: NextRequest) {
             issues.push(
               `calculated margin differs from contracted margin: calculated ${expectedMargin.toFixed(2)}% vs contracted ${contractedMargin.toFixed(2)}% (diff: ${calculatedMarginDiff.toFixed(2)}%)`
             );
-          }
-
-          // contracted_at_margin should never change after being set
-          if (!finances.contracted_at_margin) {
-            issues.push(`Active program missing contracted_at_margin`);
           }
         }
       } else {
@@ -814,8 +831,8 @@ function generateHtmlReport(summary: any, results: any[], autoFix: boolean): str
             <div class="detail-value">$${program.calculatedValues.projectedPrice?.toFixed(2) || '0.00'}</div>
           </div>
           <div class="detail-item">
-            <div class="detail-label">Locked Price</div>
-            <div class="detail-value" style="font-weight: 700; color: #8b5cf6;">$${program.storedValues.lockedPrice?.toFixed(2) || '0.00'}</div>
+            <div class="detail-label">${program.status === 'Active' ? 'Locked Price' : 'Final Total Price'}</div>
+            <div class="detail-value" style="font-weight: 700; color: ${program.issues.some((issue: string) => issue.includes('final_total_price mismatch')) ? '#ef4444' : (program.status === 'Active' ? '#8b5cf6' : '#111827')};">$${program.storedValues.lockedPrice?.toFixed(2) || '0.00'}</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Variance</div>

@@ -153,6 +153,76 @@ export async function PUT(
       );
     }
 
+    // Validate status transitions if program_status_id is being changed
+    if (body.program_status_id !== undefined) {
+      // Fetch current program with status
+      const { data: currentProgram, error: fetchError } = await supabase
+        .from('member_programs')
+        .select('program_status_id, program_status(status_name)')
+        .eq('member_program_id', id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching current program:', fetchError);
+        return NextResponse.json(
+          { error: 'Failed to fetch program data' },
+          { status: 500 }
+        );
+      }
+
+      // Only validate if status is actually changing
+      if (currentProgram.program_status_id !== body.program_status_id) {
+        // Fetch new status name
+        const { data: newStatus, error: statusError } = await supabase
+          .from('program_status')
+          .select('status_name')
+          .eq('program_status_id', body.program_status_id)
+          .single();
+
+        if (statusError) {
+          console.error('Error fetching new status:', statusError);
+          return NextResponse.json(
+            { error: 'Invalid status ID' },
+            { status: 400 }
+          );
+        }
+
+        // Validate transition
+        const currentStatusName = ((currentProgram as any).program_status?.status_name || '').toLowerCase();
+        const newStatusName = (newStatus.status_name || '').toLowerCase();
+        
+        // Status transition rules
+        const getValidTransitions = (status: string): string[] => {
+          switch (status) {
+            case 'quote':
+              return ['active', 'cancelled'];
+            case 'active':
+              return ['paused', 'cancelled', 'completed'];
+            case 'paused':
+              return ['active', 'cancelled', 'completed'];
+            case 'completed':
+            case 'cancelled':
+              return []; // Final states
+            default:
+              return [];
+          }
+        };
+
+        const validTransitions = getValidTransitions(currentStatusName);
+        if (!validTransitions.includes(newStatusName)) {
+          const validTransitionsStr = validTransitions.length > 0 
+            ? validTransitions.join(', ')
+            : 'none (final state)';
+          return NextResponse.json(
+            { 
+              error: `Invalid status transition: ${currentStatusName} cannot be changed to ${newStatusName}. Valid transitions: ${validTransitionsStr}` 
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     const updateData = {
       ...body,
       updated_by: session.user.id,

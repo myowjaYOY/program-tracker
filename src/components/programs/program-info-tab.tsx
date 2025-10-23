@@ -70,6 +70,24 @@ export default function ProgramInfoTab({
 
   const { data: leads = [] } = useLeadsForProgramCreation();
   const { data: programStatuses = [] } = useActiveProgramStatus();
+
+  // Status transition validation rules
+  const getValidStatusTransitions = (currentStatusName: string): string[] => {
+    const status = currentStatusName.toLowerCase();
+    switch (status) {
+      case 'quote':
+        return ['active', 'cancelled'];
+      case 'active':
+        return ['paused', 'cancelled', 'completed'];
+      case 'paused':
+        return ['active', 'cancelled', 'completed'];
+      case 'completed':
+      case 'cancelled':
+        return []; // Final states - no transitions allowed
+      default:
+        return []; // Unknown status - block all transitions
+    }
+  };
   const { data: finances } = useMemberProgramFinances(
     program.member_program_id
   );
@@ -193,7 +211,22 @@ export default function ProgramInfoTab({
       )?.status_name || ''
     ).toLowerCase();
 
-    // 0) Block transitions out of Completed/Cancelled
+    // 0) Validate status transitions
+    if (prevStatus && currentStatus && currentStatus !== prevStatus) {
+      const validTransitions = getValidStatusTransitions(prevStatus);
+      if (!validTransitions.includes(currentStatus)) {
+        const validTransitionsStr = validTransitions.length > 0 
+          ? validTransitions.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
+          : 'None (final state)';
+        setStatusMsg({
+          ok: false,
+          message: `Invalid status transition: ${prevStatus.charAt(0).toUpperCase() + prevStatus.slice(1)} cannot be changed to ${currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}. Valid options: ${validTransitionsStr}.`
+        });
+        return;
+      }
+    }
+
+    // 1) Block transitions out of Completed/Cancelled (redundant with above, but keeping for clarity)
     if (
       (prevStatus === 'completed' || prevStatus === 'cancelled') &&
       currentStatus !== prevStatus
@@ -220,7 +253,16 @@ export default function ProgramInfoTab({
       return;
     }
 
-    // 1b) If status is Active, program must have at least one payment row
+    // 1b) If status is Active, program must have financing type selected
+    if (currentStatus === 'active' && !finances?.financing_type_id) {
+      setStatusMsg({
+        ok: false,
+        message: 'Financing Type must be selected before activating program.',
+      });
+      return;
+    }
+
+    // 1c) If status is Active, program must have at least one payment row
     if (currentStatus === 'active' && (!payments || payments.length === 0)) {
       setStatusMsg({
         ok: false,
@@ -534,17 +576,52 @@ export default function ProgramInfoTab({
                     <em>Select a status</em>
                   </MenuItem>
                   {programStatuses.map(status => {
-                    const isActive =
-                      (status.status_name || '').toLowerCase() === 'active';
-                    const disableActive =
-                      isActive && (!payments || payments.length === 0);
+                    // Get current program status
+                    const currentStatus = programStatuses.find(
+                      s => s.program_status_id === program.program_status_id
+                    );
+                    const currentStatusName = currentStatus?.status_name || '';
+                    
+                    // Check if this transition is valid
+                    const validTransitions = getValidStatusTransitions(currentStatusName);
+                    const targetStatusName = (status.status_name || '').toLowerCase();
+                    const isCurrentStatus = status.program_status_id === program.program_status_id;
+                    const isValidTransition = isCurrentStatus || validTransitions.includes(targetStatusName);
+                    
+                    // Additional business rules for Active status
+                    const isActive = targetStatusName === 'active';
+                    const missingPayments = isActive && (!payments || payments.length === 0);
+                    const missingFinancingType = isActive && !finances?.financing_type_id;
+                    
+                    const disabled = !isValidTransition || missingPayments || missingFinancingType;
+                    
+                    // Determine the reason for being disabled
+                    let disabledReason = '';
+                    if (!isCurrentStatus) {
+                      if (!isValidTransition) {
+                        disabledReason = 'Invalid transition';
+                      } else if (missingFinancingType) {
+                        disabledReason = 'Requires financing type';
+                      } else if (missingPayments) {
+                        disabledReason = 'Requires payment';
+                      }
+                    }
+                    
                     return (
                       <MenuItem
                         key={status.program_status_id}
                         value={status.program_status_id}
-                        disabled={disableActive}
+                        disabled={disabled}
                       >
                         {status.status_name}
+                        {disabledReason && (
+                          <Typography
+                            component="span"
+                            sx={{ ml: 1, fontSize: '0.75rem', color: 'text.secondary' }}
+                          >
+                            ({disabledReason})
+                          </Typography>
+                        )}
                       </MenuItem>
                     );
                   })}

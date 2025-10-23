@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { Box, Container } from '@mui/material';
 import { Logo } from '@/components/ui/Logo';
 
@@ -7,7 +8,33 @@ interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
+// Array of login images from public/logonPics folder
+const LOGIN_IMAGES = [
+  '/logonPics/james%20astronut.jpg',
+  '/logonPics/James%20Award.jpg',
+  '/logonPics/james%20baloon.jpg',
+  '/logonPics/James%20Bigfoot.jpg',
+  '/logonPics/james%20flyfish.jpg',
+  '/logonPics/James%20pickleball.jpg',
+];
+
+// Function to get a random image
+const getRandomImage = (): string => {
+  const randomIndex = Math.floor(Math.random() * LOGIN_IMAGES.length);
+  return LOGIN_IMAGES[randomIndex] || '/logonPics/James%20Award.jpg'; // Fallback to default
+};
+
 export default function AuthLayout({ children }: AuthLayoutProps) {
+  // Start with a default image to avoid hydration mismatch, then switch to random on client
+  const [randomImage, setRandomImage] = useState<string>('/logonPics/James%20Award.jpg');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    // Only run on client side to avoid SSR/client mismatch
+    setIsClient(true);
+    setRandomImage(getRandomImage());
+  }, []);
+
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex' }}>
       {/* Left side - Form */}
@@ -24,14 +51,14 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         <Container maxWidth="sm">{children}</Container>
       </Box>
 
-      {/* Right side - Image */}
+      {/* Right side - Random Image */}
       <Box
         sx={{
           flex: { xs: '0 0 100%', md: '0 0 58.333333%' },
           display: { xs: 'none', md: 'block' },
           position: 'relative',
           overflow: 'hidden',
-          backgroundImage: 'url(/James%20Geek.png)',
+          backgroundImage: randomImage ? `url(${randomImage})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
