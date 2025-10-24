@@ -88,6 +88,7 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        persistStateKey="programToDoGrid"
       />
     </Box>
   );

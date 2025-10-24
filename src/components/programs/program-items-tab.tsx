@@ -412,6 +412,7 @@ export default function ProgramItemsTab({
         autoHeight={true}
         sortModel={[{ field: 'therapy_name', sort: 'asc' }]}
         enableExport={true}
+        persistStateKey="programItemsGrid"
       />
 
       {/* Add Item Modal */}

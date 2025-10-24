@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/script?memberId=&range=today|week|month|all&start=&end=
-// Returns schedule rows across all programs except Cancelled/Completed.
+// Returns schedule rows for Active programs only.
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -18,43 +19,32 @@ export async function GET(req: NextRequest) {
   const range = (searchParams.get('range') || 'all').toLowerCase();
   const start = searchParams.get('start');
   const end = searchParams.get('end');
+  const showCompleted = searchParams.get('showCompleted') === 'true';
 
   try {
-    // Load status ids to exclude Cancelled/Completed/Quote
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    const excluded = new Set(
-      (statuses || [])
-        .filter((s: any) =>
-          ['cancelled', 'completed', 'quote'].includes(
-            (s.status_name || '').toLowerCase()
-          )
-        )
-        .map((s: any) => s.program_status_id)
+    // Get Active program IDs using centralized service (default: Active only)
+    const programIds = await ProgramStatusService.getValidProgramIds(
+      supabase,
+      memberId ? { memberId: Number(memberId) } : undefined
     );
+    if (programIds.length === 0) return NextResponse.json({ data: [] });
 
-    // Qualified programs
-    let progQuery = supabase.from('member_programs').select(`
+    // Fetch program details for enrichment
+    const { data: programs, error: progErr } = await supabase
+      .from('member_programs')
+      .select(`
         member_program_id,
         lead_id,
         program_status_id,
         lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
-      `);
-    if (memberId) {
-      progQuery = progQuery.eq('lead_id', Number(memberId));
-    }
-    const { data: programs, error: progErr } = await progQuery;
+      `)
+      .in('member_program_id', programIds);
     if (progErr)
       return NextResponse.json(
         { error: 'Failed to load programs' },
         { status: 500 }
       );
-    const validPrograms = (programs || []).filter(
-      (p: any) => !excluded.has(p.program_status_id)
-    );
-    const programIds = validPrograms.map((p: any) => p.member_program_id);
-    if (programIds.length === 0) return NextResponse.json({ data: [] });
+    const validPrograms = programs || [];
 
     const { data: items, error: itemErr } = await supabase
       .from('member_program_items')
@@ -72,10 +62,15 @@ export async function GET(req: NextRequest) {
     let schedQuery = supabase
       .from('member_program_item_schedule')
       .select(
-        'member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag, created_at, created_by, updated_at, updated_by'
+        'member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag, created_at, created_by, updated_at, updated_by, program_role_id, program_role:program_roles(program_role_id, role_name, display_color)'
       )
       .in('member_program_item_id', itemIds)
       .order('scheduled_date', { ascending: true });
+
+    // Filter by completed_flag unless showCompleted is true
+    if (!showCompleted) {
+      schedQuery = schedQuery.eq('completed_flag', false);
+    }
 
     // Date filtering for script view: if range is not 'all'
     const today = new Date();
@@ -140,6 +135,10 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Get status names for enrichment
+    const { data: statuses } = await supabase
+      .from('program_status')
+      .select('program_status_id, status_name');
     const statusIdToName = new Map<number, string>(
       (statuses || []).map((s: any) => [
         s.program_status_id as number,
@@ -224,6 +223,8 @@ export async function GET(req: NextRequest) {
         member_name: programId
           ? programIdToMemberName.get(programId) || null
           : null,
+        role_name: r.program_role?.role_name || null,
+        role_display_color: r.program_role?.display_color || null,
         created_by_email: r.created_by
           ? userMap.get(r.created_by)?.email || null
           : null,

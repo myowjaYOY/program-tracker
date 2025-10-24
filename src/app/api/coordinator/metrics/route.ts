@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/metrics
 // Returns counts for:
 // - lateTasks: task schedules with due_date < today, incomplete, Active programs only
 // - tasksDueToday: task schedules due today, incomplete, Active programs only
 // - apptsDueToday: item schedules scheduled today, incomplete, Active programs only
-// - programChangesThisWeek: count from program_changes view (no filters per spec)
+// - programChangesThisWeek: count from program_changes view (Active programs only)
 export async function GET(_req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -22,35 +23,8 @@ export async function GET(_req: NextRequest) {
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().slice(0, 10);
 
-    // Find program_status_id for Active
-    const { data: statuses, error: statusErr } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    if (statusErr)
-      return NextResponse.json(
-        { error: 'Failed to load statuses' },
-        { status: 500 }
-      );
-    const activeStatus = (statuses || []).find(
-      s => (s as any).status_name?.toLowerCase() === 'active'
-    );
-    if (!activeStatus)
-      return NextResponse.json(
-        { error: 'Active status not found' },
-        { status: 500 }
-      );
-
-    // Active program ids
-    const { data: programs, error: progErr } = await supabase
-      .from('member_programs')
-      .select('member_program_id')
-      .eq('program_status_id', (activeStatus as any).program_status_id);
-    if (progErr)
-      return NextResponse.json(
-        { error: 'Failed to load programs' },
-        { status: 500 }
-      );
-    const programIds = (programs || []).map((p: any) => p.member_program_id);
+    // Get Active program IDs using the centralized service (default: Active only)
+    const programIds = await ProgramStatusService.getValidProgramIds(supabase);
     // Note: Do NOT early-return; still compute programChangesThisWeek even if no active programs
 
     // Item ids for active programs
@@ -135,32 +109,18 @@ export async function GET(_req: NextRequest) {
     const nextDay = new Date(weekEnd);
     nextDay.setDate(weekEnd.getDate() + 1);
     const nextDayStr = nextDay.toISOString().slice(0, 10);
-    // Limit to Active and Paused programs for this metric to match the grid
-    const activePausedStatusIds = (statuses || [])
-      .filter(
-        s => ['active', 'paused'].includes((s as any).status_name?.toLowerCase())
-      )
-      .map(s => (s as any).program_status_id);
-
-    let activePausedProgramIds: number[] = [];
-    if (activePausedStatusIds.length > 0) {
-      const { data: apPrograms } = await supabase
-        .from('member_programs')
-        .select('member_program_id, program_status_id')
-        .in('program_status_id', activePausedStatusIds);
-      activePausedProgramIds = (apPrograms || []).map(
-        (p: any) => p.member_program_id
-      );
-    }
+    
+    // Use centralized service for Active programs only
+    const programChangesValidIds = await ProgramStatusService.getValidProgramIds(supabase);
 
     let programChangesThisWeek = 0;
-    if (activePausedProgramIds.length > 0) {
+    if (programChangesValidIds.length > 0) {
       const { count } = await supabase
         .from('vw_audit_member_items')
         .select('*', { count: 'exact', head: true })
         .gte('event_at', weekStartStr)
         .lt('event_at', nextDayStr)
-        .in('program_id', activePausedProgramIds);
+        .in('program_id', programChangesValidIds);
       programChangesThisWeek = count || 0;
     } else {
       programChangesThisWeek = 0;

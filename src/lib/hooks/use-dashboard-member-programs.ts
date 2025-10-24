@@ -45,8 +45,9 @@ export function useActiveAndPausedMemberPrograms() {
 }
 
 /**
- * Hook to get members (leads) with their active/paused programs
+ * Hook to get members (leads) with their active programs
  * Returns data structured for dropdown selection
+ * NOTE: Filters for Active programs only (matching Coordinator and ProgramStatusService logic)
  */
 export function useDashboardMembers() {
   return useQuery<DashboardMember[], Error>({
@@ -62,10 +63,10 @@ export function useDashboardMembers() {
       
       const allPrograms = json.data as MemberPrograms[];
       
-      // Filter for Active and Paused programs only
+      // Filter for Active programs only (matching Coordinator logic and ProgramStatusService)
       const filteredPrograms = allPrograms.filter(program => {
         const statusName = program.status_name?.toLowerCase();
-        return statusName === 'active' || statusName === 'paused';
+        return statusName === 'active';
       });
       
       // Group programs by lead (member)

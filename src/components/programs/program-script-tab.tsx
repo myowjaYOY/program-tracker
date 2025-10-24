@@ -102,6 +102,7 @@ export default function ProgramScriptTab({ program }: ProgramScriptTabProps) {
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        persistStateKey="programScriptGrid"
       />
     </Box>
   );

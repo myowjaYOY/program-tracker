@@ -38,12 +38,14 @@ export function useCoordinatorScript(params: {
   range?: string;
   start?: string | null;
   end?: string | null;
+  showCompleted?: boolean;
 }) {
   const sp = new URLSearchParams();
   if (params.memberId) sp.set('memberId', String(params.memberId));
   if (params.range && params.range !== 'all') sp.set('range', params.range);
   if (params.start) sp.set('start', params.start);
   if (params.end) sp.set('end', params.end);
+  if (params.showCompleted) sp.set('showCompleted', 'true');
   const qs = sp.toString();
   const url = `/api/coordinator/script${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.script(qs);
@@ -67,12 +69,14 @@ export function useCoordinatorToDo(params: {
   range?: string;
   start?: string | null;
   end?: string | null;
+  showCompleted?: boolean;
 }) {
   const sp = new URLSearchParams();
   if (params.memberId) sp.set('memberId', String(params.memberId));
   if (params.range && params.range !== 'all') sp.set('range', params.range);
   if (params.start) sp.set('start', params.start);
   if (params.end) sp.set('end', params.end);
+  if (params.showCompleted) sp.set('showCompleted', 'true');
   const qs = sp.toString();
   const url = `/api/coordinator/todo${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.todo(qs);

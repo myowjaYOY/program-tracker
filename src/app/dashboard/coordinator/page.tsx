@@ -45,12 +45,12 @@ export default function CoordinatorPage() {
   >('all');
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
-  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
 
 
-  // Members: only leads with programs that are Active or Paused
+  // Members: only leads with Active programs (matching centralized service logic)
   const memberOptions = useMemo(() => {
-    const included = new Set(['active', 'paused']);
+    const included = new Set(['active']);
     const filtered = (programs || []).filter((p: any) =>
       included.has((p.status_name || '').toLowerCase())
     );
@@ -426,12 +426,13 @@ export default function CoordinatorPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={hideCompleted}
-                    onChange={e => setHideCompleted(e.target.checked)}
+                    checked={showCompleted}
+                    onChange={e => setShowCompleted(e.target.checked)}
                     size="small"
+                    disabled={tab === 2}
                   />
                 }
-                label="Hide completed"
+                label="Show completed"
               />
             </Box>
           </Box>
@@ -463,7 +464,7 @@ export default function CoordinatorPage() {
                 range={range}
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
-                hideCompleted={hideCompleted}
+                showCompleted={showCompleted}
               />
             )}
             {tab === 1 && (
@@ -472,7 +473,7 @@ export default function CoordinatorPage() {
                 range={range}
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
-                hideCompleted={hideCompleted}
+                showCompleted={showCompleted}
               />
             )}
             {tab === 2 && (

@@ -12,10 +12,11 @@ interface AuthLayoutProps {
 const LOGIN_IMAGES = [
   '/logonPics/james%20astronut.jpg',
   '/logonPics/James%20Award.jpg',
-  '/logonPics/james%20baloon.jpg',
   '/logonPics/James%20Bigfoot.jpg',
+  '/logonPics/James%20Dracul.jpg',
   '/logonPics/james%20flyfish.jpg',
-  '/logonPics/James%20pickleball.jpg',
+  '/logonPics/james%20Fredy.jpg',
+  '/logonPics/james%20Pumpkin.jpg',
 ];
 
 // Function to get a random image

@@ -19,7 +19,7 @@ interface CoordinatorToDoTabProps {
   range?: 'all' | 'today' | 'week' | 'month' | 'custom';
   start?: string | undefined;
   end?: string | undefined;
-  hideCompleted?: boolean;
+  showCompleted?: boolean;
 }
 
 export default function CoordinatorToDoTab({
@@ -27,7 +27,7 @@ export default function CoordinatorToDoTab({
   range = 'all',
   start,
   end,
-  hideCompleted = false,
+  showCompleted = false,
 }: CoordinatorToDoTabProps) {
   const {
     data = [],
@@ -38,6 +38,7 @@ export default function CoordinatorToDoTab({
     range,
     start: start ?? null,
     end: end ?? null,
+    showCompleted,
   });
   const qc = useQueryClient();
 
@@ -126,14 +127,12 @@ export default function CoordinatorToDoTab({
       therapy_name: tn,
       task_name: task,
       description: desc,
+      role_name: r.program_role?.role_name || null,
+      role_display_color: r.program_role?.display_color || null,
       created_by: r.created_by_full_name ?? r.created_by_email ?? r.created_by ?? '-',
       updated_by: r.updated_by_full_name ?? r.updated_by_email ?? r.updated_by ?? '-',
     };
   });
-
-  if (hideCompleted) {
-    rows = rows.filter(r => !r.completed_flag);
-  }
 
   const cols: GridColDef[] = [
     {
@@ -250,6 +249,26 @@ export default function CoordinatorToDoTab({
         </Box>
       ),
     },
+    {
+      field: 'role_name',
+      headerName: 'Responsible',
+      width: 100,
+      renderCell: (params: any) => {
+        const roleName = params.value || 'Admin';
+        const roleColor = params.row.role_display_color || '#808080';
+        return (
+          <Chip
+            label={roleName}
+            size="small"
+            sx={{
+              backgroundColor: roleColor,
+              color: '#fff',
+              fontWeight: 500,
+            }}
+          />
+        );
+      },
+    },
     { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
     {
       field: 'updated_at',
@@ -268,6 +287,7 @@ export default function CoordinatorToDoTab({
         loading={isLoading}
         error={error ? (error as any).message : null}
         getRowId={row => row.member_program_item_task_schedule_id}
+        persistStateKey="coordinatorToDoGrid"
         rowClassName={(row: any) => {
           if (row?.completed_flag) return '';
           const dateStr = row?.due_date as string | undefined;
@@ -288,6 +308,7 @@ export default function CoordinatorToDoTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        enableExport={true}
         sortModel={[{ field: 'due_date', sort: 'asc' }]}
       />
 

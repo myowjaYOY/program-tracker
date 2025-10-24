@@ -82,6 +82,7 @@ export default function ProgramPaymentsTab({
         showCreateButton={false}
         showActionsColumn={canEdit}
         onEdit={canEdit ? () => {} : (undefined as unknown as any)}
+        persistStateKey="programPaymentsGrid"
         renderForm={({ onClose, initialValues, mode }) => (
           <MemberProgramPaymentForm
             programId={program.member_program_id}

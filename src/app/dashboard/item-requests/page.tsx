@@ -733,6 +733,7 @@ export default function ItemRequestsPage() {
             loading={requestsLoading}
             getRowId={(row) => row.item_request_id}
             sortModel={[{ field: 'requested_date', sort: 'asc' }]}
+            persistStateKey="itemRequestsGrid"
             rowClassName={(row) => {
               // Highlight overdue requests (>10 days old, not cancelled/received)
               if (isItemRequestOverdue(row)) {

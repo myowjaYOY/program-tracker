@@ -396,7 +396,7 @@ export default function DashboardPage() {
             View Member Programs
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Select a member to view their active or paused programs
+            Select a member to view their active programs
           </Typography>
 
           {/* Member Selection */}

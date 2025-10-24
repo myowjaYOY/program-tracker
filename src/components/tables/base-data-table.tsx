@@ -75,8 +75,8 @@ function CustomAggregationFooter({
   });
 
   return (
-    <GridFooterContainer>
-      <Box sx={{ p: 1, display: 'flex', alignItems: 'center', width: '100%' }}>
+    <GridFooterContainer sx={{ justifyContent: 'space-between' }}>
+      <Box sx={{ p: 1, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         {Object.keys(aggregations).map(field => {
           const column = columns.find(col => col.field === field);
           const value = aggregations[field];
@@ -98,13 +98,15 @@ function CustomAggregationFooter({
           }
           
           return (
-            <Typography key={field} variant="body2" fontWeight="bold" sx={{ mr: 3 }}>
+            <Typography key={field} variant="body2" fontWeight="bold" sx={{ mr: 3, whiteSpace: 'nowrap' }}>
               {aggregationLabel || 'Total:'} {formattedValue}
             </Typography>
           );
         })}
       </Box>
-      <GridFooter />
+      <Box sx={{ flexShrink: 0, minWidth: 0 }}>
+        <GridFooter />
+      </Box>
     </GridFooterContainer>
   );
 }
@@ -276,8 +278,11 @@ export default function BaseDataTable<T extends BaseEntity>({
   // Debounce timer ref for state saving
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Track if we've restored state yet (only restore once)
+  // Track if we've restored state yet (only restore once per mount)
   const hasRestoredStateRef = useRef(false);
+  
+  // Track the last data length to detect data changes
+  const lastDataLengthRef = useRef(data.length);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
@@ -318,10 +323,14 @@ export default function BaseDataTable<T extends BaseEntity>({
     }, 500);
   }, [persistStateKey, user?.id, apiRef]);
 
-  // Restore saved state once user and apiRef are available
+  // Restore saved state when user/apiRef are available OR when data changes
   useEffect(() => {
-    if (hasRestoredStateRef.current) return; // Already restored
     if (!persistStateKey || !user?.id || !apiRef.current) return;
+
+    // Check if data has changed (different length or first mount)
+    const dataChanged = !hasRestoredStateRef.current || lastDataLengthRef.current !== data.length;
+    
+    if (!dataChanged) return; // No need to restore if data hasn't changed
 
     const storageKey = `${persistStateKey}_${user.id}`;
     
@@ -329,18 +338,22 @@ export default function BaseDataTable<T extends BaseEntity>({
       const savedState = localStorage.getItem(storageKey);
       if (savedState) {
         const parsedState = JSON.parse(savedState);
-        // Use restoreState method
-        apiRef.current.restoreState(parsedState);
-        hasRestoredStateRef.current = true;
-      } else {
-        hasRestoredStateRef.current = true; // Don't try again
+        // Use setTimeout to ensure the grid has finished rendering with new data
+        setTimeout(() => {
+          if (apiRef.current) {
+            apiRef.current.restoreState(parsedState);
+          }
+        }, 0);
       }
+      hasRestoredStateRef.current = true;
+      lastDataLengthRef.current = data.length;
     } catch (error) {
       console.error(`Failed to restore grid state for ${persistStateKey}:`, error);
       localStorage.removeItem(storageKey);
-      hasRestoredStateRef.current = true; // Don't try again
+      hasRestoredStateRef.current = true;
+      lastDataLengthRef.current = data.length;
     }
-  }, [persistStateKey, user?.id, apiRef]);
+  }, [persistStateKey, user?.id, apiRef, data.length]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {

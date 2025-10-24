@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/program-changes?range=today|week|month|all|custom&start=&end=&unique_only=true&limit=7
-// Returns rows from vw_audit_member_changes; supports unique grouping and limiting
+// Returns rows from vw_audit_member_changes for Active programs only; supports unique grouping and limiting
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -25,9 +26,17 @@ export async function GET(req: NextRequest) {
   const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
   try {
+    // Get Active program IDs using centralized service (default: Active only)
+    const validProgramIds = await ProgramStatusService.getValidProgramIds(
+      supabase,
+      memberId ? { memberId } : undefined
+    );
+    if (validProgramIds.length === 0) return NextResponse.json({ data: [] });
+
     let query = supabase
       .from('vw_audit_member_items')
       .select('*')
+      .in('program_id', validProgramIds)
       .order('event_at', { ascending: false });
 
     const today = new Date();
@@ -76,11 +85,6 @@ export async function GET(req: NextRequest) {
 
     // Source filtering removed
 
-    // Filter by member if provided (lead_id via view member_id)
-    if (memberId) {
-      query = query.eq('member_id', memberId);
-    }
-
     const { data, error } = await query;
     if (error)
       return NextResponse.json(
@@ -93,51 +97,6 @@ export async function GET(req: NextRequest) {
       );
 
     let rows = (data as any[]) || [];
-
-    // Defensive filter by member in case DB-level filter is bypassed by the view
-    if (memberId) {
-      rows = rows.filter(r => Number(r?.member_id) === memberId);
-    }
-
-    // Filter for Active and Paused programs only (IDs 1 and 3)
-    if (rows.length > 0) {
-      try {
-        // Get Active and Paused program status IDs
-        const { data: statusData, error: statusError } = await supabase
-          .from('program_status')
-          .select('program_status_id, status_name')
-          .in('status_name', ['Active', 'Paused']);
-
-        if (statusError) {
-          // Continue with unfiltered data if status fetch fails
-        } else {
-          const activeAndPausedStatusIds = statusData?.map(s => s.program_status_id) || [];
-          
-          // Get member programs with their status IDs
-          const programIds = [...new Set(rows.map(r => r.program_id).filter(Boolean))];
-          if (programIds.length > 0) {
-            const { data: memberPrograms, error: programsError } = await supabase
-              .from('member_programs')
-              .select('member_program_id, program_status_id')
-              .in('member_program_id', programIds);
-
-            if (programsError) {
-              // Continue with unfiltered data if member programs fetch fails
-            } else if (memberPrograms) {
-              // Filter to only include Active and Paused programs
-              const activePausedProgramIds = memberPrograms
-                .filter(mp => activeAndPausedStatusIds.includes(mp.program_status_id))
-                .map(mp => mp.member_program_id);
-
-              // Filter rows to only include Active/Paused programs
-              rows = rows.filter(row => activePausedProgramIds.includes(row.program_id));
-            }
-          }
-        }
-      } catch (error) {
-        // Continue with unfiltered data if filtering fails
-      }
-    }
 
     // Handle unique grouping if requested
     if (uniqueOnly) {

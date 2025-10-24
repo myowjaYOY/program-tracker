@@ -79,6 +79,7 @@ export default function ProgramChangesTab({
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
         sortModel={[{ field: 'changed_at', sort: 'desc' }]}
+        persistStateKey="coordinatorProgramChangesGrid"
       />
     </Box>
   );

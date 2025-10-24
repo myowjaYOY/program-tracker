@@ -73,6 +73,7 @@ export default function DashboardProgramItemsTab({ program }: DashboardProgramIt
         autoHeight={true}
         sortModel={[{ field: 'therapy_name', sort: 'asc' }]}
         enableExport={true}
+        persistStateKey="dashboardProgramItemsGrid"
       />
     </Box>
   );

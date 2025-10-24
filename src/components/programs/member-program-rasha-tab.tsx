@@ -410,6 +410,7 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
           { field: 'group_name', sort: 'asc' },
           { field: 'order_number', sort: 'asc' }
         ]}
+        persistStateKey="programRashaGrid"
       />
 
       {/* Add Modal */}

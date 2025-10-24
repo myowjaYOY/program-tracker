@@ -19,7 +19,7 @@ interface CoordinatorScriptTabProps {
   range?: 'all' | 'today' | 'week' | 'month' | 'custom';
   start?: string | undefined;
   end?: string | undefined;
-  hideCompleted?: boolean;
+  showCompleted?: boolean;
 }
 
 type Row = {
@@ -32,6 +32,9 @@ type Row = {
   completed_flag: boolean;
   therapy_name?: string | null;
   therapy_type_name?: string | null;
+  program_role_id?: number | null;
+  role_name?: string | null;
+  role_display_color?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
   created_by_email?: string | null;
@@ -47,7 +50,7 @@ export default function CoordinatorScriptTab({
   range = 'all',
   start,
   end,
-  hideCompleted = false,
+  showCompleted = false,
 }: CoordinatorScriptTabProps) {
   const {
     data = [],
@@ -58,6 +61,7 @@ export default function CoordinatorScriptTab({
     range,
     start: start ?? null,
     end: end ?? null,
+    showCompleted,
   });
   const qc = useQueryClient();
 
@@ -130,7 +134,7 @@ export default function CoordinatorScriptTab({
     });
   };
 
-  let rows: any[] = (data as any[]).map((r: any) => ({
+  const rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
     id: r.member_program_item_schedule_id,
     therapy_name: r.therapy_name ?? '',
@@ -138,10 +142,6 @@ export default function CoordinatorScriptTab({
     created_by: r.created_by_full_name ?? r.created_by_email ?? r.created_by ?? '-',
     updated_by: r.updated_by_full_name ?? r.updated_by_email ?? r.updated_by ?? '-',
   }));
-
-  if (hideCompleted) {
-    rows = rows.filter(r => !r.completed_flag);
-  }
 
   const cols: GridColDef<Row>[] = [
     {
@@ -261,6 +261,26 @@ export default function CoordinatorScriptTab({
         );
       },
     },
+    {
+      field: 'role_name',
+      headerName: 'Responsible',
+      width: 100,
+      renderCell: (params: any) => {
+        const roleName = params.value || 'Admin';
+        const roleColor = params.row.role_display_color || '#808080';
+        return (
+          <Chip
+            label={roleName}
+            size="small"
+            sx={{
+              backgroundColor: roleColor,
+              color: '#fff',
+              fontWeight: 500,
+            }}
+          />
+        );
+      },
+    },
     { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
     {
       field: 'updated_at',
@@ -279,6 +299,7 @@ export default function CoordinatorScriptTab({
         loading={isLoading}
         error={error ? (error as any).message : null}
         getRowId={row => row.member_program_item_schedule_id}
+        persistStateKey="coordinatorScriptGrid"
         rowClassName={row => {
           const isCompleted = !!(row as any).completed_flag;
           if (isCompleted) return '';
@@ -300,6 +321,7 @@ export default function CoordinatorScriptTab({
         pageSize={10}
         pageSizeOptions={[10, 25, 50]}
         autoHeight={true}
+        enableExport={true}
         sortModel={[{ field: 'scheduled_date', sort: 'asc' }]}
       />
 

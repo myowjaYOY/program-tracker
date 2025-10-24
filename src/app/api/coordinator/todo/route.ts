@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/todo?memberId=&range=today|week|month|all&start=&end=
-// Returns To Do rows across all programs except Cancelled/Completed.
+// Returns To Do rows for Active programs only.
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -18,43 +19,32 @@ export async function GET(req: NextRequest) {
   const range = (searchParams.get('range') || 'all').toLowerCase();
   const start = searchParams.get('start');
   const end = searchParams.get('end');
+  const showCompleted = searchParams.get('showCompleted') === 'true';
 
   try {
-    // Exclude Cancelled/Completed/Quote programs
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    const excluded = new Set(
-      (statuses || [])
-        .filter((s: any) =>
-          ['cancelled', 'completed', 'quote'].includes(
-            (s.status_name || '').toLowerCase()
-          )
-        )
-        .map((s: any) => s.program_status_id)
+    // Get Active program IDs using centralized service (default: Active only)
+    const programIds = await ProgramStatusService.getValidProgramIds(
+      supabase,
+      memberId ? { memberId: Number(memberId) } : undefined
     );
+    if (programIds.length === 0) return NextResponse.json({ data: [] });
 
-    // Programs filtered by member and status
-    let progQuery = supabase.from('member_programs').select(`
+    // Fetch program details for enrichment
+    const { data: programs, error: progErr } = await supabase
+      .from('member_programs')
+      .select(`
         member_program_id,
         lead_id,
         program_status_id,
         lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
-      `);
-    if (memberId) {
-      progQuery = progQuery.eq('lead_id', Number(memberId));
-    }
-    const { data: programs, error: progErr } = await progQuery;
+      `)
+      .in('member_program_id', programIds);
     if (progErr)
       return NextResponse.json(
         { error: 'Failed to load programs' },
         { status: 500 }
       );
-    const validPrograms = (programs || []).filter(
-      (p: any) => !excluded.has(p.program_status_id)
-    );
-    const programIds = validPrograms.map((p: any) => p.member_program_id);
-    if (programIds.length === 0) return NextResponse.json({ data: [] });
+    const validPrograms = programs || [];
 
     // Items and schedules
     const { data: items, error: itemErr } = await supabase
@@ -97,6 +87,8 @@ export async function GET(req: NextRequest) {
         created_by,
         updated_at,
         updated_by,
+        program_role_id,
+        program_role:program_roles(program_role_id, role_name, display_color),
         member_program_item_tasks:member_program_item_task_id(
           task_name,
           description,
@@ -108,6 +100,11 @@ export async function GET(req: NextRequest) {
       `
       )
       .in('member_program_item_schedule_id', scheduleIds);
+
+    // Filter by completed_flag unless showCompleted is true
+    if (!showCompleted) {
+      todoQuery = todoQuery.eq('completed_flag', false);
+    }
 
     // Date range filter on due_date for To Do
     const today = new Date();
@@ -192,7 +189,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Build scheduleId -> program status name mapping
+    // Get status names for enrichment
+    const { data: statuses } = await supabase
+      .from('program_status')
+      .select('program_status_id, status_name');
     const statusIdToName = new Map<number, string>(
       (statuses || []).map((s: any) => [
         s.program_status_id as number,
@@ -249,6 +249,8 @@ export async function GET(req: NextRequest) {
         member_name: programId
           ? programIdToMemberName.get(programId) || null
           : null,
+        role_name: r.program_role?.role_name || null,
+        role_display_color: r.program_role?.display_color || null,
         created_by_email: r.created_by
           ? userMap.get(r.created_by)?.email || null
           : null,
