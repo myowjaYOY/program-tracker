@@ -16,8 +16,10 @@ import {
 } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import SummaryCards from '@/components/report-card/SummaryCards';
+import { MemberProgressTab } from '@/components/member-progress';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
 import { useReportCardSummary, useReportCardParticipants } from '@/lib/hooks/use-report-card';
@@ -179,28 +181,39 @@ export default function ReportCardPage() {
           }}
         >
           <Tab
+            icon={<DashboardIcon />}
+            iconPosition="start"
+            label="MEMBER PROGRESS"
+            id="report-card-tab-0"
+            aria-controls="report-card-tabpanel-0"
+          />
+          <Tab
             icon={<AssessmentIcon />}
             iconPosition="start"
             label="MSQ ASSESSMENT"
-            id="report-card-tab-0"
-            aria-controls="report-card-tabpanel-0"
+            id="report-card-tab-1"
+            aria-controls="report-card-tabpanel-1"
           />
           <Tab
             icon={<HealthAndSafetyIcon />}
             iconPosition="start"
             label="PROMIS-29"
-            id="report-card-tab-1"
-            aria-controls="report-card-tabpanel-1"
+            id="report-card-tab-2"
+            aria-controls="report-card-tabpanel-2"
           />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <TabPanel value={tabValue} index={0}>
-        <MsqAssessmentTab selectedMemberId={selectedMemberId} />
+        <MemberProgressTab leadId={selectedMember?.lead_id || null} />
       </TabPanel>
       
       <TabPanel value={tabValue} index={1}>
+        <MsqAssessmentTab selectedMemberId={selectedMemberId} />
+      </TabPanel>
+      
+      <TabPanel value={tabValue} index={2}>
         <PromisAssessmentTab selectedMemberId={selectedMemberId} />
       </TabPanel>
       

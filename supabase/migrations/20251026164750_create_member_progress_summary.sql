@@ -2,8 +2,7 @@
 -- This table is updated by the survey import edge function after each import
 
 CREATE TABLE IF NOT EXISTS member_progress_summary (
-  external_user_id INTEGER PRIMARY KEY,
-  lead_id INTEGER REFERENCES leads(lead_id),
+  lead_id INTEGER PRIMARY KEY REFERENCES leads(lead_id),
   
   -- Profile metrics
   last_survey_date TIMESTAMPTZ,
@@ -66,8 +65,7 @@ CREATE TABLE IF NOT EXISTS member_progress_summary (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Add indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_member_progress_lead_id ON member_progress_summary(lead_id);
+-- Add indexes for common queries (lead_id already indexed as PRIMARY KEY)
 CREATE INDEX IF NOT EXISTS idx_member_progress_status ON member_progress_summary(status_indicator);
 CREATE INDEX IF NOT EXISTS idx_member_progress_calculated_at ON member_progress_summary(calculated_at);
 

@@ -738,7 +738,7 @@ async function processSurveyData(
         const numericValue = parseFloat(row.answer);
         if (!isNaN(numericValue) && isFinite(numericValue)) {
           answerNumeric = numericValue;
-        } else {
+        } else if (typeof questionId === 'number') {
           // Answer is text - check if this question has a domain mapping
           const domainMapping = questionDomainMap.get(questionId);
           
@@ -833,6 +833,7 @@ async function processSurveyData(
   console.log(`Summary: ${successfulRows} successful, ${errorRows} errors, ${duplicateRows} duplicates, ${skippedRows} skipped`);
 
   // Calculate domain scores for MSQ and PROMIS surveys (form_id = 3 or 6)
+  // Only run for NEW sessions (not duplicates)
   if (result.successful_rows > 0) {
     try {
       console.log('Starting domain scoring for MSQ and PROMIS surveys...');
@@ -844,6 +845,18 @@ async function processSurveyData(
       console.error('Domain scoring error stack:', domainError.stack);
       // Don't fail the entire import - just log the error
     }
+  }
+
+  // Calculate member progress dashboards (runs for ALL batches, including duplicates/backfills)
+  try {
+    console.log('Starting member progress dashboard calculations...');
+    await calculateMemberProgressDashboards(supabase, jobId);
+    console.log('Member progress dashboard calculations completed successfully');
+  } catch (dashboardError) {
+    console.error('Dashboard calculation failed:', dashboardError);
+    console.error('Dashboard error details:', dashboardError.message);
+    console.error('Dashboard error stack:', dashboardError.stack);
+    // Don't fail the entire import - just log the error
   }
 
   return result;
@@ -1056,4 +1069,802 @@ async function updateJobStatus(
   if (error) {
     console.error('Failed to update job status:', error);
   }
+}
+
+/**
+ * Calculate member progress dashboard metrics for all members in this import batch
+ * Populates the member_progress_summary table with pre-calculated dashboard data
+ */
+
+// Fallback module sequence for 4-Month AIP Program (program_id = 2)
+// Used only if database query fails
+const FALLBACK_MODULE_SEQUENCE = [
+  'MODULE 1 - PRE-PROGRAM',
+  'MODULE 2 - WEEK 1',
+  'MODULE 3 - WEEK 2',
+  'MODULE 4 - START OF DETOX',
+  'MODULE 5 - WEEK 4',
+  'MODULE 6 - MID-DETOX',
+  'MODULE 7 - END OF DETOX',
+  'MODULE 8 - END OF MONTH 2',
+  'MODULE 9 - START OF MONTH 3',
+  'MODULE 10 - MID-MONTH 3',
+  'MODULE 11 - END OF MONTH 3',
+  'MODULE 12 - START OF MONTH 4',
+  'MODULE 13 - MID-MONTH 4'
+];
+
+/**
+ * Get module sequence from database for a specific program
+ * Returns the ordered list of module names from the survey_modules table
+ * 
+ * @param supabase - Supabase client
+ * @param programId - Program ID to fetch modules for
+ * @returns Array of module names in order
+ */
+async function getModuleSequence(supabase: any, programId: number): Promise<string[]> {
+  try {
+    const { data: modules, error } = await supabase
+      .from('survey_modules')
+      .select('module_name, module_order')
+      .eq('program_id', programId)
+      .eq('active_flag', true);
+
+    if (error) {
+      console.error(`Error fetching module sequence for program ${programId}:`, error);
+      return FALLBACK_MODULE_SEQUENCE;
+    }
+
+    if (!modules || modules.length === 0) {
+      console.warn(`No modules found for program ${programId}, using fallback`);
+      return FALLBACK_MODULE_SEQUENCE;
+    }
+
+    // If module_order is populated, sort by it
+    if (modules[0]?.module_order !== null && modules[0]?.module_order !== undefined) {
+      const sorted = modules.sort((a, b) => (a.module_order || 0) - (b.module_order || 0));
+      return sorted.map(m => m.module_name);
+    }
+
+    // If module_order is null, extract number from "MODULE X - ..." pattern and sort
+    const sorted = modules.sort((a, b) => {
+      const aMatch = a.module_name.match(/MODULE (\d+)/);
+      const bMatch = b.module_name.match(/MODULE (\d+)/);
+      const aNum = aMatch ? parseInt(aMatch[1]) : 9999;
+      const bNum = bMatch ? parseInt(bMatch[1]) : 9999;
+      return aNum - bNum;
+    });
+
+    const sequence = sorted.map(m => m.module_name);
+    console.log(`Loaded ${sequence.length} modules for program ${programId}`);
+    return sequence;
+  } catch (error) {
+    console.error(`Exception fetching module sequence for program ${programId}:`, error);
+    return FALLBACK_MODULE_SEQUENCE;
+  }
+}
+
+async function calculateMemberProgressDashboards(supabase: any, jobId: number) {
+  console.log(`Calculating member progress dashboards for import job ${jobId}...`);
+
+  try {
+    // Create cache for module sequences by program_id
+    // This prevents re-querying the same program's modules for multiple members
+    const moduleSequenceCache = new Map<number, string[]>();
+    console.log('Initialized module sequence cache');
+
+    // Get all lead_ids from this import batch
+    const { data: sessions, error: sessionsError } = await supabase
+      .from('survey_response_sessions')
+      .select('lead_id')
+      .eq('import_batch_id', jobId);
+
+    if (sessionsError) {
+      throw new Error(`Failed to fetch sessions: ${sessionsError.message}`);
+    }
+
+    if (!sessions || sessions.length === 0) {
+      console.log('No sessions found for dashboard calculation');
+      return;
+    }
+
+    // Get unique lead_ids in JavaScript (Supabase JS client doesn't support DISTINCT in select)
+    const uniqueLeadIds = [...new Set(sessions.map(s => s.lead_id))];
+    const uniqueSessions = uniqueLeadIds.map(lead_id => ({ lead_id: lead_id as number }));
+
+    console.log(`Calculating dashboards for ${uniqueSessions.length} unique members...`);
+
+    // Process each member
+    for (const session of uniqueSessions) {
+      try {
+        const leadId = session.lead_id;
+        console.log(`Processing lead ${leadId}...`);
+
+        // Calculate all metrics for this member (passes cache for module sequences)
+        const metrics = await calculateMemberMetrics(supabase, leadId, moduleSequenceCache);
+
+        // Upsert to member_progress_summary
+        const { error: upsertError } = await supabase
+          .from('member_progress_summary')
+          .upsert({
+            lead_id: leadId,
+            ...metrics,
+            calculated_at: new Date().toISOString(),
+            last_import_batch_id: jobId
+          }, {
+            onConflict: 'lead_id'
+          });
+
+        if (upsertError) {
+          console.error(`Failed to upsert dashboard for lead ${leadId}:`, upsertError);
+        } else {
+          console.log(`Successfully updated dashboard for lead ${leadId}`);
+        }
+      } catch (memberError) {
+        console.error(`Error processing lead ${session.lead_id}:`, memberError);
+        // Continue with next member
+      }
+    }
+
+    console.log(`Dashboard calculations complete for ${uniqueSessions.length} members`);
+  } catch (error) {
+    console.error('Error in calculateMemberProgressDashboards:', error);
+    throw error;
+  }
+}
+
+/**
+ * Calculate all dashboard metrics for a specific member
+ * 
+ * @param supabase - Supabase client
+ * @param leadId - Lead ID to calculate metrics for
+ * @param moduleSequenceCache - Cache of module sequences by program_id (to avoid repeated DB queries)
+ */
+async function calculateMemberMetrics(supabase: any, leadId: number, moduleSequenceCache: Map<number, string[]>) {
+  console.log(`Calculating metrics for lead ${leadId}...`);
+
+  // Get external_user_id and mapping_id from survey_user_mappings
+  const { data: mapping, error: mappingError } = await supabase
+    .from('survey_user_mappings')
+    .select('external_user_id, mapping_id')
+    .eq('lead_id', leadId)
+    .maybeSingle();
+
+  if (mappingError || !mapping) {
+    console.log(`No survey mapping found for lead ${leadId}`);
+    return getDefaultMetrics();
+  }
+
+  const externalUserId = mapping.external_user_id;
+
+  // Get member program info for days_in_program
+  const { data: program, error: programError } = await supabase
+    .from('member_programs')
+    .select('start_date, duration, program_name')
+    .eq('lead_id', leadId)
+    .eq('active_flag', true)
+    .maybeSingle();
+
+  let daysInProgram: number | null = null;
+  console.log(`[DAYS_IN_PROGRAM DEBUG] Lead ${leadId}: programError=${!!programError}, program=${!!program}, start_date=${program?.start_date}`);
+  
+  if (programError) {
+    console.error(`Error fetching program for lead ${leadId}:`, programError);
+  } else if (!program) {
+    console.warn(`No active program found for lead ${leadId}`);
+  } else if (!program.start_date) {
+    console.warn(`Program found for lead ${leadId} but no start_date:`, JSON.stringify(program));
+  } else {
+    const startDate = new Date(program.start_date);
+    const today = new Date();
+    daysInProgram = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    console.log(`[DAYS_IN_PROGRAM SUCCESS] Lead ${leadId}: start_date=${program.start_date}, days_in_program=${daysInProgram}, type=${typeof daysInProgram}`);
+  }
+  
+  console.log(`[DAYS_IN_PROGRAM FINAL] Lead ${leadId}: daysInProgram=${daysInProgram} (will be saved to DB)`);
+
+  // Get curriculum progress from survey_user_progress (via mapping_id)
+  // Also get program_id to fetch the correct module sequence for this member
+  const { data: userProgress, error: progressError } = await supabase
+    .from('survey_user_progress')
+    .select('program_id, status, last_completed, working_on, date_of_last_completed')
+    .eq('mapping_id', mapping.mapping_id)
+    .maybeSingle();
+
+  // Get or fetch module sequence for this member's program
+  let moduleSequence: string[] = FALLBACK_MODULE_SEQUENCE; // Default
+  let programId = 2; // Default to 4 Month AIP Program
+  
+  if (userProgress && userProgress.program_id) {
+    programId = userProgress.program_id;
+    
+    // Check cache first
+    if (moduleSequenceCache.has(programId)) {
+      moduleSequence = moduleSequenceCache.get(programId)!;
+      console.log(`Using cached module sequence for program ${programId}`);
+    } else {
+      // Fetch from database and cache it
+      console.log(`Fetching module sequence for program ${programId}...`);
+      moduleSequence = await getModuleSequence(supabase, programId);
+      moduleSequenceCache.set(programId, moduleSequence);
+      console.log(`Cached module sequence for program ${programId} (${moduleSequence.length} modules)`);
+    }
+  } else {
+    console.warn(`No program_id found for lead ${leadId}, using fallback sequence`);
+  }
+
+  // Get all surveys for this member (excluding MSQ and PROMIS for now)
+  const { data: allSessions, error: sessionsError } = await supabase
+    .from('survey_response_sessions')
+    .select('session_id, form_id, completed_on, survey_forms!inner(form_name)')
+    .eq('external_user_id', externalUserId)
+    .not('form_id', 'in', '(3,6)') // Exclude MSQ and PROMIS for now
+    .order('completed_on', { ascending: true });
+
+  if (sessionsError) {
+    console.error('Error fetching sessions:', sessionsError);
+    return getDefaultMetrics();
+  }
+
+  if (!allSessions || allSessions.length === 0) {
+    console.log(`No surveys found for lead ${leadId}`);
+    return getDefaultMetrics();
+  }
+
+  const sessionIds = allSessions.map(s => s.session_id);
+
+  // Get all responses for these sessions
+  const { data: responses, error: responsesError} = await supabase
+    .from('survey_responses')
+    .select('session_id, question_id, answer_text, answer_numeric, survey_questions!inner(question_text)')
+    .in('session_id', sessionIds);
+
+  if (responsesError) {
+    console.error('Error fetching responses:', responsesError);
+    return getDefaultMetrics();
+  }
+
+  // Calculate health vitals
+  const healthVitals = calculateHealthVitals(allSessions, responses);
+  
+  // Calculate compliance metrics (with target for exercise)
+  const compliance = calculateCompliance(allSessions, responses);
+  
+  // Extract alerts (wins and concerns)
+  const alerts = extractAlerts(allSessions, responses);
+  
+  // Calculate timeline progress using survey_user_progress
+  const timeline = calculateTimelineProgress(userProgress, allSessions, moduleSequence);
+  
+  // Get goals from "Goals & Whys" survey
+  const goals = await extractGoals(supabase, externalUserId);
+  
+  // Extract weight tracking with session dates for chronological sorting
+  const weight = extractWeightData(allSessions, responses);
+  
+  // Calculate status indicator
+  const statusIndicator = calculateStatusIndicator(healthVitals, compliance, alerts, userProgress);
+
+  return {
+    // Profile
+    last_survey_date: allSessions[allSessions.length - 1]?.completed_on || null,
+    last_survey_name: (allSessions[allSessions.length - 1]?.survey_forms as any)?.form_name || null,
+    total_surveys_completed: allSessions.length,
+    days_in_program: daysInProgram,
+    status_indicator: statusIndicator,
+    
+    // Health vitals
+    ...healthVitals,
+    
+    // Compliance
+    ...compliance,
+    
+    // Alerts
+    latest_wins: JSON.stringify(alerts.wins),
+    latest_concerns: JSON.stringify(alerts.concerns),
+    
+    // Timeline
+    module_sequence: JSON.stringify(moduleSequence), // Full module list for member's program
+    ...timeline,
+    
+    // Goals
+    goals: JSON.stringify(goals),
+    
+    // Weight
+    current_weight: weight.current,
+    weight_change: weight.change
+  };
+}
+
+/**
+ * Calculate health vitals (energy, mood, motivation, wellbeing, sleep)
+ */
+function calculateHealthVitals(sessions: any[], responses: any[]) {
+  const metrics = {
+    energy: { scores: [] as number[], trend: 'no_data' as string },
+    mood: { scores: [] as number[], trend: 'no_data' as string },
+    motivation: { scores: [] as number[], trend: 'no_data' as string },
+    wellbeing: { scores: [] as number[], trend: 'no_data' as string },
+    sleep: { scores: [] as number[], trend: 'no_data' as string }
+  };
+
+  // Map question patterns to metrics
+  const questionPatterns = {
+    energy: ['rate your energy', 'energy level'],
+    mood: ['rate your mood', 'mood /'],
+    motivation: ['rate your motivation', 'motivation level'],
+    wellbeing: ['rate your wellbeing', 'general wellbeing'],
+    sleep: ['rate your sleep', 'sleep quality']
+  };
+
+  // Group responses by session
+  const sessionMap = new Map<number, any[]>();
+  for (const response of responses) {
+    if (!sessionMap.has(response.session_id)) {
+      sessionMap.set(response.session_id, []);
+    }
+    sessionMap.get(response.session_id)!.push(response);
+  }
+
+  // Extract scores for each session
+  for (const session of sessions) {
+    const sessionResponses = sessionMap.get(session.session_id) || [];
+    
+    for (const [metric, patterns] of Object.entries(questionPatterns)) {
+      for (const response of sessionResponses) {
+        const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
+        
+        // Check if this question matches the metric pattern
+        if (patterns.some(pattern => questionText.includes(pattern))) {
+          const score = response.answer_numeric;
+          if (score !== null && score !== undefined) {
+            metrics[metric as keyof typeof metrics].scores.push(Number(score));
+          }
+          break; // Found the question for this metric in this session
+        }
+      }
+    }
+  }
+
+  // Calculate trends and prepare output
+  const result: any = {};
+  for (const [metric, data] of Object.entries(metrics)) {
+    if (data.scores.length > 0) {
+      const currentScore = data.scores[data.scores.length - 1];
+      const trend = data.scores.length >= 2 
+        ? calculateTrend(data.scores[data.scores.length - 2], currentScore)
+        : 'stable';
+      
+      result[`${metric}_score`] = currentScore;
+      result[`${metric}_trend`] = trend;
+      result[`${metric}_sparkline`] = JSON.stringify(data.scores.slice(-10)); // Last 10 scores
+    } else {
+      result[`${metric}_score`] = null;
+      result[`${metric}_trend`] = 'no_data';
+      result[`${metric}_sparkline`] = JSON.stringify([]);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Calculate compliance metrics
+ */
+function calculateCompliance(sessions: any[], responses: any[]) {
+  const compliance = {
+    nutrition: { yes: 0, total: 0 },
+    supplements: { yes: 0, total: 0 },
+    exercise: { days: [] as number[] },
+    meditation: { yes: 0, total: 0 }
+  };
+
+  // Group responses by session
+  const sessionMap = new Map<number, any[]>();
+  for (const response of responses) {
+    if (!sessionMap.has(response.session_id)) {
+      sessionMap.set(response.session_id, []);
+    }
+    sessionMap.get(response.session_id)!.push(response);
+  }
+
+  // Extract compliance data
+  for (const session of sessions) {
+    const sessionResponses = sessionMap.get(session.session_id) || [];
+    
+    for (const response of sessionResponses) {
+      const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
+      const answer = response.answer_text?.toLowerCase() || '';
+
+      // Nutrition compliance
+      if (questionText.includes('following the nutritional plan') || 
+          questionText.includes('followed the nutritional plan')) {
+        compliance.nutrition.total++;
+        if (answer === 'yes') compliance.nutrition.yes++;
+      }
+
+      // Supplements compliance
+      if (questionText.includes('taken your supplements') || 
+          questionText.includes('taking supplements as prescribed')) {
+        compliance.supplements.total++;
+        if (answer === 'yes') compliance.supplements.yes++;
+      }
+
+      // Exercise days per week
+      if (questionText.includes('how many days per week do you exercise')) {
+        const days = response.answer_numeric;
+        if (days !== null && days !== undefined) {
+          compliance.exercise.days.push(Number(days));
+        }
+      }
+
+      // Meditation compliance
+      if (questionText.includes('abdominal breathing') || 
+          questionText.includes('meditation')) {
+        compliance.meditation.total++;
+        if (answer === 'yes' || answer === 'daily') compliance.meditation.yes++;
+      }
+    }
+  }
+
+  // Calculate percentages
+  const exerciseTarget = 5; // Standard target: 5 days per week
+  const latestExerciseDays = compliance.exercise.days.length > 0 
+    ? compliance.exercise.days[compliance.exercise.days.length - 1] 
+    : null;
+  
+  return {
+    nutrition_compliance_pct: compliance.nutrition.total > 0 
+      ? Math.round((compliance.nutrition.yes / compliance.nutrition.total) * 100) 
+      : null,
+    nutrition_streak: compliance.nutrition.yes, // Simplified for now
+    supplements_compliance_pct: compliance.supplements.total > 0 
+      ? Math.round((compliance.supplements.yes / compliance.supplements.total) * 100) 
+      : null,
+    exercise_compliance_pct: latestExerciseDays !== null
+      ? Math.round((latestExerciseDays / exerciseTarget) * 100)
+      : null,
+    exercise_days_per_week: latestExerciseDays,
+    meditation_compliance_pct: compliance.meditation.total > 0 
+      ? Math.round((compliance.meditation.yes / compliance.meditation.total) * 100) 
+      : null
+  };
+}
+
+/**
+ * Extract wins and concerns from open-ended responses
+ */
+function extractAlerts(sessions: any[], responses: any[]) {
+  const wins: any[] = [];
+  const concerns: any[] = [];
+  
+  // Group responses by session
+  const sessionMap = new Map<number, any[]>();
+  for (const response of responses) {
+    if (!sessionMap.has(response.session_id)) {
+      sessionMap.set(response.session_id, []);
+    }
+    sessionMap.get(response.session_id)!.push(response);
+  }
+
+  // Extract from recent sessions (last 5)
+  const recentSessions = sessions.slice(-5);
+
+  for (const session of recentSessions) {
+    const sessionResponses = sessionMap.get(session.session_id) || [];
+    
+    for (const response of sessionResponses) {
+      const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
+      const answer = response.answer_text || '';
+
+      // Skip empty or placeholder answers
+      if (!answer || answer.toLowerCase() === 'none' || answer.toLowerCase() === 'n/a') {
+        continue;
+      }
+
+      // Extract wins
+      if (questionText.includes('benefits') || 
+          questionText.includes('successes') || 
+          questionText.includes('positive health results')) {
+        
+        // Filter out negative responses even when answering "benefits" questions
+        const answerLower = answer.toLowerCase();
+        const negativeKeywords = [
+          'however', 'but ', 'worsened', 'worse', 'gotten worse', 'getting worse',
+          'no improvement', 'not improved', 'not better', 'no change',
+          'haven\'t', 'hasn\'t', 'didn\'t help', 'don\'t feel', 'doesn\'t',
+          'failed', 'unfortunately', 'disappointed', 'frustrated',
+          'same questions', 'why am i asked', 'over and over',
+          'both have worsened', 'still struggling', 'still have'
+        ];
+        
+        // Skip if answer contains strong negative indicators
+        const hasNegativeKeywords = negativeKeywords.some(keyword => answerLower.includes(keyword));
+        
+        if (!hasNegativeKeywords) {
+          wins.push({
+            date: session.completed_on,
+            message: answer.substring(0, 200), // Limit length
+            type: 'explicit'
+          });
+        }
+      }
+
+      // Extract concerns
+      if (questionText.includes('obstacles') || 
+          questionText.includes('concerns') || 
+          questionText.includes('challenges') || 
+          questionText.includes('hesitations')) {
+        concerns.push({
+          date: session.completed_on,
+          message: answer.substring(0, 200),
+          severity: 'medium'
+        });
+      }
+    }
+  }
+
+  return {
+    wins: wins.slice(-5).reverse(), // Keep last 5, newest first
+    concerns: concerns.slice(-5).reverse() // Keep last 5, newest first
+  };
+}
+
+/**
+ * Calculate timeline progress using survey_user_progress table
+ * 
+ * IMPORTANT: 
+ * - last_completed = last module they finished
+ * - working_on = module they SHOULD BE on (not currently on)
+ * - Overdue = all modules from (last_completed + 1) to working_on (INCLUSIVE of working_on)
+ * 
+ * @param userProgress - User progress data from survey_user_progress table
+ * @param sessions - All survey sessions for this member
+ * @param moduleSequence - Ordered array of module names from survey_modules table
+ */
+function calculateTimelineProgress(userProgress: any | null, sessions: any[], moduleSequence: string[]) {
+  if (!userProgress || !userProgress.last_completed) {
+    // Fallback: use session data
+    const milestones = sessions.map(s => (s.survey_forms as any)?.form_name || 'Unknown');
+    return {
+      completed_milestones: JSON.stringify(milestones),
+      next_milestone: null,
+      overdue_milestones: JSON.stringify([])
+    };
+  }
+
+  const lastCompleted = userProgress.last_completed;
+  const workingOn = userProgress.working_on; // SHOULD BE on (not currently on)
+
+  // Find position in module sequence
+  const lastCompletedIndex = moduleSequence.indexOf(lastCompleted);
+  const workingOnIndex = moduleSequence.indexOf(workingOn);
+
+  // Warn if module not found (indicates bad data in survey_user_progress)
+  if (lastCompletedIndex === -1) {
+    console.warn(`[TIMELINE WARNING] Module not found in sequence: last_completed="${lastCompleted}" (available: ${moduleSequence.join(', ')})`);
+  }
+  if (workingOn !== 'Finished' && workingOnIndex === -1) {
+    console.warn(`[TIMELINE WARNING] Module not found in sequence: working_on="${workingOn}"`);
+  }
+
+  // Completed milestones: all modules up to and including last_completed
+  const completedMilestones = lastCompletedIndex >= 0 
+    ? moduleSequence.slice(0, lastCompletedIndex + 1)
+    : [];
+
+  // Next milestone: always the module immediately after last_completed
+  // ONLY show "Program Complete" if they've ACTUALLY completed all modules
+  let nextMilestone: string | null = null;
+  const allModulesActuallyCompleted = lastCompletedIndex >= 0 && lastCompletedIndex === moduleSequence.length - 1;
+  
+  if (allModulesActuallyCompleted) {
+    nextMilestone = 'Program Complete';
+  } else if (lastCompletedIndex >= 0 && lastCompletedIndex < moduleSequence.length - 1) {
+    nextMilestone = moduleSequence[lastCompletedIndex + 1];
+  }
+
+  // Overdue milestones: ALL modules from (last_completed + 1) to working_on (INCLUSIVE)
+  // SPECIAL CASE: If working_on = "Finished" but they haven't completed all modules,
+  // then ALL remaining modules are overdue
+  const overdueMilestones: string[] = [];
+  
+  if (workingOn === 'Finished' && !allModulesActuallyCompleted && lastCompletedIndex >= 0) {
+    // They SHOULD be finished, but aren't → all remaining modules are overdue
+    for (let i = lastCompletedIndex + 1; i < moduleSequence.length; i++) {
+      overdueMilestones.push(moduleSequence[i]);
+    }
+  } else if (lastCompletedIndex >= 0 && workingOnIndex >= 0 && workingOnIndex > lastCompletedIndex) {
+    // Normal case: modules between last_completed and working_on are overdue
+    for (let i = lastCompletedIndex + 1; i <= workingOnIndex; i++) {
+      if (i < moduleSequence.length) {
+        overdueMilestones.push(moduleSequence[i]);
+      }
+    }
+  }
+
+  return {
+    completed_milestones: JSON.stringify(completedMilestones),
+    next_milestone: nextMilestone,
+    overdue_milestones: JSON.stringify(overdueMilestones)
+  };
+}
+
+/**
+ * Extract weight tracking data from survey responses
+ * Sorts by session date to ensure correct chronological order
+ */
+function extractWeightData(sessions: any[], responses: any[]) {
+  const weightPattern = ['weight', 'current weight', 'body weight'];
+  const weightData: Array<{ value: number; date: string; sessionId: number }> = [];
+
+  // Create a map of session_id to completed_on date
+  const sessionDateMap = new Map<number, string>();
+  for (const session of sessions) {
+    sessionDateMap.set(session.session_id, session.completed_on);
+  }
+
+  for (const response of responses) {
+    const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
+    
+    // Check if this is a weight question (exclude MSQ "excessive weight" type questions)
+    const isWeightQuestion = weightPattern.some(pattern => questionText.includes(pattern));
+    const isActualWeight = questionText.includes('current weight') || questionText.includes('body weight');
+    
+    if (isWeightQuestion && isActualWeight) {
+      const weight = response.answer_numeric;
+      const sessionDate = sessionDateMap.get(response.session_id);
+      
+      if (weight !== null && weight !== undefined && weight > 0 && weight < 500 && sessionDate) {
+        // Reasonable weight range filter
+        weightData.push({ 
+          value: Number(weight), 
+          date: sessionDate,
+          sessionId: response.session_id
+        });
+      }
+    }
+  }
+
+  if (weightData.length === 0) {
+    return { current: null, change: null };
+  }
+
+  // Sort by date chronologically (earliest to latest)
+  weightData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const firstWeight = weightData[0].value;
+  const currentWeight = weightData[weightData.length - 1].value;
+  const weightChange = currentWeight - firstWeight;
+
+  return {
+    current: currentWeight,
+    change: weightChange
+  };
+}
+
+/**
+ * Extract goals from "Goals & Whys" survey
+ */
+async function extractGoals(supabase: any, memberId: number) {
+  const { data: goalSession, error } = await supabase
+    .from('survey_response_sessions')
+    .select(`
+      session_id,
+      survey_responses!inner(answer_text, survey_questions!inner(question_text))
+    `)
+    .eq('external_user_id', memberId)
+    .eq('form_id', 2) // "Goals & Whys" survey
+    .order('completed_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !goalSession) {
+    return [];
+  }
+
+  const goals: any[] = [];
+  const responses = goalSession.survey_responses || [];
+
+  for (const response of responses) {
+    const questionText = response.survey_questions?.question_text || '';
+    const answer = response.answer_text || '';
+
+    if (questionText.includes('SMART Goal') && answer && answer !== '' && answer.toLowerCase() !== 'n/a') {
+      goals.push({
+        goal_text: answer,
+        status: 'on_track' // Default status
+      });
+    }
+  }
+
+  return goals;
+}
+
+/**
+ * Calculate overall status indicator
+ */
+function calculateStatusIndicator(healthVitals: any, compliance: any, alerts: any, userProgress: any | null): string {
+  // Red flags
+  if (alerts.concerns.length >= 3) return 'red';
+  if (compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 40) return 'red';
+  
+  // Check for declining trends
+  const decliningCount = Object.keys(healthVitals)
+    .filter(key => key.includes('_trend'))
+    .filter(key => healthVitals[key] === 'declining')
+    .length;
+  
+  if (decliningCount >= 3) return 'red';
+  
+  // Check if behind on curriculum AND overdue > 14 days
+  if (userProgress && userProgress.status === 'Behind' && userProgress.date_of_last_completed) {
+    const lastCompletionDate = new Date(userProgress.date_of_last_completed);
+    const today = new Date();
+    const daysSinceLastSurvey = Math.floor((today.getTime() - lastCompletionDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysSinceLastSurvey > 14) return 'red';
+  }
+  
+  // Yellow flags
+  if (alerts.concerns.length >= 1) return 'yellow';
+  if (compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 70) return 'yellow';
+  if (decliningCount >= 1) return 'yellow';
+  if (userProgress && userProgress.status === 'Behind') return 'yellow';
+  
+  // Green - all good
+  return 'green';
+}
+
+/**
+ * Calculate trend based on previous and current scores
+ */
+function calculateTrend(previousScore: number, currentScore: number): string {
+  const diff = currentScore - previousScore;
+  if (diff > 0.5) return 'improving';
+  if (diff < -0.5) return 'declining';
+  return 'stable';
+}
+
+/**
+ * Get default metrics when no data is available
+ */
+function getDefaultMetrics() {
+  return {
+    last_survey_date: null,
+    last_survey_name: null,
+    total_surveys_completed: 0,
+    days_in_program: null,
+    status_indicator: 'green',
+    energy_score: null,
+    energy_trend: 'no_data',
+    energy_sparkline: JSON.stringify([]),
+    mood_score: null,
+    mood_trend: 'no_data',
+    mood_sparkline: JSON.stringify([]),
+    motivation_score: null,
+    motivation_trend: 'no_data',
+    motivation_sparkline: JSON.stringify([]),
+    wellbeing_score: null,
+    wellbeing_trend: 'no_data',
+    wellbeing_sparkline: JSON.stringify([]),
+    sleep_score: null,
+    sleep_trend: 'no_data',
+    sleep_sparkline: JSON.stringify([]),
+    nutrition_compliance_pct: null,
+    nutrition_streak: 0,
+    supplements_compliance_pct: null,
+    exercise_compliance_pct: null,
+    exercise_days_per_week: null,
+    meditation_compliance_pct: null,
+    latest_wins: JSON.stringify([]),
+    latest_concerns: JSON.stringify([]),
+    module_sequence: JSON.stringify(FALLBACK_MODULE_SEQUENCE), // Use fallback when no data
+    completed_milestones: JSON.stringify([]),
+    next_milestone: null,
+    overdue_milestones: JSON.stringify([]),
+    goals: JSON.stringify([]),
+    current_weight: null,
+    weight_change: null
+  };
 }
