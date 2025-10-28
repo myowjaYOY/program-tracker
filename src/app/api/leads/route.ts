@@ -71,6 +71,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
 
+  // Check for existing lead with same name and email (case-insensitive)
+  if (parse.data.email && parse.data.email !== '') {
+    const { data: existingLead } = await supabase
+      .from('leads')
+      .select('lead_id, first_name, last_name, email')
+      .ilike('first_name', parse.data.first_name)
+      .ilike('last_name', parse.data.last_name)
+      .ilike('email', parse.data.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingLead) {
+      return NextResponse.json(
+        {
+          error: `A lead with this name and email already exists: ${existingLead.first_name} ${existingLead.last_name} (${existingLead.email}) - Lead ID #${existingLead.lead_id}`,
+        },
+        { status: 409 } // 409 Conflict
+      );
+    }
+  }
+
   // Convert empty pmedate string to null for database
   const leadData = {
     ...parse.data,
@@ -88,6 +109,13 @@ export async function POST(req: NextRequest) {
     .single();
   if (error) {
     console.error('Supabase error:', error);
+    // Check if it's a unique constraint violation (in case backend check missed it)
+    if (error.code === '23505' && error.message.includes('idx_leads_unique_name_email')) {
+      return NextResponse.json(
+        { error: 'A lead with this name and email already exists.' },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ data }, { status: 201 });

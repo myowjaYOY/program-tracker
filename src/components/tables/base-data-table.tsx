@@ -312,7 +312,12 @@ export default function BaseDataTable<T extends BaseEntity>({
           columns: currentState.columns,
           sorting: currentState.sorting,
           filter: currentState.filter,
-          pagination: currentState.pagination,
+          // Only save page size preference, NOT row count (which should be dynamic based on data)
+          pagination: {
+            paginationModel: {
+              pageSize: currentState.pagination?.paginationModel?.pageSize ?? 25
+            }
+          },
           density: currentState.density,
           pinnedColumns: currentState.pinnedColumns,
         };

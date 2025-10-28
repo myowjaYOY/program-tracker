@@ -3,8 +3,110 @@
 ## Overview
 This document explains how every metric on the Member Progress Dashboard is calculated, what it means, and how to interpret it. This information should be made available to users through tooltips, help icons, or an info panel on the dashboard.
 
-**Last Updated:** October 26, 2025  
-**Version:** 1.0
+**Last Updated:** October 27, 2025  
+**Version:** 2.0 (Decoupled Architecture)
+
+---
+
+## Architecture
+
+### Decoupled Analysis Design (v2.0)
+
+**What Changed (October 27, 2025):**
+The dashboard analysis logic has been decoupled from the import function to enable flexible, on-demand re-analysis.
+
+#### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 1: Data Import (process-survey-import)               │
+│ - Stores raw survey responses                               │
+│ - Fast, simple, never needs changes                         │
+│ - Triggers analysis after successful import                 │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 2: Analysis Service (analyze-member-progress)        │
+│ - Reads survey responses from database                      │
+│ - Applies classification logic (wins/challenges/etc)        │
+│ - Calculates all dashboard metrics                          │
+│ - Writes to member_progress_summary                         │
+│ - Can be re-run ANYTIME on historical data                  │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 3: Dashboard UI (React)                              │
+│ - Reads pre-calculated metrics from database                │
+│ - Fast loading (no computation on page load)                │
+│ - Cache-friendly                                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Key Benefits
+
+1. **Flexible Logic Refinement**: Change wins/challenges classification anytime
+2. **On-Demand Re-Analysis**: Single button click re-processes all members
+3. **Fast Iteration**: Test logic changes in seconds, not weeks
+4. **No Import Dependency**: Update dashboards without new survey data
+5. **Separation of Concerns**: Import never breaks due to analysis issues
+
+#### How Analysis is Triggered
+
+**Automatic (After Import):**
+- Import function completes successfully
+- HTTP POST to `analyze-member-progress` with `mode: 'batch'`
+- Analysis runs for all members in that import batch
+- Takes ~20-30 seconds for typical batch
+
+**Manual (Admin UI):**
+- Navigate to Dashboard Analytics admin page
+- Click "Re-Analyze All Dashboards" button
+- HTTP POST to `analyze-member-progress` with `mode: 'all'`
+- Re-processes ALL members (~64 members in ~25 seconds)
+
+#### Data Flow
+
+```
+CSV Upload → Import Function → Database (raw survey data)
+                   ↓
+             Triggers Analysis Function
+                   ↓
+         Database Query (all surveys for member)
+                   ↓
+         Calculate Metrics (health vitals, compliance, etc.)
+                   ↓
+         Write to member_progress_summary table
+                   ↓
+         Dashboard UI reads pre-calculated metrics
+```
+
+#### Performance
+
+- **Import**: No significant change (~5-10 seconds for typical batch)
+- **Analysis**: ~0.4 seconds per member (runs in parallel with import completion)
+- **Dashboard Load**: Instant (reads pre-calculated data)
+- **Re-Analysis**: ~25 seconds for 64 members
+
+#### Database Tables
+
+**Source Data:**
+- `survey_response_sessions` - Survey completion records
+- `survey_responses` - Individual question answers
+- `survey_user_progress` - Curriculum tracking
+- `member_programs` - Program enrollment
+
+**Calculated Data:**
+- `member_progress_summary` - Pre-calculated dashboard metrics (THIS is what the UI reads)
+
+#### Admin Control
+
+**Location:** Dashboard → Admin → Dashboard Analytics
+
+**Features:**
+- View current dashboard statistics
+- See last analysis timestamp
+- Trigger re-analysis for all members
+- View analysis results in real-time
 
 ---
 
@@ -363,22 +465,42 @@ Meditation Compliance % = (Yes/Daily answers / Total answers) × 100
 
 ---
 
-## 4. ALERTS CARD
+## 4. WINS & CHALLENGES CARDS
 
-Alerts highlight explicit wins and concerns the member has reported in open-ended survey questions.
+**🎯 CRITICAL: Sentiment-Based Classification**
 
-### Wins (Latest 5)
-**What they are:** Positive results, improvements, or breakthroughs the member has shared.
+These cards highlight positive progress and challenges based on **sentiment analysis of ALL text responses**, not filtered by question type.
 
-**How they're extracted:**
-- Search recent surveys (last 5 sessions)
-- Look for questions containing:
-  - "benefits"
-  - "successes"
-  - "positive health results"
-  - "improvements"
-  - "victories"
-- Extract answer text (non-empty, not "none" or "n/a")
+**How it works:**
+- Analyzes **ALL text responses** from recent surveys (last 5 sessions)
+- **Does NOT filter by question type** - examines every open-ended answer
+- Classifies based on **ANSWER sentiment**, not question keywords
+- **Nothing disappears** - all feedback is captured (wins OR challenges)
+
+**Sentiment Analysis Logic:**
+1. **Positive Indicators** (37 keywords): "better", "improved", "great", "excellent", "more energy", "less pain", "weight loss", "grateful", etc.
+2. **Negative Indicators** (50+ keywords): "worse", "worsened", "no improvement", "struggling", "pain", "frustrated", "anxious", "overwhelmed", "can't", etc.
+3. **Classification:**
+   - `positiveCount > negativeCount` → **Win**
+   - `negativeCount > positiveCount` → **Challenge**
+   - `positiveCount == negativeCount` → **Challenge** (cautious approach - better to flag concern)
+
+**What gets skipped:**
+- Empty answers or placeholders ("none", "n/a", "yes", "no")
+- Very short answers (< 5 characters)
+- Pure numeric answers
+- Questions asking for numeric data (weight, days, ratings)
+
+---
+
+### Wins Card (Latest 5)
+**What they are:** Positive results, improvements, or breakthroughs detected in ANY answer text.
+
+**Examples captured:**
+- "My energy is so much better!" (answer to "How are you feeling?")
+- "Lost 5 pounds this week!" (answer to "Any updates?")
+- "Pain decreased significantly" (answer to "What changes have you noticed?")
+- "Feeling motivated and strong" (answer to "How's your mood?")
 
 **Display:**
 - Green background
@@ -394,20 +516,16 @@ Alerts highlight explicit wins and concerns the member has reported in open-ende
 
 ---
 
-### Concerns (Latest 5)
-**What they are:** Challenges, obstacles, symptoms, or worries the member has reported.
+### Challenges Card (Latest 5)
+**What they are:** Concerns, struggles, or negative feedback detected in ANY answer text.
 
-**How they're extracted:**
-- Search recent surveys (last 5 sessions)
-- Look for questions containing:
-  - "obstacles"
-  - "concerns"
-  - "challenges"
-  - "struggles"
-  - "hesitations"
-  - "symptoms"
-  - "problems"
-- Extract answer text (non-empty, not "none" or "n/a")
+**Examples captured:**
+- "My inflammation improved, but my knees have worsened" (mixed sentiment → flagged as challenge)
+- "Not seeing any improvement yet" (answer to "How are you doing?")
+- "Still struggling with fatigue" (answer to any question)
+- "Why am I asked the same questions over and over?" (frustration detected)
+
+**IMPORTANT:** Even answers to "What's going well?" questions can be flagged as challenges if they contain negative sentiment!
 
 **Severity levels:**
 - Currently all flagged as "medium" (yellow)
@@ -420,14 +538,21 @@ Alerts highlight explicit wins and concerns the member has reported in open-ende
 - Most recent at top
 
 **User interpretation:**
-- Require follow-up action
-- 3+ concerns = RED status, immediate attention needed
+- **Action required!** These need provider follow-up
+- 3+ challenges = RED status, immediate attention needed
+- May indicate:
+  - Side effects or reactions
+  - Program compliance issues
+  - External stressors affecting progress
+  - Need for protocol adjustments
+  - Member frustration or confusion
 - Common themes:
   - Detox symptoms
   - Social challenges
   - Time/preparation challenges
   - Budget/affordability
   - Lack of results/frustration
+- Document follow-up action in member notes
 - Address promptly to prevent dropout
 
 ---

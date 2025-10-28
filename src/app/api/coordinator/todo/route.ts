@@ -266,7 +266,12 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ data: enriched });
+    const response = NextResponse.json({ data: enriched });
+    // Bust cache to ensure fresh data after role fixes
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    return response;
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || 'Internal server error' },

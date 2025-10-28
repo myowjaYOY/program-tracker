@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { memberProgramFinancesSchema } from '@/lib/validations/member-program-finances';
+import { calculateTaxesOnTaxableItems } from '@/lib/utils/financial-calculations';
 
 export async function GET(
   req: NextRequest,
@@ -136,6 +137,65 @@ export async function PUT(
       .select('financing_type_id, finance_charges, discounts, taxes, contracted_at_margin, variance')
       .eq('member_program_id', id)
       .single();
+
+    // ========================================
+    // RECALCULATE TAXES SERVER-SIDE
+    // ========================================
+    // Always recalculate taxes from fresh database data to prevent
+    // stale client-side cache from causing tax drift (critical bug fix)
+    
+    // 1. Fetch fresh program items to calculate total_taxable_charge
+    const { data: programItems, error: itemsError } = await supabase
+      .from('member_program_items')
+      .select('charge, taxable_flag, quantity')
+      .eq('member_program_id', id)
+      .eq('active_flag', true);
+
+    if (itemsError) {
+      console.error('Failed to fetch program items for tax calculation:', itemsError);
+      return NextResponse.json(
+        { error: 'Failed to calculate taxes: could not fetch program items' },
+        { status: 500 }
+      );
+    }
+
+    // 2. Calculate total_charge and total_taxable_charge from items
+    let totalCharge = 0;
+    let totalTaxableCharge = 0;
+    
+    if (programItems && programItems.length > 0) {
+      for (const item of programItems) {
+        const itemCharge = Number(item.charge || 0) * Number(item.quantity || 0);
+        totalCharge += itemCharge;
+        if (item.taxable_flag) {
+          totalTaxableCharge += itemCharge;
+        }
+      }
+    }
+
+    // 3. Get the discount value (use new value if being updated, otherwise current)
+    const discountToUse = (validatedData as any).discounts !== undefined
+      ? Number((validatedData as any).discounts)
+      : Number(currentFinances?.discounts || 0);
+
+    // 4. Recalculate taxes server-side using the proven financial calculation function
+    const recalculatedTaxes = calculateTaxesOnTaxableItems(
+      totalCharge,
+      totalTaxableCharge,
+      discountToUse
+    );
+
+    // 5. Override client-sent taxes with server-calculated value
+    // This prevents stale browser cache from corrupting tax data
+    (validatedData as any).taxes = recalculatedTaxes;
+
+    console.log(`[Finances API] Tax recalculation for program ${id}:`, {
+      totalCharge: totalCharge.toFixed(2),
+      totalTaxableCharge: totalTaxableCharge.toFixed(2),
+      discountToUse: discountToUse.toFixed(2),
+      recalculatedTaxes: recalculatedTaxes.toFixed(2),
+      clientSentTaxes: body.taxes !== undefined ? Number(body.taxes).toFixed(2) : 'not provided'
+    });
 
     const updateData = {
       ...validatedData,

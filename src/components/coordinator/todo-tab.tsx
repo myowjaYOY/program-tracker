@@ -58,12 +58,14 @@ export default function CoordinatorToDoTab({
     setIsNotesModalOpen(false);
     setSelectedLead(null);
     // Invalidate todo query to refresh note counts
+    const sp = new URLSearchParams();
+    if (memberId) sp.set('memberId', String(memberId));
+    if (range && range !== 'all') sp.set('range', range);
+    if (start) sp.set('start', start);
+    if (end) sp.set('end', end);
+    if (showCompleted) sp.set('showCompleted', 'true');
     qc.invalidateQueries({
-      queryKey: coordinatorKeys.todo(
-        new URLSearchParams(
-          memberId ? { memberId: String(memberId), range } : { range }
-        ).toString()
-      ),
+      queryKey: coordinatorKeys.todo(sp.toString()),
     });
   };
 
@@ -72,17 +74,39 @@ export default function CoordinatorToDoTab({
     const sp = new URLSearchParams();
     if (memberId) sp.set('memberId', String(memberId));
     if (range && range !== 'all') sp.set('range', range);
+    if (start) sp.set('start', start);
+    if (end) sp.set('end', end);
+    if (showCompleted) sp.set('showCompleted', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.todo(qs);
 
     // Optimistic update - immediately update the UI
     qc.setQueryData(queryKey, (oldData: any) => {
       if (!oldData) return oldData;
-      return oldData.map((item: any) => 
-        item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
-          ? { ...item, completed_flag: !row.completed_flag }
-          : item
-      );
+      
+      // If showing completed tasks, just flip the flag
+      if (showCompleted) {
+        return oldData.map((item: any) => 
+          item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
+            ? { ...item, completed_flag: !row.completed_flag }
+            : item
+        );
+      }
+      
+      // If NOT showing completed, handle based on current state
+      if (!row.completed_flag) {
+        // Marking as complete - remove from incomplete list
+        return oldData.filter((item: any) => 
+          item.member_program_item_task_schedule_id !== row.member_program_item_task_schedule_id
+        );
+      } else {
+        // Marking as incomplete - flip flag (item stays in list)
+        return oldData.map((item: any) => 
+          item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
+            ? { ...item, completed_flag: false }
+            : item
+        );
+      }
     });
 
     try {
@@ -101,10 +125,17 @@ export default function CoordinatorToDoTab({
       }
       
       // Ensure data is fresh after successful update
-      await qc.invalidateQueries({ queryKey });
+      // Use refetchType: 'active' to force refetch even if data is within staleTime
+      await qc.invalidateQueries({ 
+        queryKey,
+        refetchType: 'active'
+      });
       
       // Also invalidate metrics to update the cards
-      qc.invalidateQueries({ queryKey: coordinatorKeys.metrics() });
+      await qc.invalidateQueries({ 
+        queryKey: coordinatorKeys.metrics(),
+        refetchType: 'active'
+      });
     } catch {
       // Revert optimistic update on error
       qc.invalidateQueries({ queryKey });
