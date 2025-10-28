@@ -9,10 +9,10 @@ import {
   coordinatorKeys,
 } from '@/lib/hooks/use-coordinator';
 import { useQueryClient } from '@tanstack/react-query';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { LeadNotesModal } from '@/components/notes';
+import ScheduleStatusChip from '@/components/ui/schedule-status-chip';
+import { toast } from 'sonner';
 
 interface CoordinatorToDoTabProps {
   memberId?: number | null;
@@ -20,6 +20,7 @@ interface CoordinatorToDoTabProps {
   start?: string | undefined;
   end?: string | undefined;
   showCompleted?: boolean;
+  hideMissed?: boolean;
 }
 
 export default function CoordinatorToDoTab({
@@ -28,6 +29,7 @@ export default function CoordinatorToDoTab({
   start,
   end,
   showCompleted = false,
+  hideMissed = false,
 }: CoordinatorToDoTabProps) {
   const {
     data = [],
@@ -39,6 +41,7 @@ export default function CoordinatorToDoTab({
     start: start ?? null,
     end: end ?? null,
     showCompleted,
+    hideMissed,
   });
   const qc = useQueryClient();
 
@@ -64,12 +67,13 @@ export default function CoordinatorToDoTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
+    if (hideMissed) sp.set('hideMissed', 'true');
     qc.invalidateQueries({
       queryKey: coordinatorKeys.todo(sp.toString()),
     });
   };
 
-  async function toggleComplete(row: any): Promise<void> {
+  async function handleStatusChange(row: any, newValue: boolean | null): Promise<void> {
     // Generate query key exactly the same way as the hook
     const sp = new URLSearchParams();
     if (memberId) sp.set('memberId', String(memberId));
@@ -77,6 +81,7 @@ export default function CoordinatorToDoTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
+    if (hideMissed) sp.set('hideMissed', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.todo(qs);
 
@@ -84,26 +89,43 @@ export default function CoordinatorToDoTab({
     qc.setQueryData(queryKey, (oldData: any) => {
       if (!oldData) return oldData;
       
-      // If showing completed tasks, just flip the flag
+      // If showing completed tasks, just update the value (never remove)
       if (showCompleted) {
         return oldData.map((item: any) => 
           item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
-            ? { ...item, completed_flag: !row.completed_flag }
+            ? { ...item, completed_flag: newValue }
             : item
         );
       }
       
-      // If NOT showing completed, handle based on current state
-      if (!row.completed_flag) {
-        // Marking as complete - remove from incomplete list
+      // If hideMissed is active, handle accordingly
+      if (hideMissed) {
+        // Only showing pending - if changing to anything other than null, remove it
+        if (newValue !== null) {
+          return oldData.filter((item: any) => 
+            item.member_program_item_task_schedule_id !== row.member_program_item_task_schedule_id
+          );
+        } else {
+          // Changing back to pending - keep it
+          return oldData.map((item: any) => 
+            item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
+              ? { ...item, completed_flag: newValue }
+              : item
+          );
+        }
+      }
+      
+      // Default: showing pending + missed (not completed)
+      if (newValue === true) {
+        // Marking as redeemed - remove from list
         return oldData.filter((item: any) => 
           item.member_program_item_task_schedule_id !== row.member_program_item_task_schedule_id
         );
       } else {
-        // Marking as incomplete - flip flag (item stays in list)
+        // Marking as missed or pending - update value (item stays in list)
         return oldData.map((item: any) => 
           item.member_program_item_task_schedule_id === row.member_program_item_task_schedule_id
-            ? { ...item, completed_flag: false }
+            ? { ...item, completed_flag: newValue }
             : item
         );
       }
@@ -115,12 +137,13 @@ export default function CoordinatorToDoTab({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ completed_flag: !row.completed_flag }),
+        body: JSON.stringify({ completed_flag: newValue }),
       });
       
       if (!res.ok) {
         // Revert optimistic update on error
         qc.invalidateQueries({ queryKey });
+        toast.error('Failed to update status');
         return;
       }
       
@@ -136,9 +159,12 @@ export default function CoordinatorToDoTab({
         queryKey: coordinatorKeys.metrics(),
         refetchType: 'active'
       });
+      
+      // Success - no toast needed (optimistic update already shown)
     } catch {
       // Revert optimistic update on error
       qc.invalidateQueries({ queryKey });
+      toast.error('Failed to update status');
     }
   }
 
@@ -230,55 +256,20 @@ export default function CoordinatorToDoTab({
     { field: 'description', headerName: 'Description', width: 260 },
     {
       field: 'completed_flag',
-      headerName: 'Completed',
+      headerName: 'Redeemed',
       width: 130,
       renderCell: params => {
         const row: any = params.row;
-        const isCompleted = !!row.completed_flag;
         const readOnly =
           (row.program_status_name || '').toLowerCase() !== 'active';
         return (
-          <Chip
-            label={isCompleted ? 'Yes' : 'No'}
-            color={isCompleted ? 'success' : 'default'}
-            size="small"
-            onClick={() => {
-              if (!readOnly) void toggleComplete(row);
-            }}
-            sx={{ cursor: readOnly ? 'default' : 'pointer' }}
+          <ScheduleStatusChip
+            completed_flag={row.completed_flag}
+            onStatusChange={(newValue) => handleStatusChange(row, newValue)}
+            readOnly={readOnly}
           />
         );
       },
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      sortable: false,
-      renderCell: params => (
-        <Box>
-          <IconButton
-            size="small"
-            color={params.row.completed_flag ? 'success' : 'primary'}
-            disabled={
-              (params.row.program_status_name || '').toLowerCase() !== 'active'
-            }
-            onClick={() => {
-              if (
-                (params.row.program_status_name || '').toLowerCase() ===
-                'active'
-              )
-                void toggleComplete(params.row);
-            }}
-          >
-            {params.row.completed_flag ? (
-              <CheckCircleOutlineIcon />
-            ) : (
-              <RadioButtonUncheckedIcon />
-            )}
-          </IconButton>
-        </Box>
-      ),
     },
     {
       field: 'role_name',
@@ -320,7 +311,11 @@ export default function CoordinatorToDoTab({
         getRowId={row => row.member_program_item_task_schedule_id}
         persistStateKey="coordinatorToDoGrid"
         rowClassName={(row: any) => {
-          if (row?.completed_flag) return '';
+          const completedFlag = row?.completed_flag;
+          // If decision made (not null), no color - item is resolved
+          if (completedFlag !== null) return '';
+          
+          // Only pending items (null) get date-based coloring
           const dateStr = row?.due_date as string | undefined;
           if (!dateStr) return '';
           const today = new Date();

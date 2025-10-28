@@ -144,10 +144,10 @@ export async function PUT(
     // Always recalculate taxes from fresh database data to prevent
     // stale client-side cache from causing tax drift (critical bug fix)
     
-    // 1. Fetch fresh program items to calculate total_taxable_charge
+    // 1. Fetch fresh program items with therapy info to calculate total_taxable_charge
     const { data: programItems, error: itemsError } = await supabase
       .from('member_program_items')
-      .select('charge, taxable_flag, quantity')
+      .select('item_charge, quantity, therapies!inner(taxable)')
       .eq('member_program_id', id)
       .eq('active_flag', true);
 
@@ -165,9 +165,9 @@ export async function PUT(
     
     if (programItems && programItems.length > 0) {
       for (const item of programItems) {
-        const itemCharge = Number(item.charge || 0) * Number(item.quantity || 0);
+        const itemCharge = Number(item.item_charge || 0) * Number(item.quantity || 0);
         totalCharge += itemCharge;
-        if (item.taxable_flag) {
+        if (item.therapies?.taxable) {
           totalTaxableCharge += itemCharge;
         }
       }
@@ -190,10 +190,10 @@ export async function PUT(
     (validatedData as any).taxes = recalculatedTaxes;
 
     console.log(`[Finances API] Tax recalculation for program ${id}:`, {
-      totalCharge: totalCharge.toFixed(2),
-      totalTaxableCharge: totalTaxableCharge.toFixed(2),
-      discountToUse: discountToUse.toFixed(2),
-      recalculatedTaxes: recalculatedTaxes.toFixed(2),
+      totalCharge: Number(totalCharge).toFixed(2),
+      totalTaxableCharge: Number(totalTaxableCharge).toFixed(2),
+      discountToUse: Number(discountToUse).toFixed(2),
+      recalculatedTaxes: Number(recalculatedTaxes).toFixed(2),
       clientSentTaxes: body.taxes !== undefined ? Number(body.taxes).toFixed(2) : 'not provided'
     });
 
@@ -276,15 +276,18 @@ export async function PUT(
     return NextResponse.json({ data });
   } catch (error) {
     if (error instanceof Error && error.name === 'ZodError') {
+      console.error('[Finances API] Zod validation error:', error);
       return NextResponse.json(
-        { error: 'Invalid data provided' },
+        { error: 'Invalid data provided', details: (error as any).issues },
         { status: 400 }
       );
     }
+    console.error('[Finances API] Unexpected error in PUT /finances:', error);
     return NextResponse.json(
       {
         error: 'Internal server error',
-        details: (error as any)?.message ?? null,
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : null,
       },
       { status: 500 }
     );

@@ -4,8 +4,6 @@ import React, { useState } from 'react';
 import { Box, IconButton, Chip, Tooltip } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import {
   useCoordinatorScript,
@@ -13,6 +11,8 @@ import {
 } from '@/lib/hooks/use-coordinator';
 import { useQueryClient } from '@tanstack/react-query';
 import { LeadNotesModal } from '@/components/notes';
+import ScheduleStatusChip from '@/components/ui/schedule-status-chip';
+import { toast } from 'sonner';
 
 interface CoordinatorScriptTabProps {
   memberId?: number | null;
@@ -20,6 +20,7 @@ interface CoordinatorScriptTabProps {
   start?: string | undefined;
   end?: string | undefined;
   showCompleted?: boolean;
+  hideMissed?: boolean;
 }
 
 type Row = {
@@ -29,7 +30,7 @@ type Row = {
   program_status_name?: string | null;
   instance_number: number;
   scheduled_date: string;
-  completed_flag: boolean;
+  completed_flag: boolean | null;  // Three-state: true=redeemed, false=missed, null=pending
   therapy_name?: string | null;
   therapy_type_name?: string | null;
   program_role_id?: number | null;
@@ -43,6 +44,10 @@ type Row = {
   updated_by_full_name?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  // For notes
+  lead_id?: number | null;
+  member_name?: string | null;
+  note_count?: number;
 };
 
 export default function CoordinatorScriptTab({
@@ -51,6 +56,7 @@ export default function CoordinatorScriptTab({
   start,
   end,
   showCompleted = false,
+  hideMissed = false,
 }: CoordinatorScriptTabProps) {
   const {
     data = [],
@@ -62,6 +68,7 @@ export default function CoordinatorScriptTab({
     start: start ?? null,
     end: end ?? null,
     showCompleted,
+    hideMissed,
   });
   const qc = useQueryClient();
 
@@ -72,7 +79,7 @@ export default function CoordinatorScriptTab({
     name: string;
   } | null>(null);
 
-  async function toggleComplete(row: Row): Promise<void> {
+  async function handleStatusChange(row: Row, newValue: boolean | null): Promise<void> {
     // Generate query key exactly the same way as the hook
     const sp = new URLSearchParams();
     if (memberId) sp.set('memberId', String(memberId));
@@ -80,6 +87,7 @@ export default function CoordinatorScriptTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
+    if (hideMissed) sp.set('hideMissed', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.script(qs);
 
@@ -87,26 +95,43 @@ export default function CoordinatorScriptTab({
     qc.setQueryData(queryKey, (oldData: any) => {
       if (!oldData) return oldData;
       
-      // If showing completed items, just flip the flag
+      // If showing completed items, just update the value (never remove)
       if (showCompleted) {
         return oldData.map((item: any) => 
           item.member_program_item_schedule_id === row.member_program_item_schedule_id
-            ? { ...item, completed_flag: !row.completed_flag }
+            ? { ...item, completed_flag: newValue }
             : item
         );
       }
       
-      // If NOT showing completed, handle based on current state
-      if (!row.completed_flag) {
-        // Marking as complete - remove from incomplete list
+      // If hideMissed is active, handle accordingly
+      if (hideMissed) {
+        // Only showing pending - if changing to anything other than null, remove it
+        if (newValue !== null) {
+          return oldData.filter((item: any) => 
+            item.member_program_item_schedule_id !== row.member_program_item_schedule_id
+          );
+        } else {
+          // Changing back to pending - keep it
+          return oldData.map((item: any) => 
+            item.member_program_item_schedule_id === row.member_program_item_schedule_id
+              ? { ...item, completed_flag: newValue }
+              : item
+          );
+        }
+      }
+      
+      // Default: showing pending + missed (not completed)
+      if (newValue === true) {
+        // Marking as redeemed - remove from list
         return oldData.filter((item: any) => 
           item.member_program_item_schedule_id !== row.member_program_item_schedule_id
         );
       } else {
-        // Marking as incomplete - flip flag (item stays in list)
+        // Marking as missed or pending - update value (item stays in list)
         return oldData.map((item: any) => 
           item.member_program_item_schedule_id === row.member_program_item_schedule_id
-            ? { ...item, completed_flag: false }
+            ? { ...item, completed_flag: newValue }
             : item
         );
       }
@@ -118,12 +143,13 @@ export default function CoordinatorScriptTab({
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ completed_flag: !row.completed_flag }),
+        body: JSON.stringify({ completed_flag: newValue }),
       });
       
       if (!res.ok) {
         // Revert optimistic update on error
         qc.invalidateQueries({ queryKey });
+        toast.error('Failed to update status');
         return;
       }
       
@@ -139,9 +165,12 @@ export default function CoordinatorScriptTab({
         queryKey: coordinatorKeys.metrics(),
         refetchType: 'active'
       });
+      
+      // Success - no toast needed (optimistic update already shown)
     } catch {
       // Revert optimistic update on error
       qc.invalidateQueries({ queryKey });
+      toast.error('Failed to update status');
     }
   }
 
@@ -160,6 +189,7 @@ export default function CoordinatorScriptTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
+    if (hideMissed) sp.set('hideMissed', 'true');
     qc.invalidateQueries({
       queryKey: coordinatorKeys.script(sp.toString()),
     });
@@ -243,52 +273,18 @@ export default function CoordinatorScriptTab({
     },
     {
       field: 'completed_flag',
-      headerName: 'Completed',
+      headerName: 'Redeemed',
       width: 130,
       renderCell: params => {
         const row = params.row as any as Row;
-        const isCompleted = !!row.completed_flag;
         const readOnly =
           (row.program_status_name || '').toLowerCase() !== 'active';
         return (
-          <Chip
-            label={isCompleted ? 'Yes' : 'No'}
-            color={isCompleted ? 'success' : 'default'}
-            size="small"
-            onClick={() => {
-              if (!readOnly) void toggleComplete(row);
-            }}
-            sx={{ cursor: readOnly ? 'default' : 'pointer' }}
+          <ScheduleStatusChip
+            completed_flag={row.completed_flag}
+            onStatusChange={(newValue) => handleStatusChange(row, newValue)}
+            readOnly={readOnly}
           />
-        );
-      },
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 120,
-      sortable: false,
-      renderCell: params => {
-        const row = params.row as Row;
-        const readOnly =
-          (row.program_status_name || '').toLowerCase() !== 'active';
-        return (
-          <Box>
-            <IconButton
-              size="small"
-              color={row.completed_flag ? 'success' : 'primary'}
-              disabled={readOnly}
-              onClick={() => {
-                if (!readOnly) void toggleComplete(row);
-              }}
-            >
-              {row.completed_flag ? (
-                <CheckCircleOutlineIcon />
-              ) : (
-                <RadioButtonUncheckedIcon />
-              )}
-            </IconButton>
-          </Box>
         );
       },
     },
@@ -332,8 +328,11 @@ export default function CoordinatorScriptTab({
         getRowId={row => row.member_program_item_schedule_id}
         persistStateKey="coordinatorScriptGrid"
         rowClassName={row => {
-          const isCompleted = !!(row as any).completed_flag;
-          if (isCompleted) return '';
+          const completedFlag = (row as any).completed_flag;
+          // If decision made (not null), no color - item is resolved
+          if (completedFlag !== null) return '';
+          
+          // Only pending items (null) get date-based coloring
           const dateStr = (row as any).scheduled_date as string | undefined;
           if (!dateStr) return '';
           const today = new Date();

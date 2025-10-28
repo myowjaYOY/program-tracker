@@ -8,7 +8,7 @@ export const memberProgramItemTaskSchema = z.object({
   task_name: z.string().min(1, 'Task name is required'),
   description: z.string().optional(),
   task_delay: z.number().int('Task delay must be an integer'),
-  completed_flag: z.boolean().default(false),
+  completed_flag: z.boolean().nullable().default(null),  // Three-state: true=redeemed, false=missed, null=pending
   completed_date: z.string().optional(),
   completed_by: z.string().uuid().optional(),
 });

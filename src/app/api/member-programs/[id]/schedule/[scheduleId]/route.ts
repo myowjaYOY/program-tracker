@@ -15,7 +15,7 @@ export async function PUT(
   }
 
   const { id, scheduleId } = await context.params;
-  let body: { completed_flag?: boolean } = {};
+  let body: { completed_flag?: boolean | null } = {};
   try {
     body = await req.json();
   } catch {}
@@ -23,7 +23,9 @@ export async function PUT(
   try {
     const { data, error } = await supabase
       .from('member_program_item_schedule')
-      .update({ completed_flag: !!body.completed_flag })
+      .update({ 
+        completed_flag: body.completed_flag !== undefined ? body.completed_flag : null 
+      })
       .eq('member_program_item_schedule_id', scheduleId)
       .select()
       .single();

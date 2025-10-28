@@ -6,6 +6,12 @@ import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
 import { useProgramToDo } from '@/lib/hooks/use-program-todo';
+import { getScheduleStatus, STATUS_CONFIG } from '@/lib/utils/schedule-status';
+import {
+  CheckCircle as RedeemedIcon,
+  Cancel as MissedIcon,
+  RadioButtonUnchecked as PendingIcon,
+} from '@mui/icons-material';
 
 interface ProgramToDoTabProps {
   program: MemberPrograms;
@@ -50,15 +56,27 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
     { field: 'description', headerName: 'Description', width: 300 },
     {
       field: 'completed_flag',
-      headerName: 'Completed',
+      headerName: 'Redeemed',
       width: 130,
-      renderCell: params => (
-        <Chip
-          label={params.value ? 'Yes' : 'No'}
-          color={params.value ? 'success' : 'error'}
-          size="small"
-        />
-      ),
+      renderCell: params => {
+        const row: any = params.row;
+        const status = getScheduleStatus(row.completed_flag);
+        const config = STATUS_CONFIG[status];
+        
+        const IconComponent = 
+          status === 'redeemed' ? RedeemedIcon :
+          status === 'missed' ? MissedIcon :
+          PendingIcon;
+        
+        return (
+          <Chip
+            label={config.label}
+            color={config.color}
+            size="small"
+            icon={<IconComponent sx={{ fontSize: 16 }} />}
+          />
+        );
+      },
     },
     {
       field: 'updated_by_full_name',

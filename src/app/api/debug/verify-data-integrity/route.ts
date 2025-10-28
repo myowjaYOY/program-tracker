@@ -270,20 +270,25 @@ export async function GET(req: NextRequest) {
             );
           }
 
-          // Check if margins match contracted margin (regardless of current status)
+          // Check if margins are LOWER than contracted margin (higher is OK)
+          // Business Rule: Current margin must be >= contracted margin
+          // - Margin higher than contracted = GOOD (delivering more value)
+          // - Margin lower than contracted = BAD (not meeting commitments)
           const contractedMargin = Number(finances.contracted_at_margin || 0);
-          const storedMarginDiff = Math.abs(storedMargin - contractedMargin);
-          const calculatedMarginDiff = Math.abs(expectedMargin - contractedMargin);
 
-          if (storedMarginDiff > 0.1) {
+          // Only flag if stored margin is LOWER than contracted (allow 0.1% tolerance)
+          if (storedMargin < contractedMargin - 0.1) {
+            const deficit = contractedMargin - storedMargin;
             issues.push(
-              `stored margin differs from contracted margin: stored ${storedMargin.toFixed(2)}% vs contracted ${contractedMargin.toFixed(2)}% (diff: ${storedMarginDiff.toFixed(2)}%)`
+              `stored margin is below contracted margin: stored ${storedMargin.toFixed(2)}% vs contracted ${contractedMargin.toFixed(2)}% (deficit: ${deficit.toFixed(2)}%)`
             );
           }
 
-          if (calculatedMarginDiff > 0.1) {
+          // Only flag if calculated margin is LOWER than contracted (allow 0.1% tolerance)
+          if (expectedMargin < contractedMargin - 0.1) {
+            const deficit = contractedMargin - expectedMargin;
             issues.push(
-              `calculated margin differs from contracted margin: calculated ${expectedMargin.toFixed(2)}% vs contracted ${contractedMargin.toFixed(2)}% (diff: ${calculatedMarginDiff.toFixed(2)}%)`
+              `calculated margin is below contracted margin: calculated ${expectedMargin.toFixed(2)}% vs contracted ${contractedMargin.toFixed(2)}% (deficit: ${deficit.toFixed(2)}%)`
             );
           }
         }
@@ -840,11 +845,11 @@ function generateHtmlReport(summary: any, results: any[], autoFix: boolean): str
           </div>
           <div class="detail-item">
             <div class="detail-label">Stored Margin</div>
-            <div class="detail-value" style="color: ${program.issues.some((issue: string) => issue.includes('margin mismatch') || issue.includes('stored margin differs from contracted margin')) ? '#ef4444' : '#111827'};">${program.storedValues.margin?.toFixed(2) || '0.00'}%</div>
+            <div class="detail-value" style="color: ${program.issues.some((issue: string) => issue.includes('margin mismatch') || issue.includes('stored margin is below contracted margin')) ? '#ef4444' : '#111827'};">${program.storedValues.margin?.toFixed(2) || '0.00'}%</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Calculated Margin</div>
-            <div class="detail-value" style="color: ${program.issues.some((issue: string) => issue.includes('margin mismatch') || issue.includes('calculated margin differs from contracted margin')) ? '#ef4444' : '#111827'};">${program.calculatedValues.projectedMargin?.toFixed(2) || '0.00'}%</div>
+            <div class="detail-value" style="color: ${program.issues.some((issue: string) => issue.includes('margin mismatch') || issue.includes('calculated margin is below contracted margin')) ? '#ef4444' : '#111827'};">${program.calculatedValues.projectedMargin?.toFixed(2) || '0.00'}%</div>
           </div>
           <div class="detail-item">
             <div class="detail-label">Contracted Margin</div>
