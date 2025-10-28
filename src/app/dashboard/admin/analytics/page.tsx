@@ -139,7 +139,7 @@ export default function AnalyticsAdminPage() {
       {/* Main Content */}
       <Grid container spacing={3}>
         {/* Dashboard Statistics Card */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardHeader 
               title="Dashboard Statistics" 
@@ -201,7 +201,7 @@ export default function AnalyticsAdminPage() {
         </Grid>
 
         {/* Re-Analysis Control Card */}
-        <Grid item xs={12} md={6}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardHeader 
               title="Re-Analyze Dashboards" 
@@ -246,7 +246,7 @@ export default function AnalyticsAdminPage() {
 
         {/* Analysis Result Card */}
         {analysisResult && (
-          <Grid item xs={12}>
+          <Grid size={{ xs: 12 }}>
             <Card>
               <CardHeader 
                 title="Latest Analysis Results" 
@@ -267,7 +267,7 @@ export default function AnalyticsAdminPage() {
                 </Alert>
 
                 <Grid container spacing={2}>
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.lighter', borderRadius: 2 }}>
                       <Typography variant="h4" color="success.main" fontWeight="bold">
                         {analysisResult.analyzed_count}
@@ -278,7 +278,7 @@ export default function AnalyticsAdminPage() {
                     </Box>
                   </Grid>
 
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.lighter', borderRadius: 2 }}>
                       <Typography variant="h4" color="error.main" fontWeight="bold">
                         {analysisResult.failed_count}
@@ -289,7 +289,7 @@ export default function AnalyticsAdminPage() {
                     </Box>
                   </Grid>
 
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.lighter', borderRadius: 2 }}>
                       <Typography variant="h4" color="info.main" fontWeight="bold">
                         {analysisResult.duration_seconds.toFixed(1)}s
@@ -326,7 +326,7 @@ export default function AnalyticsAdminPage() {
         )}
 
         {/* Information Card */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardHeader 
               title="About Dashboard Analysis" 
