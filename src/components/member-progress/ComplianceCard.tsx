@@ -184,11 +184,9 @@ export default function ComplianceCard({ data }: ComplianceCardProps) {
           icon={ExerciseIcon}
           iconColor="#06b6d4"
           percentage={data.exercise_compliance_pct}
-          subtitle={
-            data.exercise_days_per_week !== null
-              ? `${data.exercise_days_per_week.toFixed(1)} days/week`
-              : undefined
-          }
+          {...(data.exercise_days_per_week !== null && {
+            subtitle: `${data.exercise_days_per_week.toFixed(1)} days/week`,
+          })}
           target="5 days/week"
         />
 
