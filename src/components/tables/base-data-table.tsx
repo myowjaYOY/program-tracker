@@ -275,8 +275,15 @@ export default function BaseDataTable<T extends BaseEntity>({
   // Create API reference for state persistence
   const apiRef = useGridApiRef();
   
-  // Load saved state from localStorage BEFORE rendering (no race condition)
+  // Load saved state from localStorage BEFORE rendering
+  // CRITICAL: Must wait for user to be loaded before computing state
   const initialGridState = useMemo(() => {
+    // If we have persistStateKey but no user yet, return null to signal "not ready"
+    if (persistStateKey && !user?.id) {
+      return null; // null = waiting for user, undefined = no saved state
+    }
+    
+    // No persistence needed
     if (!persistStateKey || !user?.id) {
       return undefined;
     }
@@ -295,7 +302,7 @@ export default function BaseDataTable<T extends BaseEntity>({
     }
     
     return undefined;
-  }, [persistStateKey, user?.id]); // Only compute once on mount
+  }, [persistStateKey, user?.id]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
@@ -308,16 +315,21 @@ export default function BaseDataTable<T extends BaseEntity>({
   // NOTE: We load state via initialGridState useMemo (above) - no restoration needed!
   
   useEffect(() => {
+    // Capture apiRef at effect time, not cleanup time
+    const apiRefCurrent = apiRef.current;
+    const currentPersistKey = persistStateKey;
+    const currentUserId = user?.id;
+    
     // Save on unmount (SPA navigation)
     return () => {
-      if (!persistStateKey || !user?.id || !apiRef.current) return;
+      if (!currentPersistKey || !currentUserId || !apiRefCurrent) return;
       
-      const storageKey = `${persistStateKey}_${user.id}`;
+      const storageKey = `${currentPersistKey}_${currentUserId}`;
       try {
-        const state = apiRef.current.exportState();
+        const state = apiRefCurrent.exportState();
         localStorage.setItem(storageKey, JSON.stringify(state));
       } catch (error) {
-        console.error(`Failed to save grid state for ${persistStateKey}:`, error);
+        console.error(`Failed to save grid state for ${currentPersistKey}:`, error);
       }
     };
   }, [persistStateKey, user?.id, apiRef]);
@@ -327,11 +339,12 @@ export default function BaseDataTable<T extends BaseEntity>({
     if (!persistStateKey || !user?.id) return;
     
     const storageKey = `${persistStateKey}_${user.id}`;
+    const apiRefCurrent = apiRef.current;
     
     const handleBeforeUnload = () => {
-      if (apiRef.current) {
+      if (apiRefCurrent) {
         try {
-          const state = apiRef.current.exportState();
+          const state = apiRefCurrent.exportState();
           localStorage.setItem(storageKey, JSON.stringify(state));
         } catch (error) {
           console.error(`Failed to save grid state for ${persistStateKey}:`, error);
@@ -517,26 +530,30 @@ export default function BaseDataTable<T extends BaseEntity>({
           position: autoHeight ? 'static' : 'relative',
         }}
       >
-        <DataGridPro
-          apiRef={apiRef}
-          rows={data}
-          columns={allColumns}
-          loading={loading}
-          rowHeight={40}
-          autoHeight={autoHeight}
-          getRowId={getRowId || (row => row.id)}
-          pagination={true}
-          showToolbar={enableExport}
-          initialState={{
-            // Merge saved state with defaults
-            ...initialGridState,
-            // Always set pagination defaults if not in saved state
-            pagination: initialGridState?.pagination || {
-              paginationModel: { page: 0, pageSize },
-            },
-            // Always set sorting if sortModel prop provided
-            ...(sortModel && { sorting: { sortModel } }),
-          }}
+        {/* Wait for user to load before rendering grid (prevents initialState race condition) */}
+        {persistStateKey && initialGridState === null ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
+            <CircularProgress size={40} />
+          </Box>
+        ) : (
+          <DataGridPro
+            key={persistStateKey && user?.id ? `${persistStateKey}_${user.id}` : 'grid'}
+            apiRef={apiRef}
+            rows={data}
+            columns={allColumns}
+            loading={loading}
+            rowHeight={40}
+            autoHeight={autoHeight}
+            getRowId={getRowId || (row => row.id)}
+            pagination={true}
+            showToolbar={enableExport}
+            initialState={{
+              ...initialGridState,
+              pagination: initialGridState?.pagination || {
+                paginationModel: { page: 0, pageSize },
+              },
+              ...(sortModel && { sorting: { sortModel } }),
+            }}
           {...(sortModel && { initialSortModel: sortModel })}
           pageSizeOptions={pageSizeOptions}
           {...(onRowClick && {
@@ -598,6 +615,7 @@ export default function BaseDataTable<T extends BaseEntity>({
               },
           }}
         />
+        )}
         {loading && (
           <Box
             sx={{
