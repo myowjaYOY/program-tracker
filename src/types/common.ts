@@ -119,6 +119,7 @@ export interface MemberProgressDashboard {
   completed_milestones: string[];
   next_milestone: string | null;
   overdue_milestones: string[];
+  module_completion_dates: Record<string, string>; // Map of module_name → completion_date (ISO string)
   
   // Goals
   goals: Goal[];

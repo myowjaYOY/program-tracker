@@ -16,10 +16,6 @@ import {
 } from '@mui/material';
 import {
   Timeline as TimelineIcon,
-  CheckCircle as CheckCircleIcon,
-  RadioButtonUnchecked as FutureIcon,
-  Warning as OverdueIcon,
-  PlayArrow as NextIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard } from '@/types/common';
 
@@ -69,9 +65,56 @@ const CustomConnector = styled(StepConnector)(({ theme }) => ({
 }));
 
 /**
- * Custom step icon with circular colored nodes
+ * Extract module number from module name
+ * E.g., "MODULE 1 - PRE-PROGRAM" → "M1"
+ * E.g., "MODULE 13 - MID-MONTH 4" → "M13"
+ */
+function extractModuleNumber(moduleName: string): string {
+  const match = moduleName.match(/MODULE\s+(\d+)/i);
+  return match ? `M${match[1]}` : 'M?';
+}
+
+/**
+ * Extract description from module name and convert to title case
+ * E.g., "MODULE 1 - PRE-PROGRAM" → "Pre-Program"
+ * E.g., "MODULE 4 - START OF DETOX" → "Start of Detox"
+ */
+function extractModuleDescription(moduleName: string): string {
+  const parts = moduleName.split('-');
+  let description = moduleName;
+  
+  if (parts.length > 1) {
+    description = parts.slice(1).join('-').trim();
+  }
+  
+  // Convert to title case (capitalize first letter of each word)
+  return description
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Format date as "Oct 15"
+ */
+function formatDate(dateString: string | null | undefined): string | null {
+  if (!dateString) return null;
+  try {
+    const date = new Date(dateString);
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    return `${month} ${day}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Custom step icon with module number text
  */
 interface CustomStepIconProps extends StepIconProps {
+  moduleName: string;
   isCompleted: boolean;
   isOverdue: boolean;
   isNext: boolean;
@@ -79,28 +122,30 @@ interface CustomStepIconProps extends StepIconProps {
 }
 
 function CustomStepIcon(props: CustomStepIconProps) {
-  const { isCompleted, isOverdue, isNext, isFuture } = props;
+  const { moduleName, isCompleted, isOverdue, isNext, isFuture } = props;
 
-  // Determine color and icon
+  // Determine color
   let backgroundColor = '#e0e0e0';
-  let icon = <FutureIcon />;
+  let textColor = '#9ca3af';
   let borderColor = 'transparent';
 
   if (isCompleted) {
     backgroundColor = '#10b981';
-    icon = <CheckCircleIcon sx={{ color: 'white' }} />;
+    textColor = 'white';
   } else if (isOverdue) {
     backgroundColor = '#ef4444';
-    icon = <OverdueIcon sx={{ color: 'white' }} />;
+    textColor = 'white';
     borderColor = '#dc2626';
   } else if (isNext) {
     backgroundColor = '#3b82f6';
-    icon = <NextIcon sx={{ color: 'white' }} />;
+    textColor = 'white';
     borderColor = '#2563eb';
   } else if (isFuture) {
     backgroundColor = '#d1d5db';
-    icon = <FutureIcon sx={{ color: '#9ca3af' }} />;
+    textColor = '#9ca3af';
   }
+
+  const moduleNumber = extractModuleNumber(moduleName);
 
   return (
     <Box
@@ -113,14 +158,21 @@ function CustomStepIcon(props: CustomStepIconProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 24,
         transition: 'all 0.3s ease',
         '&:hover': {
           transform: 'scale(1.1)',
         },
       }}
     >
-      {icon}
+      <Typography 
+        sx={{ 
+          color: textColor, 
+          fontWeight: 'bold', 
+          fontSize: '0.875rem',
+        }}
+      >
+        {moduleNumber}
+      </Typography>
     </Box>
   );
 }
@@ -237,6 +289,19 @@ export default function TimelineCard({ data }: TimelineCardProps) {
             >
               {moduleSequence.map((module, index) => {
                 const { isCompleted, isOverdue, isNext, isFuture } = getModuleState(module, index);
+                const description = extractModuleDescription(module);
+                const completionDate = data.module_completion_dates?.[module];
+                const formattedDate = formatDate(completionDate);
+                
+                // Determine top line (date or status)
+                let topLine = '';
+                if (isCompleted && formattedDate) {
+                  topLine = formattedDate; // "Oct 15"
+                } else if (isOverdue) {
+                  topLine = 'overdue'; // lowercase
+                } else {
+                  topLine = ''; // Future modules show no date
+                }
                 
                 return (
                   <Step key={module} completed={isCompleted} active={isNext}>
@@ -244,6 +309,7 @@ export default function TimelineCard({ data }: TimelineCardProps) {
                       StepIconComponent={(props) => (
                         <CustomStepIcon
                           {...props}
+                          moduleName={module}
                           isCompleted={isCompleted}
                           isOverdue={isOverdue}
                           isNext={isNext}
@@ -251,15 +317,34 @@ export default function TimelineCard({ data }: TimelineCardProps) {
                         />
                       )}
                     >
-                      <Typography 
-                        variant="caption" 
-                        sx={{ 
-                          fontWeight: isNext ? 'bold' : 'normal',
-                          color: isOverdue ? '#ef4444' : isNext ? '#3b82f6' : 'text.secondary',
-                        }}
-                      >
-                        {module}
-                      </Typography>
+                      <Box sx={{ textAlign: 'center' }}>
+                        {/* Date or Status - ABOVE description */}
+                        {topLine && (
+                          <Typography 
+                            variant="caption" 
+                            sx={{ 
+                              fontSize: '0.75rem',
+                              color: 'text.secondary', // Same color for all
+                              display: 'block',
+                              marginBottom: 0.5,
+                            }}
+                          >
+                            {topLine}
+                          </Typography>
+                        )}
+                        
+                        {/* Description - BELOW date */}
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            fontSize: '0.75rem',
+                            color: 'text.secondary', // Same color for all
+                            display: 'block',
+                          }}
+                        >
+                          {description}
+                        </Typography>
+                      </Box>
                     </StepLabel>
                   </Step>
                 );

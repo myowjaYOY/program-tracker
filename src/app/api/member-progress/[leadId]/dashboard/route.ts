@@ -48,6 +48,47 @@ export async function GET(
       .eq('lead_id', leadId)
       .maybeSingle();
 
+    // Fetch module completion dates separately
+    // Join survey_response_sessions → survey_session_program_context → survey_modules
+    const { data: completionDates } = await supabase.rpc('get_module_completion_dates', {
+      p_lead_id: leadId
+    });
+
+    // If RPC function doesn't exist, fall back to direct query
+    let moduleCompletionDatesMap: Record<string, string> = {};
+    if (completionDates) {
+      // RPC returned array of {module_name, completed_on}
+      moduleCompletionDatesMap = Object.fromEntries(
+        completionDates.map((row: any) => [row.module_name, row.completed_on])
+      );
+    } else {
+      // Fallback: direct query
+      const { data: completionData } = await supabase
+        .from('survey_response_sessions')
+        .select(`
+          completed_on,
+          survey_session_program_context!inner(
+            survey_modules!inner(module_name)
+          )
+        `)
+        .eq('lead_id', leadId);
+
+      if (completionData) {
+        // Group by module and get max date
+        const grouped: Record<string, string> = {};
+        completionData.forEach((row: any) => {
+          const moduleName = row.survey_session_program_context?.survey_modules?.module_name;
+          const completedOn = row.completed_on;
+          if (moduleName && completedOn) {
+            if (!grouped[moduleName] || completedOn > grouped[moduleName]) {
+              grouped[moduleName] = completedOn;
+            }
+          }
+        });
+        moduleCompletionDatesMap = grouped;
+      }
+    }
+
     if (error) {
       console.error('Database error:', error);
       return NextResponse.json(
@@ -109,6 +150,8 @@ export async function GET(
       goals: typeof data.goals === 'string'
         ? JSON.parse(data.goals)
         : (data.goals || []),
+      // Add module completion dates
+      module_completion_dates: moduleCompletionDatesMap,
     };
 
     console.log(`Successfully fetched dashboard for lead ${leadId}`);

@@ -308,7 +308,7 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     .from('member_programs')
     .select('start_date, duration, program_name')
     .eq('lead_id', leadId)
-    .eq('active_flag', true)
+    .eq('program_status_id', 1) // 1 = Active status
     .maybeSingle();
 
   let daysInProgram: number | null = null;
@@ -409,7 +409,14 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
   const weight = extractWeightData(allSessions, responses);
   
   // Calculate status indicator
-  const statusIndicator = calculateStatusIndicator(healthVitals, compliance, alerts, userProgress);
+  const statusIndicator = calculateStatusIndicator(
+    healthVitals, 
+    compliance, 
+    alerts, 
+    userProgress, 
+    daysInProgram, 
+    allSessions.length
+  );
 
   return {
     // Profile
@@ -1032,22 +1039,49 @@ async function extractGoals(supabase: any, memberId: number) {
 }
 
 /**
- * Calculate overall status indicator
+ * Calculate overall status indicator with data quality weighting
+ * 
+ * Option 3: Weight by Data Quality
+ * - Ignore nutrition if member has < 3 nutrition surveys
+ * - Reduce concern weight if they're early in program (< 30 days)
+ * - Require sufficient data before flagging issues
  */
-function calculateStatusIndicator(healthVitals: any, compliance: any, alerts: any, userProgress: any | null): string {
-  // Red flags
-  if (alerts.concerns.length >= 3) return 'red';
-  if (compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 40) return 'red';
+function calculateStatusIndicator(
+  healthVitals: any, 
+  compliance: any, 
+  alerts: any, 
+  userProgress: any | null,
+  daysInProgram: number | null,
+  totalSurveys: number
+): string {
+  // Data quality flags
+  const hasEnoughSurveys = totalSurveys >= 3;
+  const isEarlyInProgram = daysInProgram !== null && daysInProgram < 30;
   
-  // Check for declining trends
-  const decliningCount = Object.keys(healthVitals)
-    .filter(key => key.includes('_trend'))
-    .filter(key => healthVitals[key] === 'declining')
-    .length;
+  // Red flags (with data quality filtering)
   
-  if (decliningCount >= 3) return 'red';
+  // 1. Concerns: Weight by program duration
+  // - Early in program (< 30 days): Need 5+ concerns for red (initial adjustment period)
+  // - Established in program (30+ days): Need 3+ concerns for red
+  const concernThreshold = isEarlyInProgram ? 5 : 3;
+  if (alerts.concerns.length >= concernThreshold) return 'red';
   
-  // Check if behind on curriculum AND overdue > 14 days
+  // 2. Nutrition: Only flag if we have enough data (3+ surveys)
+  if (hasEnoughSurveys && compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 40) {
+    return 'red';
+  }
+  
+  // 3. Declining trends: Only flag if we have enough data (3+ surveys)
+  if (hasEnoughSurveys) {
+    const decliningCount = Object.keys(healthVitals)
+      .filter(key => key.includes('_trend'))
+      .filter(key => healthVitals[key] === 'declining')
+      .length;
+    
+    if (decliningCount >= 3) return 'red';
+  }
+  
+  // 4. Behind on curriculum: Only flag if significantly behind (>14 days)
   if (userProgress && userProgress.status === 'Behind' && userProgress.date_of_last_completed) {
     const lastCompletionDate = new Date(userProgress.date_of_last_completed);
     const today = new Date();
@@ -1056,13 +1090,33 @@ function calculateStatusIndicator(healthVitals: any, compliance: any, alerts: an
     if (daysSinceLastSurvey > 14) return 'red';
   }
   
-  // Yellow flags
-  if (alerts.concerns.length >= 1) return 'yellow';
-  if (compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 70) return 'yellow';
-  if (decliningCount >= 1) return 'yellow';
+  // Yellow flags (with data quality filtering)
+  
+  // 1. Concerns: Weight by program duration
+  // - Early in program (< 30 days): Need 3+ concerns for yellow
+  // - Established in program (30+ days): Need 1+ concerns for yellow
+  const yellowConcernThreshold = isEarlyInProgram ? 3 : 1;
+  if (alerts.concerns.length >= yellowConcernThreshold) return 'yellow';
+  
+  // 2. Nutrition: Only flag if we have enough data (3+ surveys)
+  if (hasEnoughSurveys && compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 70) {
+    return 'yellow';
+  }
+  
+  // 3. Declining trends: Only flag if we have enough data (3+ surveys)
+  if (hasEnoughSurveys) {
+    const decliningCount = Object.keys(healthVitals)
+      .filter(key => key.includes('_trend'))
+      .filter(key => healthVitals[key] === 'declining')
+      .length;
+    
+    if (decliningCount >= 1) return 'yellow';
+  }
+  
+  // 4. Behind on curriculum: Any amount triggers yellow
   if (userProgress && userProgress.status === 'Behind') return 'yellow';
   
-  // Green - all good
+  // Green - all good (or insufficient data to determine issues)
   return 'green';
 }
 

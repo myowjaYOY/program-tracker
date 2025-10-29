@@ -163,15 +163,17 @@ export async function PUT(
     let totalCharge = 0;
     let totalTaxableCharge = 0;
     
-    if (programItems && programItems.length > 0) {
-      for (const item of programItems) {
-        const itemCharge = Number(item.item_charge || 0) * Number(item.quantity || 0);
-        totalCharge += itemCharge;
-        if (item.therapies?.taxable) {
-          totalTaxableCharge += itemCharge;
+      if (programItems && programItems.length > 0) {
+        for (const item of programItems) {
+          const itemCharge = Number(item.item_charge || 0) * Number(item.quantity || 0);
+          totalCharge += itemCharge;
+          // therapies is returned as array from Supabase, access first element
+          const therapy = Array.isArray(item.therapies) ? item.therapies[0] : item.therapies;
+          if (therapy?.taxable) {
+            totalTaxableCharge += itemCharge;
+          }
         }
       }
-    }
 
     // 3. Get the discount value (use new value if being updated, otherwise current)
     const discountToUse = (validatedData as any).discounts !== undefined
