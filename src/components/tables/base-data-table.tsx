@@ -274,6 +274,28 @@ export default function BaseDataTable<T extends BaseEntity>({
   
   // Create API reference for state persistence
   const apiRef = useGridApiRef();
+  
+  // Load saved state from localStorage BEFORE rendering (no race condition)
+  const initialGridState = useMemo(() => {
+    if (!persistStateKey || !user?.id) {
+      return undefined;
+    }
+    
+    const storageKey = `${persistStateKey}_${user.id}`;
+    const savedState = localStorage.getItem(storageKey);
+    
+    if (savedState) {
+      try {
+        return JSON.parse(savedState);
+      } catch (error) {
+        console.error(`Failed to parse grid state for ${persistStateKey}:`, error);
+        localStorage.removeItem(storageKey);
+        return undefined;
+      }
+    }
+    
+    return undefined;
+  }, [persistStateKey, user?.id]); // Only compute once on mount
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<T | undefined>(undefined);
@@ -282,57 +304,12 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
-  // STATE PERSISTENCE - Hybrid MUI Pattern (restore once + debounced auto-save)
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Restore state once on mount
+  // STATE PERSISTENCE - Save state on exit (unmount or browser close)
+  // NOTE: We load state via initialGridState useMemo (above) - no restoration needed!
+  
   useEffect(() => {
-    if (!persistStateKey || !user?.id || !apiRef.current) return;
-    
-    const storageKey = `${persistStateKey}_${user.id}`;
-    const savedState = localStorage.getItem(storageKey);
-    
-    if (savedState) {
-      try {
-        apiRef.current.restoreState(JSON.parse(savedState));
-      } catch (error) {
-        console.error(`Failed to restore grid state for ${persistStateKey}:`, error);
-        localStorage.removeItem(storageKey);
-      }
-    }
-  }, [persistStateKey, user?.id]);
-
-  // Debounced auto-save on state changes (1 second debounce)
-  const handleStateChange = useCallback(() => {
-    if (!persistStateKey || !user?.id || !apiRef.current) return;
-    
-    // Clear previous timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    // Debounce save by 1 second
-    saveTimeoutRef.current = setTimeout(() => {
-      if (!apiRef.current) return;
-      
-      const storageKey = `${persistStateKey}_${user.id}`;
-      try {
-        const state = apiRef.current.exportState();
-        localStorage.setItem(storageKey, JSON.stringify(state));
-      } catch (error) {
-        console.error(`Failed to save grid state for ${persistStateKey}:`, error);
-      }
-    }, 1000);
-  }, [persistStateKey, user?.id]);
-
-  // Save state on component unmount (SPA navigation)
-  useEffect(() => {
+    // Save on unmount (SPA navigation)
     return () => {
-      // Clear any pending debounced save
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
       if (!persistStateKey || !user?.id || !apiRef.current) return;
       
       const storageKey = `${persistStateKey}_${user.id}`;
@@ -343,20 +320,15 @@ export default function BaseDataTable<T extends BaseEntity>({
         console.error(`Failed to save grid state for ${persistStateKey}:`, error);
       }
     };
-  }, [persistStateKey, user?.id]);
+  }, [persistStateKey, user?.id, apiRef]);
 
-  // Save state on browser close/refresh
   useEffect(() => {
+    // Save on browser close/refresh
     if (!persistStateKey || !user?.id) return;
     
     const storageKey = `${persistStateKey}_${user.id}`;
     
     const handleBeforeUnload = () => {
-      // Clear any pending debounced save
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-      
       if (apiRef.current) {
         try {
           const state = apiRef.current.exportState();
@@ -369,7 +341,7 @@ export default function BaseDataTable<T extends BaseEntity>({
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [persistStateKey, user?.id]);
+  }, [persistStateKey, user?.id, apiRef]);
 
   // Actions column
   const actionsColumn: GridColDef = useMemo(
@@ -555,11 +527,14 @@ export default function BaseDataTable<T extends BaseEntity>({
           getRowId={getRowId || (row => row.id)}
           pagination={true}
           showToolbar={enableExport}
-          {...(persistStateKey && { onStateChange: handleStateChange })}
           initialState={{
-            pagination: {
+            // Merge saved state with defaults
+            ...initialGridState,
+            // Always set pagination defaults if not in saved state
+            pagination: initialGridState?.pagination || {
               paginationModel: { page: 0, pageSize },
             },
+            // Always set sorting if sortModel prop provided
             ...(sortModel && { sorting: { sortModel } }),
           }}
           {...(sortModel && { initialSortModel: sortModel })}

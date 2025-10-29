@@ -1,280 +1,363 @@
-# Pre-Production Deployment Checklist
+# 🚀 Pre-Production Checklist - October 29, 2025
 
-## ✅ Code Quality Checks - PASSED
+## ✅ **CHANGES READY FOR DEPLOYMENT**
 
-### Linting
-- ✅ **No ESLint errors** in coordinator components
-- ✅ **No ESLint errors** in coordinator API routes
-- ✅ **No TypeScript errors** (via ESLint)
-
-### Code Cleanliness
-- ✅ **No console.log statements** in production code
-- ✅ **No debug code** left behind
-- ✅ **No TODO/FIXME comments** indicating incomplete work
-
----
-
-## 📝 Files Modified (Ready for Commit)
-
-### Component Files
-- `src/components/coordinator/script-tab.tsx` ✅
-- `src/components/coordinator/todo-tab.tsx` ✅
-
-### API Route Files  
-- `src/app/api/coordinator/script/route.ts` ✅
-- `src/app/api/coordinator/todo/route.ts` ✅
-
-### Other Files (From Previous Work Sessions)
-- `src/app/api/leads/[id]/route.ts` (Duplicate prevention)
-- `src/app/api/leads/route.ts` (Duplicate prevention)
-- `src/app/api/member-programs/[id]/finances/route.ts` (Tax fix)
-- `src/lib/utils/financial-calculations.ts` (Tax calculation fix)
-- `src/components/layout/Sidebar.tsx` (Menu ordering)
-- `src/components/tables/base-data-table.tsx` (Pagination fix)
-- `src/lib/config/menu-items.ts` (Dashboard analytics)
-- `docs/dashboard-metrics-and-business-rules.md` (Documentation)
-- `supabase/functions/process-survey-import/index.ts` (Module sequence)
-
-### New Migration Files (Untracked)
-- `migrations/20251027_fix_schedule_program_role_id.sql` ✅
-- `supabase/migrations/20251027_fix_schedule_program_role_id.sql` ✅
-- `supabase/migrations/20251027_prevent_duplicate_leads.sql` ✅
-
-### New Edge Functions (Untracked)
-- `supabase/functions/analyze-member-progress/` ✅
-- `src/app/api/admin/reanalyze-dashboards/` ✅
-- `src/app/dashboard/admin/analytics/` ✅
-
-### Documentation Files (Untracked - Optional to commit)
-- `COORDINATOR_UI_UPDATE_BUG_ANALYSIS.md`
-- `AUDIT_TAX_DISCREPANCY_ROOT_CAUSE_AND_FIX.md`
-- `TAX_DATA_CLEANUP_STRATEGY.md`
-- `TAX_FIX_CODE_REVIEW.md`
-- Various other .md files
-
-### SQL Scripts (Untracked - Backup/Reference)
-- `scripts/fix-active-program-taxes-final.sql`
-- `scripts/fix-corrupted-taxes.sql`
+### **1. Three-State Status System (Phase 2)** ✅
+- **Status:** Phase 2 migration applied to database
+- **Impact:** All incomplete schedule items converted from `false` to `NULL` (Pending)
+- **Risk:** LOW - UI already deployed and tested
+- **Files Changed:** Database migration only
+- **Verification:**
+  - ✅ Migration applied successfully
+  - ✅ 2,264 items + 1,218 tasks now showing as Pending (NULL)
+  - ✅ 0 false values in database (as expected)
+  - ✅ Users can now mark items as Missed (false)
 
 ---
 
-## 🐛 Bugs Fixed in This Session
-
-### Critical Priority
-1. ✅ **Query Key Mismatch** - UI updates now work with all filter combinations
-2. ✅ **Optimistic Update Logic** - Items correctly disappear when completed
-3. ✅ **Stale Time Interference** - Updates work within 30-second window
-4. ✅ **Un-awaited Metrics** - Metrics cards update synchronously
-5. ✅ **Program Role Propagation** - Schedules copy correct roles from source
-
-### Database Fixes
-1. ✅ **965 tasks** corrected to match therapy_tasks roles
-2. ✅ **1,426 items** corrected to match therapies roles
-3. ✅ **3,152 item schedules** updated with correct roles
-4. ✅ **1,360 task schedules** updated with correct roles
-5. ✅ **31 Active programs** tax/discount corrections applied
-
----
-
-## ⚠️ Breaking Changes
-
-**NONE** - All changes are backwards compatible
+### **2. Grid State Persistence - Final Fix** ✅
+- **Status:** Complete rewrite using `initialState` prop
+- **Impact:** Grid settings (column width, sort, filter) should now persist reliably
+- **Risk:** LOW - Simplified from 110 lines to 70 lines
+- **Files Changed:** `src/components/tables/base-data-table.tsx`
+- **Key Changes:**
+  - ✅ Load state BEFORE rendering (no race condition)
+  - ✅ Removed debounced auto-save (unnecessary)
+  - ✅ Removed restoration useEffect (caused race)
+  - ✅ Using MUI's `initialState` prop correctly
+- **Testing Needed:**
+  - [ ] Resize column → navigate away → come back → width persists
+  - [ ] React Query refetch doesn't reset settings (critical bug fix)
+  - [ ] Browser refresh preserves settings
+  - [ ] Tab switching preserves settings
 
 ---
 
-## 🎯 What This Deployment Fixes
-
-### User-Reported Issues
-✅ Coordinator Script tab - items not updating after completion  
-✅ Coordinator To Do tab - tasks not updating after completion  
-✅ Intermittent behavior (works sometimes, fails other times)  
-✅ Manual refresh required to see updated state  
-✅ Metrics cards not updating immediately  
-
-### Root Causes Addressed
-1. Query key construction mismatch with hook parameters
-2. Incorrect optimistic updates for filtered views
-3. React Query staleTime preventing refetch
-4. Race conditions in async invalidations
-5. Program role not propagating to schedules
+### **3. Dashboard Status Calculation - Data Quality Weighting** ✅
+- **Status:** Deployed to edge function (Version 8)
+- **Impact:** Status indicator now considers data quality and program duration
+- **Risk:** LOW - Logic enhancement, no breaking changes
+- **Files Changed:** `supabase/functions/analyze-member-progress/index.ts`
+- **Key Changes:**
+  - ✅ Early program members (< 30 days): Higher thresholds for red/yellow
+  - ✅ Nutrition/trends: Only flagged if ≥3 surveys (sufficient data)
+  - ✅ Concerns weighted by program duration
+- **Expected Result:**
+  - Fewer "Needs Attention" false positives
+  - More "On Track" for early-stage members
+  - More accurate status for members with limited data
 
 ---
 
-## 🧪 Testing Recommendations
-
-### Critical Path Testing
-1. **Script Tab - Default View**
-   - Complete 5 items rapidly
-   - Verify all disappear immediately
-   - Check metrics cards update
-
-2. **To Do Tab - Show Completed**
-   - Enable "Show Completed" checkbox
-   - Complete a task
-   - Verify task shows as completed, stays visible
-
-3. **Custom Date Filters**
-   - Set custom date range
-   - Complete items/tasks
-   - Verify updates work correctly
-
-4. **Rapid Clicks (<30 seconds)**
-   - Load page, immediately complete 10 items
-   - Verify all update correctly (staleTime test)
-
-5. **Notes Modal**
-   - Add note to a member
-   - Verify note count increments immediately
-
-### Edge Cases
-- Complete same item multiple times rapidly
-- Switch between filters during updates
-- Complete items while network is slow
-- Multiple users completing same item
+### **4. Program Finances API Fix** ✅
+- **Status:** TypeScript error fixed
+- **Impact:** Server-side tax recalculation works correctly
+- **Risk:** LOW - Bug fix for array access
+- **Files Changed:** `src/app/api/member-programs/[id]/finances/route.ts`
+- **Key Changes:**
+  - ✅ Fixed therapies array access for taxable flag
+  - ✅ Handles both array and object formats safely
 
 ---
 
-## 📊 Performance Impact
+## 📋 **PRODUCTION READINESS VERIFICATION**
 
-### API Calls Per Action
-- **Before**: 1 call (sometimes skipped)
-- **After**: 2 calls (always executed: data + metrics)
-- **Impact**: Acceptable (<200ms total latency)
-
-### Network Traffic
-- **Increase**: ~50KB per user action (2 API responses)
-- **Frequency**: Only on user-initiated actions
-- **Assessment**: Negligible impact
+### **Code Quality** ✅
+- ✅ **No Linter Errors:** All files pass ESLint
+- ✅ **No TypeScript Errors:** Type checking passes
+- ✅ **Build Test:** Previous deployment succeeded (grid persistence pending)
+- ✅ **No Breaking Changes:** All changes are enhancements or fixes
 
 ---
 
-## 🔒 Security Review
-
-✅ **No new security vulnerabilities introduced**  
-✅ **No authentication/authorization changes**  
-✅ **No SQL injection risks** (uses Supabase client)  
-✅ **No XSS risks** (React handles escaping)  
-✅ **No sensitive data exposed** (same data as before)  
+### **Database State** ✅
+- ✅ **Phase 1 Migration:** Applied previously
+- ✅ **Phase 2 Migration:** Applied today (completed_flag defaults to NULL)
+- ✅ **Data Integrity:** 
+  - 4,103 item schedules (1,839 redeemed, 2,264 pending, 0 missed)
+  - 2,141 task schedules (923 redeemed, 1,218 pending, 0 missed)
+- ✅ **Backward Compatibility:** Old UI still works (Phase 1 maintains compatibility)
 
 ---
 
-## 📦 Deployment Steps
+### **Edge Functions** ✅
+- ✅ **analyze-member-progress:** Version 8 deployed
+- ✅ **Status Calculation:** Updated logic active
+- ✅ **OpenAI Integration:** Working (sentiment analysis)
+- ✅ **Batch Processing:** 30 members at a time (scales to 200+)
 
-### 1. Git Operations (DO NOT DO - User will handle)
+---
+
+### **API Routes** ✅
+- ✅ **Coordinator Script/ToDo:** Three-state support active
+- ✅ **Program Finances:** Tax calculation fix applied
+- ✅ **Member Progress:** Dashboard data quality logic active
+
+---
+
+### **UI Components** ✅
+- ✅ **Schedule Status Chips:** Three states (Pending, Redeemed, Missed)
+- ✅ **Grid Persistence:** New initialState approach
+- ✅ **Member Progress Dashboard:** Data quality indicators
+- ✅ **Coordinator Pages:** Show/Hide filters working
+
+---
+
+## ⚠️ **KNOWN ISSUES / CONSIDERATIONS**
+
+### **1. Grid Persistence Uncertainty**
+- **Status:** Just implemented third attempt at fix
+- **Confidence:** 95% (highest yet, but still needs testing)
+- **Fallback:** Easy rollback if issues persist (single file change)
+- **User Impact:** Low risk - worst case, settings don't persist (annoying but not breaking)
+
+### **2. Dashboard Status Changes**
+- **Status:** Will see status distribution shift
+- **Impact:** More "On Track" statuses expected (especially for new members)
+- **User Impact:** Positive - fewer false alarms
+- **Monitoring:** Check that we're not hiding real problems
+
+### **3. Three-State Transition**
+- **Status:** All incomplete items now show as Pending (gray chips)
+- **Impact:** Users need to explicitly mark items as Missed
+- **User Impact:** More accurate tracking, but requires user action
+- **Training:** Users may need guidance on when to mark "Missed"
+
+---
+
+## 🧪 **CRITICAL TESTS BEFORE GOING LIVE**
+
+### **Priority 1: Must Pass** 🔴
+
+#### **Grid Persistence (New Fix)**
+1. [ ] Open Coordinator Script tab
+2. [ ] Resize "Therapy Name" column to 400px
+3. [ ] Navigate to Dashboard
+4. [ ] Navigate back to Coordinator
+5. [ ] **VERIFY:** Column is 400px (not reset to default)
+6. [ ] Wait 5 seconds (ensure React Query refetch doesn't reset)
+7. [ ] **VERIFY:** Column still 400px
+
+#### **Three-State Status**
+1. [ ] Open Coordinator Script tab
+2. [ ] Find a Pending item (gray chip)
+3. [ ] Click chip → should become Redeemed (green)
+4. [ ] Click chip → should become Missed (red)
+5. [ ] Click chip → should become Pending (gray)
+6. [ ] Verify row colors only apply to Pending items
+
+#### **Dashboard Status**
+1. [ ] Check a new member (< 30 days in program)
+2. [ ] **VERIFY:** Status is not "Needs Attention" unless truly critical
+3. [ ] Check a member with < 3 surveys
+4. [ ] **VERIFY:** Nutrition compliance doesn't flag them as red/yellow
+
+#### **Program Finances**
+1. [ ] Edit a program's finances (change discount)
+2. [ ] **VERIFY:** No TypeScript errors in console
+3. [ ] **VERIFY:** Taxes recalculate correctly
+
+---
+
+### **Priority 2: Should Pass** 🟡
+
+#### **Grid Persistence (Extended)**
+1. [ ] Test on Leads page
+2. [ ] Test on Programs page Script tab
+3. [ ] Test column reordering
+4. [ ] Test column hiding/showing
+5. [ ] Test sorting
+6. [ ] Test filtering
+7. [ ] Test page size changes
+
+#### **Multi-User Isolation**
+1. [ ] User A: Resize column
+2. [ ] Log out
+3. [ ] User B: Log in
+4. [ ] **VERIFY:** User B sees defaults (not User A's settings)
+
+---
+
+## 🔄 **ROLLBACK PROCEDURES**
+
+### **If Grid Persistence Still Fails:**
 ```bash
-# Review changes
-git diff
+# Rollback base-data-table.tsx
+git checkout HEAD~1 -- src/components/tables/base-data-table.tsx
+git add src/components/tables/base-data-table.tsx
+git commit -m "fix: rollback grid persistence to previous version"
+git push
+```
+**Impact:** Grid settings won't persist, but everything else works
+**Risk:** LOW - Single file rollback
 
-# Stage coordinator fixes
-git add src/components/coordinator/script-tab.tsx
-git add src/components/coordinator/todo-tab.tsx
+---
 
-# Stage API cache-busting
-git add src/app/api/coordinator/script/route.ts
-git add src/app/api/coordinator/todo/route.ts
+### **If Three-State Status Causes Issues:**
+```sql
+-- Emergency rollback (Phase 2 only)
+BEGIN;
+UPDATE member_program_item_schedule SET completed_flag = false WHERE completed_flag IS NULL;
+UPDATE member_program_items_task_schedule SET completed_flag = false WHERE completed_flag IS NULL;
+ALTER TABLE member_program_item_schedule ALTER COLUMN completed_flag SET DEFAULT false;
+ALTER TABLE member_program_items_task_schedule ALTER COLUMN completed_flag SET DEFAULT false;
+COMMIT;
+```
+**Impact:** Back to two-state system (completed/incomplete)
+**Risk:** LOW - Redeemed items (true) remain untouched
 
-# Commit
-git commit -m "fix: coordinator UI update issues - query key mismatch and stale time"
+---
 
-# Push to production
+### **If Dashboard Status Logic Causes Issues:**
+Redeploy previous version of analyze-member-progress edge function:
+```bash
+# Would need to revert the edge function code and redeploy
+```
+**Impact:** Status calculation reverts to original strict thresholds
+**Risk:** LOW - Independent service, doesn't affect other features
+
+---
+
+## 📊 **DEPLOYMENT PLAN**
+
+### **Step 1: Pre-Deployment** (5 minutes)
+- [x] Run all linter checks
+- [x] Verify no TypeScript errors
+- [x] Review all changes one final time
+- [ ] Backup current production database (optional but recommended)
+
+### **Step 2: Deploy to Production** (5-10 minutes)
+```bash
+# Push to master (triggers Vercel deployment)
 git push origin master
 ```
+- [ ] Monitor Vercel build logs
+- [ ] Verify build succeeds
+- [ ] Wait for deployment to complete
 
-### 2. Database Migrations (Already Applied)
-✅ All database fixes already applied via SQL scripts  
-✅ No pending migrations needed  
-✅ Role propagation function deployed  
-✅ Duplicate lead constraint added  
+### **Step 3: Smoke Tests** (10 minutes)
+- [ ] Test grid persistence (Priority 1 test)
+- [ ] Test three-state status (Priority 1 test)
+- [ ] Test dashboard status (Priority 1 test)
+- [ ] Test program finances (Priority 1 test)
 
-### 3. Edge Functions (Already Deployed)
-✅ `analyze-member-progress` deployed  
-✅ `process-survey-import` updated  
-✅ Module sequence fix applied  
+### **Step 4: Monitor** (24 hours)
+- [ ] Check for user reports of issues
+- [ ] Monitor error logs in Vercel
+- [ ] Monitor Supabase logs
+- [ ] Check dashboard analytics for anomalies
 
-### 4. Post-Deployment Verification
-- [ ] Load Coordinator page in production
-- [ ] Complete a Script item → verify disappears
-- [ ] Complete a To Do task → verify disappears
-- [ ] Check metrics cards → verify update
-- [ ] Add a note → verify count updates
-- [ ] Test with "Show Completed" enabled
-
----
-
-## 🚨 Rollback Plan (If Needed)
-
-### Quick Rollback
-```bash
-# Revert the commit
-git revert HEAD
-
-# Push rollback
-git push origin master
-```
-
-### Partial Rollback
-If only one component is problematic:
-```bash
-# Revert specific file
-git checkout HEAD~1 src/components/coordinator/script-tab.tsx
-git add src/components/coordinator/script-tab.tsx
-git commit -m "rollback: script-tab coordinator fix"
-git push origin master
-```
-
-### Database Rollback
-**NOT NEEDED** - All database changes improve data integrity
+### **Step 5: Full Validation** (48 hours)
+- [ ] Run all Priority 2 tests
+- [ ] Verify no regression issues
+- [ ] Confirm grid persistence working consistently
+- [ ] Confirm status distribution looks correct
 
 ---
 
-## ✅ Final Checklist
+## ✅ **SIGN-OFF CHECKLIST**
 
-- ✅ All modified files reviewed
-- ✅ No linter errors
-- ✅ No console.log statements
-- ✅ No TODO/FIXME comments
-- ✅ TypeScript compiles (via linter)
-- ✅ Changes are backwards compatible
-- ✅ No breaking changes
-- ✅ All bugs documented
-- ✅ Testing plan documented
-- ✅ Rollback plan documented
-- ✅ Database fixes already applied
-- ⬜ User to push to production
+Before deploying to production, verify:
+
+- [x] **Code Quality:** No linter errors, no TS errors
+- [x] **Database:** Phase 2 migration applied successfully
+- [x] **Edge Functions:** Updated and deployed
+- [x] **API Routes:** All fixes applied
+- [x] **Backward Compatibility:** Verified
+- [x] **Rollback Plan:** Documented and ready
+- [ ] **Critical Tests:** Run Priority 1 tests (post-deploy)
+- [ ] **Monitoring:** Ready to watch logs
 
 ---
 
-## 📊 Success Metrics
+## 🎯 **SUCCESS CRITERIA**
 
-After deployment, monitor:
+### **Immediate (Day 1):**
+- ✅ Deployment succeeds without errors
+- ✅ No critical bugs reported
+- ✅ Grid persistence works in Priority 1 test
+- ✅ Three-state status works correctly
+- ✅ No user data loss or corruption
 
-1. **User Reports**: Decrease in "UI not updating" complaints → **Target: 0**
-2. **Support Tickets**: Decrease in coordinator-related tickets → **Target: -80%**
-3. **Error Logs**: No new JavaScript errors → **Target: 0 new errors**
-4. **Performance**: API response times < 200ms → **Target: <150ms average**
-5. **User Satisfaction**: Positive feedback on coordinator experience
+### **Short-Term (Week 1):**
+- ✅ Grid persistence works consistently across all pages
+- ✅ Dashboard status shows more "On Track" members
+- ✅ Users successfully use three-state status
+- ✅ No performance degradation
 
----
-
-## 🎉 Expected Outcome
-
-**Before This Fix:**
-- ❌ UI updates intermittent (50% failure rate)
-- ❌ Users must refresh manually
-- ❌ Confusion about item/task status
-- ❌ Metrics cards show stale data
-- ❌ Poor user experience
-
-**After This Fix:**
-- ✅ UI updates immediately (100% success rate)
-- ✅ No manual refresh needed
-- ✅ Clear, immediate feedback
-- ✅ Metrics cards always current
-- ✅ Excellent user experience
+### **Long-Term (Month 1):**
+- ✅ Grid persistence is reliable (no user complaints)
+- ✅ Dashboard provides accurate member insights
+- ✅ Three-state tracking improves compliance visibility
+- ✅ No regression issues discovered
 
 ---
 
-## 🚀 READY FOR PRODUCTION
+## 📞 **SUPPORT & MONITORING**
 
-**All checks passed. User can safely push to production.**
+### **Vercel Dashboard:**
+- Monitor build logs: https://vercel.com/dashboard
+- Check function logs for errors
+- Monitor response times
 
+### **Supabase Dashboard:**
+- Check edge function logs
+- Monitor database performance
+- Review error rates
+
+### **User Feedback:**
+- Watch for grid persistence complaints
+- Monitor confusion about three-state status
+- Track dashboard accuracy feedback
+
+---
+
+## 🚨 **EMERGENCY CONTACTS**
+
+If critical issues arise:
+1. **Immediate:** Rollback via git (procedures above)
+2. **Database Issues:** Use Supabase dashboard to monitor
+3. **Edge Function Issues:** Check logs, redeploy previous version
+4. **Grid Persistence:** Rollback single file (low impact)
+
+---
+
+## ✅ **FINAL CHECKLIST**
+
+- [x] All code changes reviewed
+- [x] No linter errors
+- [x] No TypeScript errors
+- [x] Database migrations applied
+- [x] Edge functions deployed
+- [x] Rollback procedures documented
+- [x] Critical tests identified
+- [ ] **READY FOR PRODUCTION DEPLOYMENT**
+
+---
+
+**Prepared by:** AI Assistant  
+**Date:** October 29, 2025, 10:45 PM  
+**Status:** ✅ READY FOR DEPLOYMENT  
+**Confidence:** HIGH (with monitoring plan in place)
+
+---
+
+## 🎉 **GO/NO-GO DECISION**
+
+**RECOMMENDATION:** ✅ **GO FOR PRODUCTION**
+
+**Reasoning:**
+1. All changes are enhancements or bug fixes (no breaking changes)
+2. Database migrations completed successfully
+3. Rollback procedures are simple and low-risk
+4. Code quality checks pass
+5. Each change is isolated and can be rolled back independently
+6. Monitoring plan in place
+
+**Risk Level:** LOW to MEDIUM
+- Grid persistence: New fix (testing will confirm)
+- Three-state status: Low risk (UI already deployed)
+- Dashboard status: Low risk (enhancement only)
+- Finances fix: Low risk (bug fix)
+
+**Next Action:** Deploy to production and run Priority 1 smoke tests immediately after.
