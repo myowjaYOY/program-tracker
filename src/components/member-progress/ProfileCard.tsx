@@ -7,16 +7,12 @@ import {
   Card,
   CardContent,
   Grid,
-  Tooltip,
-  Chip,
 } from '@mui/material';
 import {
-  Person as PersonIcon,
   CalendarToday as CalendarIcon,
   Assessment as AssessmentIcon,
   Schedule as ScheduleIcon,
   MonitorWeight as WeightIcon,
-  InfoOutlined as InfoIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard, StatusIndicator } from '@/types/common';
 
@@ -72,27 +68,41 @@ export default function ProfileCard({ data }: ProfileCardProps) {
       >
         <CardContent>
           <Grid container spacing={2}>
-            {/* Overall Status */}
+            {/* Current Score */}
             <Grid size={{ xs: 12, sm: 2.4 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
-                <PersonIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+                <AssessmentIcon sx={{ fontSize: 20, color: 'primary.main' }} />
                 <Typography variant="body2" color="textSecondary" fontWeight="medium">
-                  Status
+                  Current Score
                 </Typography>
               </Box>
-              <Tooltip title={statusConfig.description} placement="top" arrow>
-                <Box>
-                  <Chip
-                    label={statusConfig.label}
-                    sx={{
-                      backgroundColor: statusConfig.color,
-                      color: 'white',
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                    }}
-                  />
-                </Box>
-              </Tooltip>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  mb: 0.5,
+                }}
+              >
+                <Typography 
+                  variant="h6" 
+                  fontWeight="bold"
+                >
+                  {data.status_score}
+                </Typography>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: statusConfig.color,
+                    fontWeight: 'medium',
+                  }}
+                >
+                  ({statusConfig.label})
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="textSecondary">
+                As of: {formatDate(data.calculated_at)}
+              </Typography>
             </Grid>
 
             {/* Days in Program */}
@@ -102,20 +112,13 @@ export default function ProfileCard({ data }: ProfileCardProps) {
                 <Typography variant="body2" color="textSecondary" fontWeight="medium">
                   Days in Program
                 </Typography>
-                <Tooltip 
-                  title="Days since program start date (from member_programs table)"
-                  placement="top"
-                  arrow
-                >
-                  <InfoIcon sx={{ fontSize: 16, color: 'action.disabled', cursor: 'help' }} />
-                </Tooltip>
               </Box>
-              <Typography variant="h5" fontWeight="bold" color={statusConfig.color}>
+              <Typography variant="h6" fontWeight="bold" color="text.primary">
                 {data.days_in_program ?? 'N/A'}
               </Typography>
-              {data.days_in_program && (
+              {data.projected_end_date && (
                 <Typography variant="caption" color="textSecondary">
-                  {Math.floor(data.days_in_program / 7)} weeks
+                  Projected End: {formatDate(data.projected_end_date)}
                 </Typography>
               )}
             </Grid>
@@ -128,7 +131,7 @@ export default function ProfileCard({ data }: ProfileCardProps) {
                   Surveys Completed
                 </Typography>
               </Box>
-              <Typography variant="h5" fontWeight="bold" color="text.primary">
+              <Typography variant="h6" fontWeight="bold" color="text.primary">
                 {data.total_surveys_completed}
               </Typography>
               <Typography variant="caption" color="textSecondary">
@@ -163,7 +166,7 @@ export default function ProfileCard({ data }: ProfileCardProps) {
               {data.current_weight !== null ? (
                 <>
                   <Typography 
-                    variant="h5" 
+                    variant="h6" 
                     fontWeight="bold" 
                     color={
                       data.weight_change === null 

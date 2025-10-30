@@ -36,8 +36,12 @@ export type StatusIndicator = 'green' | 'yellow' | 'red';
 
 /**
  * Goal status from Goals & Whys survey
+ * - on_track: Making good progress toward goal
+ * - win: Goal achieved
+ * - at_risk: Struggling or off track
+ * - insufficient_data: Not enough survey data to evaluate
  */
-export type GoalStatus = 'on_track' | 'win' | 'at_risk';
+export type GoalStatus = 'on_track' | 'win' | 'at_risk' | 'insufficient_data';
 
 /**
  * Individual health vital metric
@@ -64,6 +68,7 @@ export interface Alert {
 export interface Goal {
   goal_text: string;
   status: GoalStatus;
+  progress_summary?: string; // GPT's reasoning for the status assessment
 }
 
 /**
@@ -76,7 +81,9 @@ export interface MemberProgressDashboard {
   
   // Profile metrics
   status_indicator: StatusIndicator;
+  status_score: number;
   days_in_program: number | null;
+  projected_end_date: string | null;
   total_surveys_completed: number;
   last_survey_date: string | null;
   last_survey_name: string | null;

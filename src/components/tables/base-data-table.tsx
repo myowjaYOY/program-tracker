@@ -552,9 +552,10 @@ export default function BaseDataTable<T extends BaseEntity>({
               pagination: initialGridState?.pagination || {
                 paginationModel: { page: 0, pageSize },
               },
-              ...(sortModel && { sorting: { sortModel } }),
+              // Only apply prop sortModel if no saved state exists
+              ...(!initialGridState?.sorting && sortModel && { sorting: { sortModel } }),
             }}
-          {...(sortModel && { initialSortModel: sortModel })}
+          {...(!initialGridState?.sorting && sortModel && { initialSortModel: sortModel })}
           pageSizeOptions={pageSizeOptions}
           {...(onRowClick && {
             onRowClick: (params: any) => onRowClick(params.row),

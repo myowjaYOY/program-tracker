@@ -206,13 +206,13 @@ export default function TimelineCard({ data }: TimelineCardProps) {
   const activeStep = completedCount;
 
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
+    <Card variant="outlined" sx={{ height: '100%', borderTop: 3, borderTopColor: 'primary.main' }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TimelineIcon sx={{ fontSize: 24, color: 'primary.main' }} />
-            <Typography variant="h6" fontWeight="bold">
+            <TimelineIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+            <Typography variant="subtitle2" fontWeight="bold">
               Curriculum Progress
             </Typography>
           </Box>
@@ -230,26 +230,6 @@ export default function TimelineCard({ data }: TimelineCardProps) {
                 {overdueCount} Overdue
               </Typography>
             )}
-          </Box>
-        </Box>
-
-        {/* Legend */}
-        <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#10b981' }} />
-            <Typography variant="caption">Completed</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-            <Typography variant="caption">Next</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#ef4444' }} />
-            <Typography variant="caption">Overdue</Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#d1d5db' }} />
-            <Typography variant="caption">Future</Typography>
           </Box>
         </Box>
 
@@ -353,22 +333,6 @@ export default function TimelineCard({ data }: TimelineCardProps) {
           </Box>
         </Box>
 
-        {/* Status Message */}
-        <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-          {overdueCount > 0 ? (
-            <Typography variant="body2" color="#ef4444" fontWeight="500">
-              ⚠️ Member is behind schedule - {overdueCount} {overdueCount === 1 ? 'module' : 'modules'} overdue
-            </Typography>
-          ) : data.next_milestone === 'Program Complete' ? (
-            <Typography variant="body2" color="#10b981" fontWeight="500">
-              🎉 Program complete! All modules finished.
-            </Typography>
-          ) : (
-            <Typography variant="body2" color="#10b981" fontWeight="500">
-              ✅ On track - Up next: {data.next_milestone}
-            </Typography>
-          )}
-        </Box>
       </CardContent>
     </Card>
   );

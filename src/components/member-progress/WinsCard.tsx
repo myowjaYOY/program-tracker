@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -11,10 +11,15 @@ import {
   ListItemIcon,
   ListItemText,
   Alert as MuiAlert,
+  Chip,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   EmojiEvents as WinIcon,
   InfoOutlined as InfoIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard, Alert } from '@/types/common';
 
@@ -69,62 +74,55 @@ function WinItem({ alert }: WinItemProps) {
  * Displays recent wins from survey responses
  */
 export default function WinsCard({ data }: WinsCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const hasWins = data.latest_wins.length > 0;
 
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <WinIcon sx={{ fontSize: 24, color: '#10b981' }} />
-          <Typography variant="h6" fontWeight="bold" color="#10b981">
-            Wins
-          </Typography>
-          {hasWins && (
-            <Box
-              sx={{
-                ml: 'auto',
-                backgroundColor: '#10b98120',
-                color: '#10b981',
-                fontWeight: 600,
-                fontSize: '0.75rem',
-                px: 1.5,
-                py: 0.5,
-                borderRadius: 2,
-              }}
-            >
-              {data.latest_wins.length}
-            </Box>
-          )}
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderTop: 3, borderTopColor: '#10b981' }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: expanded ? 2 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WinIcon sx={{ fontSize: 20, color: '#10b981' }} />
+            <Typography variant="subtitle2" fontWeight="bold" color="#10b981">
+              Wins
+            </Typography>
+            {hasWins && (
+              <Chip
+                label={data.latest_wins.length}
+                size="small"
+                sx={{
+                  backgroundColor: '#10b98120',
+                  color: '#10b981',
+                  height: 20,
+                  fontSize: '0.7rem',
+                }}
+              />
+            )}
+          </Box>
+          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.5 }}>
+            {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
         </Box>
 
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-          Recent positive health results and successes
-        </Typography>
+        <Collapse in={expanded} timeout="auto" unmountOnExit>
+          <Box sx={{ maxHeight: 420, overflow: 'auto' }}>
+            {/* No wins state */}
+            {!hasWins && (
+              <MuiAlert severity="info" icon={<InfoIcon />}>
+                No wins reported in recent surveys
+              </MuiAlert>
+            )}
 
-        {/* No wins state */}
-        {!hasWins && (
-          <MuiAlert severity="info" icon={<InfoIcon />}>
-            No wins reported in recent surveys
-          </MuiAlert>
-        )}
-
-        {/* Wins List */}
-        {hasWins && (
-          <List disablePadding>
-            {data.latest_wins.map((win, idx) => (
-              <WinItem key={`win-${idx}`} alert={win} />
-            ))}
-          </List>
-        )}
-
-        {/* Encouragement */}
-        {hasWins && (
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="caption" color="textSecondary" fontStyle="italic">
-              🎉 Celebrating progress and positive outcomes!
-            </Typography>
+            {/* Wins List */}
+            {hasWins && (
+              <List disablePadding>
+                {data.latest_wins.map((win, idx) => (
+                  <WinItem key={`win-${idx}`} alert={win} />
+                ))}
+              </List>
+            )}
           </Box>
-        )}
+        </Collapse>
       </CardContent>
     </Card>
   );

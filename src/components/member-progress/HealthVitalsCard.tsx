@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -9,6 +9,8 @@ import {
   Grid,
   Tooltip,
   LinearProgress,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   Bolt as EnergyIcon,
@@ -20,6 +22,8 @@ import {
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
   RemoveCircleOutline as NoDataIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard, TrendIndicator } from '@/types/common';
 
@@ -171,19 +175,25 @@ function VitalRow({ label, icon: Icon, iconColor, score, trend, sparkline }: Vit
  * Displays 5 key health metrics with trends and sparklines
  */
 export default function HealthVitalsCard({ data }: HealthVitalsCardProps) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <WellbeingIcon sx={{ fontSize: 24, color: 'primary.main' }} />
-          <Typography variant="h6" fontWeight="bold">
-            Health Vitals
-          </Typography>
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderTop: 3, borderTopColor: 'primary.main' }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: expanded ? 2 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WellbeingIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+            <Typography variant="subtitle2" fontWeight="bold">
+              Health Vitals
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.5 }}>
+            {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
         </Box>
 
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-          Daily self-reported scores (0-10 scale). Trend based on last 3-5 surveys.
-        </Typography>
+        <Collapse in={expanded} timeout="auto" unmountOnExit>
+          <Box sx={{ maxHeight: 420, overflow: 'auto' }}>
 
         {/* Energy */}
         <VitalRow
@@ -234,6 +244,8 @@ export default function HealthVitalsCard({ data }: HealthVitalsCardProps) {
           trend={data.sleep_trend}
           sparkline={data.sleep_sparkline}
         />
+          </Box>
+        </Collapse>
       </CardContent>
     </Card>
   );

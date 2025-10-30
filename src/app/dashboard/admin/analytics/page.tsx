@@ -13,7 +13,9 @@ import {
   Chip,
   Grid,
   Divider,
-  LinearProgress
+  LinearProgress,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -43,6 +45,7 @@ interface AnalysisResult {
 export default function AnalyticsAdminPage() {
   const queryClient = useQueryClient();
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [includeInactive, setIncludeInactive] = useState(false);
 
   // Fetch dashboard info
   const { data: dashboardInfo, isLoading: isLoadingInfo, error: infoError } = useQuery<DashboardInfo>({
@@ -59,9 +62,13 @@ export default function AnalyticsAdminPage() {
 
   // Re-analysis mutation
   const reanalyzeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (testMode: boolean) => {
       const response = await fetch('/api/admin/reanalyze-dashboards', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ test_mode: testMode }),
       });
 
       if (!response.ok) {
@@ -94,8 +101,11 @@ export default function AnalyticsAdminPage() {
   });
 
   const handleReanalyze = () => {
-    if (confirm(`This will re-analyze all ${dashboardInfo?.member_count || 0} member dashboards. This may take 30-60 seconds. Continue?`)) {
-      reanalyzeMutation.mutate();
+    const memberCount = dashboardInfo?.member_count || 0;
+    const modeText = includeInactive ? ' (including inactive programs)' : ' (active programs only)';
+    
+    if (confirm(`This will re-analyze all ${memberCount} member dashboards${modeText}. This may take 30-60 seconds. Continue?`)) {
+      reanalyzeMutation.mutate(includeInactive);
     }
   };
 
@@ -222,6 +232,28 @@ export default function AnalyticsAdminPage() {
                 <Typography component="li" variant="body2" color="textSecondary">
                   You want to refresh data without new survey imports
                 </Typography>
+              </Box>
+
+              <Box sx={{ mt: 3, mb: 2, p: 2, bgcolor: 'info.lighter', borderRadius: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={includeInactive}
+                      onChange={(e) => setIncludeInactive(e.target.checked)}
+                      disabled={reanalyzeMutation.isPending}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        Include inactive programs
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Test mode: Analyze all members regardless of program status
+                      </Typography>
+                    </Box>
+                  }
+                />
               </Box>
 
               <Button

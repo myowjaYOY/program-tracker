@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -9,6 +9,8 @@ import {
   Chip,
   Tooltip,
   LinearProgress,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   Restaurant as NutritionIcon,
@@ -16,6 +18,8 @@ import {
   FitnessCenter as ExerciseIcon,
   SelfImprovement as MeditationIcon,
   LocalFireDepartment as StreakIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard } from '@/types/common';
 
@@ -71,29 +75,11 @@ function ComplianceRow({
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Icon sx={{ fontSize: 20, color: iconColor }} />
-          <Typography variant="body2" fontWeight="medium">
-            {label}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="h6" fontWeight="bold" color={color}>
-            {percentage !== null ? `${Math.round(percentage)}%` : 'N/A'}
-          </Typography>
-          <Chip
-            label={level}
-            size="small"
-            sx={{
-              backgroundColor: `${color}20`,
-              color: color,
-              fontWeight: 600,
-              fontSize: '0.7rem',
-              height: 20,
-            }}
-          />
-        </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <Icon sx={{ fontSize: 20, color: iconColor }} />
+        <Typography variant="subtitle2" fontWeight="medium">
+          {label}
+        </Typography>
       </Box>
 
       {/* Progress bar */}
@@ -112,9 +98,9 @@ function ComplianceRow({
         />
       )}
 
-      {/* Subtitle info */}
-      {(subtitle || streak !== undefined || target) && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+      {/* Subtitle info with chip and percentage */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {subtitle && (
             <Typography variant="caption" color="textSecondary">
               {subtitle}
@@ -134,7 +120,23 @@ function ComplianceRow({
             </Typography>
           )}
         </Box>
-      )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Chip
+            label={level}
+            size="small"
+            sx={{
+              backgroundColor: `${color}20`,
+              color: color,
+              fontWeight: 600,
+              fontSize: '0.7rem',
+              height: 20,
+            }}
+          />
+          <Typography variant="caption" fontWeight="bold" color={color} sx={{ fontSize: '0.7rem' }}>
+            {percentage !== null ? `${Math.round(percentage)}%` : 'N/A'}
+          </Typography>
+        </Box>
+      </Box>
     </Box>
   );
 }
@@ -145,19 +147,52 @@ function ComplianceRow({
  * Displays compliance metrics for nutrition, supplements, exercise, and meditation
  */
 export default function ComplianceCard({ data }: ComplianceCardProps) {
+  const [expanded, setExpanded] = useState(true);
+
+  // Calculate overall adherence
+  const complianceValues = [
+    data.nutrition_compliance_pct,
+    data.supplements_compliance_pct,
+    data.exercise_compliance_pct,
+    data.meditation_compliance_pct,
+  ].filter((val): val is number => val !== null);
+
+  const overallAdherence = complianceValues.length > 0
+    ? Math.round(complianceValues.reduce((sum, val) => sum + val, 0) / complianceValues.length)
+    : null;
+
+  const adherenceColor = overallAdherence !== null ? getComplianceColor(overallAdherence) : '#9ca3af';
+  const adherenceLevel = overallAdherence !== null ? getComplianceLevel(overallAdherence) : 'No Data';
+
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <NutritionIcon sx={{ fontSize: 24, color: 'primary.main' }} />
-          <Typography variant="h6" fontWeight="bold">
-            Protocol Compliance
-          </Typography>
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderTop: 3, borderTopColor: 'primary.main' }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: expanded ? 2 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NutritionIcon sx={{ fontSize: 20, color: 'primary.main' }} />
+            <Typography variant="subtitle2" fontWeight="bold">
+              Protocol Compliance
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {overallAdherence !== null && (
+              <>
+                <Typography variant="caption" color="textSecondary">
+                  Overall Program Adherence
+                </Typography>
+                <Typography variant="body2" fontWeight="bold" color={adherenceColor}>
+                  {overallAdherence}%
+                </Typography>
+              </>
+            )}
+            <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.5 }}>
+              {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            </IconButton>
+          </Box>
         </Box>
 
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-          Adherence to program protocols. Calculated from latest progress surveys.
-        </Typography>
+        <Collapse in={expanded} timeout="auto" unmountOnExit>
+          <Box sx={{ maxHeight: 420, overflow: 'auto' }}>
 
         {/* Nutrition Compliance */}
         <ComplianceRow
@@ -198,50 +233,8 @@ export default function ComplianceCard({ data }: ComplianceCardProps) {
           percentage={data.meditation_compliance_pct}
           subtitle="Daily practice"
         />
-
-        {/* Overall Compliance Summary */}
-        {[
-          data.nutrition_compliance_pct,
-          data.supplements_compliance_pct,
-          data.exercise_compliance_pct,
-          data.meditation_compliance_pct,
-        ].some((val) => val !== null) && (
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-              Overall Program Adherence
-            </Typography>
-            {(() => {
-              const values = [
-                data.nutrition_compliance_pct,
-                data.supplements_compliance_pct,
-                data.exercise_compliance_pct,
-                data.meditation_compliance_pct,
-              ].filter((val): val is number => val !== null);
-
-              if (values.length === 0) return null;
-
-              const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-              const color = getComplianceColor(average);
-
-              return (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="h5" fontWeight="bold" color={color}>
-                    {Math.round(average)}%
-                  </Typography>
-                  <Chip
-                    label={getComplianceLevel(average)}
-                    size="small"
-                    sx={{
-                      backgroundColor: `${color}20`,
-                      color: color,
-                      fontWeight: 600,
-                    }}
-                  />
-                </Box>
-              );
-            })()}
           </Box>
-        )}
+        </Collapse>
       </CardContent>
     </Card>
   );

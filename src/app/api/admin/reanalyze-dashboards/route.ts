@@ -43,7 +43,11 @@ export async function POST(request: Request) {
     //   );
     // }
 
-    console.log('Triggering dashboard re-analysis for all members...');
+    // Parse request body for test_mode parameter
+    const body = await request.json().catch(() => ({}));
+    const testMode = body.test_mode === true;
+
+    console.log(`Triggering dashboard re-analysis for all members (test_mode: ${testMode})...`);
 
     // Get Supabase URL and service role key from environment
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -69,7 +73,8 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        mode: 'all'
+        mode: 'all',
+        test_mode: testMode
       })
     });
 

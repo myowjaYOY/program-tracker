@@ -13,6 +13,10 @@ import {
   MenuItem,
   Tabs,
   Tab,
+  IconButton,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import SchoolIcon from '@mui/icons-material/School';
@@ -22,6 +26,8 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useDashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
@@ -33,6 +39,7 @@ import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-to
 import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
 import DashboardProgramItemsTab from '@/components/dashboard/dashboard-program-items-tab';
 import DashboardProgramNotesTab from '@/components/dashboard/dashboard-program-notes-tab';
+import ActiveMembersModal from '@/components/dashboard/active-members-modal';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -65,6 +72,11 @@ export default function DashboardPage() {
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [selectedProgram, setSelectedProgram] = useState<MemberPrograms | null>(null);
   const [tabValue, setTabValue] = useState(0);
+  
+  // State for Active Members menu and modal
+  const [activeMembersMenuAnchor, setActiveMembersMenuAnchor] = useState<null | HTMLElement>(null);
+  const activeMembersMenuOpen = Boolean(activeMembersMenuAnchor);
+  const [activeMembersModalOpen, setActiveMembersModalOpen] = useState(false);
 
   // Handler functions
   const handleMemberChange = (event: any, newValue: any) => {
@@ -85,6 +97,19 @@ export default function DashboardPage() {
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+  };
+
+  const handleActiveMembersMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setActiveMembersMenuAnchor(event.currentTarget);
+  };
+
+  const handleActiveMembersMenuClose = () => {
+    setActiveMembersMenuAnchor(null);
+  };
+
+  const handleViewActiveMembers = () => {
+    handleActiveMembersMenuClose();
+    setActiveMembersModalOpen(true);
   };
 
 
@@ -134,19 +159,34 @@ export default function DashboardPage() {
               <Box
                 sx={{
                   display: 'flex',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
                   justifyContent: 'space-between',
                   mb: 2,
                 }}
               >
-                <Box>
-                  <Typography
-                    color="textSecondary"
-                    variant="body2"
-                    sx={{ fontWeight: 500 }}
-                  >
-                    Active Members
-                  </Typography>
+                <Box sx={{ flex: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Active Members
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={handleActiveMembersMenuOpen}
+                      sx={{
+                        ml: 'auto',
+                        color: 'text.secondary',
+                        '&:hover': {
+                          color: 'primary.main',
+                        },
+                      }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
                   <Typography
                     variant="h3"
                     component="div"
@@ -180,6 +220,28 @@ export default function DashboardPage() {
                 Members on active programs
               </Typography>
             </CardContent>
+            
+            {/* Active Members Menu */}
+            <Menu
+              anchorEl={activeMembersMenuAnchor}
+              open={activeMembersMenuOpen}
+              onClose={handleActiveMembersMenuClose}
+              anchorOrigin={{
+                vertical: 'bottom',
+                horizontal: 'right',
+              }}
+              transformOrigin={{
+                vertical: 'top',
+                horizontal: 'right',
+              }}
+            >
+              <MenuItem onClick={handleViewActiveMembers}>
+                <ListItemIcon>
+                  <VisibilityIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>View Active Members</ListItemText>
+              </MenuItem>
+            </Menu>
           </Card>
         </Grid>
 
@@ -559,6 +621,12 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Active Members Modal */}
+      <ActiveMembersModal
+        open={activeMembersModalOpen}
+        onClose={() => setActiveMembersModalOpen(false)}
+      />
     </Box>
   );
 }

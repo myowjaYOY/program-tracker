@@ -3,13 +3,14 @@
 // Decoupled from import function to enable flexible re-analysis without new imports
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from '@supabase/supabase-js'
-import OpenAI from 'openai'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import OpenAI from 'npm:openai@4'
 
 interface AnalysisRequest {
   mode: 'all' | 'specific' | 'batch';
   lead_ids?: number[];
   import_batch_id?: number;
+  test_mode?: boolean; // If true, includes inactive programs (for testing)
 }
 
 interface AnalysisResult {
@@ -62,26 +63,62 @@ Deno.serve(async (req) => {
 
     const startTime = Date.now();
     const requestBody: AnalysisRequest = await req.json();
-    const { mode, lead_ids, import_batch_id } = requestBody;
+    const { mode, lead_ids, import_batch_id, test_mode = false } = requestBody;
 
-    console.log(`Starting analysis in mode: ${mode}`);
+    console.log(`Starting analysis in mode: ${mode}, test_mode: ${test_mode}`);
 
     let leadIdsToAnalyze: number[] = [];
 
     // Determine which members to analyze based on mode
     switch (mode) {
       case 'all':
-        // Analyze all members with survey mappings
-        const { data: allMappings, error: allMappingsError } = await supabase
-          .from('survey_user_mappings')
-          .select('lead_id');
+        // Analyze members with survey mappings
+        // PRODUCTION: Only active programs (program_status_id = 1)
+        // TEST MODE: All programs including inactive
+        
+        if (test_mode) {
+          console.log('⚠️ TEST MODE: Including inactive programs');
+          
+          // Get all members with survey mappings (regardless of program status)
+          const { data: allMappings, error: allMappingsError } = await supabase
+            .from('survey_user_mappings')
+            .select('lead_id');
 
-        if (allMappingsError) {
-          throw new Error(`Failed to fetch members: ${allMappingsError.message}`);
+          if (allMappingsError) {
+            throw new Error(`Failed to fetch members: ${allMappingsError.message}`);
+          }
+
+          leadIdsToAnalyze = [...new Set(allMappings.map((m: any) => m.lead_id))];
+          console.log(`Mode: all (TEST) - Found ${leadIdsToAnalyze.length} members to analyze (includes inactive)`);
+          
+        } else {
+          console.log('✅ PRODUCTION MODE: Active programs only');
+          
+          // Get only members with active programs
+          const { data: activeMappings, error: activeMappingsError } = await supabase
+            .from('survey_user_mappings')
+            .select(`
+              lead_id,
+              leads!inner(
+                member_programs!inner(
+                  program_status_id
+                )
+              )
+            `)
+            .eq('leads.member_programs.program_status_id', 1); // Only active programs
+
+          if (activeMappingsError) {
+            throw new Error(`Failed to fetch active members: ${activeMappingsError.message}`);
+          }
+
+          // Extract unique lead_ids where active program exists
+          leadIdsToAnalyze = [...new Set(activeMappings
+            .filter((m: any) => m.leads?.member_programs?.length > 0)
+            .map((m: any) => m.lead_id)
+          )];
+          
+          console.log(`Mode: all (PRODUCTION) - Found ${leadIdsToAnalyze.length} members with active programs`);
         }
-
-        leadIdsToAnalyze = [...new Set(allMappings.map((m: any) => m.lead_id))];
-        console.log(`Mode: all - Found ${leadIdsToAnalyze.length} members to analyze`);
         break;
 
       case 'specific':
@@ -306,12 +343,13 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
   // Get member program info for days_in_program
   const { data: program, error: programError } = await supabase
     .from('member_programs')
-    .select('start_date, duration, program_name')
+    .select('start_date, duration')
     .eq('lead_id', leadId)
     .eq('program_status_id', 1) // 1 = Active status
     .maybeSingle();
 
   let daysInProgram: number | null = null;
+  let projectedEndDate: string | null = null;
   console.log(`[DAYS_IN_PROGRAM DEBUG] Lead ${leadId}: programError=${!!programError}, program=${!!program}, start_date=${program?.start_date}`);
   
   if (programError) {
@@ -324,10 +362,18 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     const startDate = new Date(program.start_date);
     const today = new Date();
     daysInProgram = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    console.log(`[DAYS_IN_PROGRAM SUCCESS] Lead ${leadId}: start_date=${program.start_date}, days_in_program=${daysInProgram}, type=${typeof daysInProgram}`);
+    
+    // Calculate projected end date (start_date + duration)
+    if (program.duration) {
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + program.duration);
+      projectedEndDate = endDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    }
+    
+    console.log(`[DAYS_IN_PROGRAM SUCCESS] Lead ${leadId}: start_date=${program.start_date}, days_in_program=${daysInProgram}, projected_end_date=${projectedEndDate}, type=${typeof daysInProgram}`);
   }
   
-  console.log(`[DAYS_IN_PROGRAM FINAL] Lead ${leadId}: daysInProgram=${daysInProgram} (will be saved to DB)`);
+  console.log(`[DAYS_IN_PROGRAM FINAL] Lead ${leadId}: daysInProgram=${daysInProgram}, projectedEndDate=${projectedEndDate} (will be saved to DB)`);
 
   // Get curriculum progress from survey_user_progress (via mapping_id)
   // Also get program_id to fetch the correct module sequence for this member
@@ -377,6 +423,20 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     return getDefaultMetrics();
   }
 
+  // GPT CACHING LOGIC: Check if we need to re-run GPT analysis
+  const currentSurveyCount = allSessions.length;
+  
+  const { data: existingSummary } = await supabase
+    .from('member_progress_summary')
+    .select('last_analyzed_session_count, latest_wins, latest_concerns, goals')
+    .eq('lead_id', leadId)
+    .maybeSingle();
+
+  const lastAnalyzedCount = existingSummary?.last_analyzed_session_count || 0;
+  const hasNewSurveys = currentSurveyCount > lastAnalyzedCount;
+
+  console.log(`[Lead ${leadId}] 📊 Survey count: ${currentSurveyCount}, Last analyzed: ${lastAnalyzedCount}, Has new: ${hasNewSurveys ? '✅ YES' : '❌ NO'}`);
+
   const sessionIds = allSessions.map(s => s.session_id);
 
   // Get all responses for these sessions
@@ -396,20 +456,48 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
   // Calculate compliance metrics (with target for exercise)
   const compliance = calculateCompliance(allSessions, responses);
   
-  // Extract alerts (wins and concerns) - using GPT for sentiment analysis
-  const alerts = await extractAlerts(allSessions, responses, leadId);
+  // CONDITIONAL GPT ANALYSIS: Only run if new surveys exist
+  let alerts;
+  let goals;
+
+  if (hasNewSurveys) {
+    console.log(`[Lead ${leadId}] 🤖 Running GPT analysis (new surveys detected)...`);
+    
+    // Get initial goals from "Goals & Whys" survey
+    const initialGoals = await extractInitialGoals(supabase, externalUserId);
+    
+    // Run GPT analysis for wins, challenges, AND goal tracking
+    const gptResults = await extractAlertsAndGoals(allSessions, responses, initialGoals, leadId);
+    
+    if (gptResults.error) {
+      console.error(`[Lead ${leadId}] ❌ GPT analysis failed: ${gptResults.error}`);
+      alerts = { wins: [], concerns: [] };
+      goals = [];
+    } else {
+      console.log(`[Lead ${leadId}] ✅ GPT analysis complete: ${gptResults.wins?.length || 0} wins, ${gptResults.concerns?.length || 0} challenges, ${gptResults.goals?.length || 0} goals`);
+      alerts = { wins: gptResults.wins, concerns: gptResults.concerns };
+      goals = gptResults.goals;
+    }
+    
+  } else {
+    console.log(`[Lead ${leadId}] ♻️ Reusing cached GPT results (no new surveys)`);
+    
+    // Reuse existing GPT results from cache
+    alerts = {
+      wins: existingSummary?.latest_wins ? JSON.parse(existingSummary.latest_wins) : [],
+      concerns: existingSummary?.latest_concerns ? JSON.parse(existingSummary.latest_concerns) : []
+    };
+    goals = existingSummary?.goals ? JSON.parse(existingSummary.goals) : [];
+  }
   
   // Calculate timeline progress using survey_user_progress
   const timeline = calculateTimelineProgress(userProgress, allSessions, moduleSequence);
-  
-  // Get goals from "Goals & Whys" survey
-  const goals = await extractGoals(supabase, externalUserId);
   
   // Extract weight tracking with session dates for chronological sorting
   const weight = extractWeightData(allSessions, responses);
   
   // Calculate status indicator
-  const statusIndicator = calculateStatusIndicator(
+  const statusResult = calculateStatusIndicator(
     healthVitals, 
     compliance, 
     alerts, 
@@ -424,7 +512,9 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     last_survey_name: (allSessions[allSessions.length - 1]?.survey_forms as any)?.form_name || null,
     total_surveys_completed: allSessions.length,
     days_in_program: daysInProgram,
-    status_indicator: statusIndicator,
+    projected_end_date: projectedEndDate,
+    status_indicator: statusResult.status,
+    status_score: statusResult.score,
     
     // Health vitals
     ...healthVitals,
@@ -440,12 +530,15 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     module_sequence: JSON.stringify(moduleSequence), // Full module list for member's program
     ...timeline,
     
-    // Goals
+    // Goals (now with GPT tracking)
     goals: JSON.stringify(goals),
     
     // Weight
     current_weight: weight.current,
-    weight_change: weight.change
+    weight_change: weight.change,
+    
+    // Cache tracking
+    last_analyzed_session_count: currentSurveyCount
   };
 }
 
@@ -605,25 +698,33 @@ function calculateCompliance(sessions: any[], responses: any[]) {
 }
 
 /**
- * Extract wins and challenges using GPT-4o-mini for accurate sentiment analysis
+ * Extract wins, challenges, AND evaluate goals using GPT-4o-mini
  * 
- * IMPORTANT: Uses OpenAI to analyze sentiment of answers with full context awareness:
- * - Understands negation ("isn't hurting" = positive, "hurting" = negative)
- * - Handles mixed sentiment (can split into both wins AND challenges)
- * - Context-aware (considers question + answer together)
- * - All feedback is captured (nothing disappears)
+ * IMPORTANT: Uses OpenAI to analyze sentiment AND track goal progress:
+ * - Wins/Challenges: Understands negation, handles mixed sentiment, context-aware
+ * - Goals: Evaluates progress toward each goal based on survey data
  * 
- * Returns last 10 wins and last 10 challenges, newest first.
+ * Returns up to 6 wins, up to 6 challenges, and all goals with tracking status.
  * 
- * NOTE: Falls back to basic keyword analysis if GPT fails.
+ * NOTE: Returns error object if GPT fails (no fallback analysis).
  */
-async function extractAlerts(sessions: any[], responses: any[], leadId: number) {
+async function extractAlertsAndGoals(
+  sessions: any[], 
+  responses: any[], 
+  initialGoals: string[], 
+  leadId: number
+) {
   try {
     // Check for OpenAI API key
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiKey) {
-      console.warn(`[Lead ${leadId}] OPENAI_API_KEY not set, using fallback sentiment analysis`);
-      return extractAlertsFallback(sessions, responses);
+      console.error(`[Lead ${leadId}] ❌ OPENAI_API_KEY not set - GPT analysis unavailable`);
+      return { 
+        wins: [], 
+        concerns: [], 
+        goals: [],
+        error: 'GPT unavailable: API key not configured' 
+      };
     }
 
     // Group responses by session
@@ -682,46 +783,74 @@ async function extractAlerts(sessions: any[], responses: any[], leadId: number) 
     }
 
     // If no meaningful data, return empty
-    if (surveyData.length === 0) {
-      console.log(`[Lead ${leadId}] No meaningful survey responses for sentiment analysis`);
-      return { wins: [], concerns: [] };
+    if (surveyData.length === 0 && initialGoals.length === 0) {
+      console.log(`[Lead ${leadId}] No meaningful survey responses for GPT analysis`);
+      return { wins: [], concerns: [], goals: [] };
     }
 
-    // Build GPT prompt
-    const prompt = `Analyze these survey responses and identify wins (positive progress) and challenges (concerns/struggles).
+    // Build GPT prompt with GOALS evaluation
+    const prompt = `Analyze these survey responses and evaluate progress toward goals.
 
-Survey responses:
+MEMBER'S GOALS (from initial survey):
+${initialGoals.length > 0 ? JSON.stringify(initialGoals, null, 2) : 'No goals set'}
+
+RECENT SURVEY RESPONSES:
 ${JSON.stringify(surveyData, null, 2)}
 
-Instructions:
-- Analyze each answer's sentiment considering the question context
-- Handle negation correctly (e.g., "not hurting" = positive, "hurting" = negative)
-- Split mixed sentiment into separate wins AND challenges (e.g., "better sleep but worse pain" → 1 win + 1 challenge)
-- Skip meaningless responses like "I can't think of any", "None", lists of symptoms without context
-- Keep messages concise and clear (< 150 characters)
-- Return the LAST 10 WINS and LAST 10 CHALLENGES maximum, newest first
+INSTRUCTIONS:
+1. Identify WINS (positive progress, improvements, successes)
+2. Identify CHALLENGES (concerns, struggles, setbacks)
+3. Evaluate EACH GOAL:
+   - Assess if member is making progress toward it based on survey data
+   - Determine status: "on_track" (progressing well) | "at_risk" (struggling/off track) | "win" (achieved) | "insufficient_data" (not enough data)
+   - Write brief progress summary (< 100 chars)
+
+RULES:
+- Handle negation correctly ("not hurting" = win, "hurting" = challenge)
+- Split mixed sentiment into separate items ("better sleep but worse pain" → 1 win + 1 challenge)
+- Skip meaningless responses like "I can't think of any", "None"
+- Keep messages concise (< 150 chars)
+- Return UP TO 6 WINS and UP TO 6 CHALLENGES maximum, newest first
+- If fewer than 6 exist, return what you have (don't pad)
 
 Return JSON in this exact format:
 {
   "wins": [
-    {"date": "2024-11-18T02:10:00+00:00", "message": "Brief description of the win"},
+    {"date": "2024-11-18T02:10:00+00:00", "message": "Brief description of win"}
   ],
   "challenges": [
-    {"date": "2024-11-18T02:10:00+00:00", "message": "Brief description of the challenge", "severity": "medium"}
+    {"date": "2024-11-18T02:10:00+00:00", "message": "Brief description of challenge", "severity": "medium"}
+  ],
+  "goals": [
+    {
+      "goal_text": "Lose 10 lbs in 8 weeks",
+      "status": "on_track",
+      "progress_summary": "Lost 5 lbs in 4 weeks, trending well"
+    },
+    {
+      "goal_text": "Reduce inflammation",
+      "status": "at_risk",
+      "progress_summary": "Still experiencing high inflammation levels"
+    },
+    {
+      "goal_text": "Sleep 8 hours nightly",
+      "status": "win",
+      "progress_summary": "Consistently achieving 8+ hours of sleep"
+    }
   ]
 }`;
 
     // Call OpenAI
     const openai = new OpenAI({ apiKey: openaiKey });
     
-    console.log(`[Lead ${leadId}] Calling GPT for sentiment analysis (${surveyData.length} sessions)...`);
+    console.log(`[Lead ${leadId}] 🤖 Calling GPT-4o-mini for analysis (${surveyData.length} sessions, ${initialGoals.length} goals)...`);
     
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a health coach analyzing member survey responses to identify positive progress (wins) and concerns (challenges). Be accurate, context-aware, and handle negation properly.'
+          content: 'You are a health coach analyzing member survey responses to identify wins, challenges, and evaluate goal progress. Be accurate, context-aware, and handle negation properly. Return structured JSON.'
         },
         {
           role: 'user',
@@ -729,143 +858,42 @@ Return JSON in this exact format:
         }
       ],
       temperature: 0.3, // Lower temperature for more consistent analysis
-      max_tokens: 1500,
+      max_tokens: 2000, // Increased for goals
       response_format: { type: 'json_object' }
     });
 
     const responseContent = completion.choices[0]?.message?.content;
     if (!responseContent) {
-      console.error(`[Lead ${leadId}] No response from OpenAI, using fallback`);
-      return extractAlertsFallback(sessions, responses);
+      console.error(`[Lead ${leadId}] ❌ No response from OpenAI`);
+      return { 
+        wins: [], 
+        concerns: [], 
+        goals: [],
+        error: 'GPT returned empty response' 
+      };
     }
 
     const aiResponse = JSON.parse(responseContent);
     
-    console.log(`[Lead ${leadId}] GPT analysis complete: ${aiResponse.wins?.length || 0} wins, ${aiResponse.challenges?.length || 0} challenges`);
+    console.log(`[Lead ${leadId}] ✅ GPT analysis complete: ${aiResponse.wins?.length || 0} wins, ${aiResponse.challenges?.length || 0} challenges, ${aiResponse.goals?.length || 0} goals`);
 
     return {
-      wins: (aiResponse.wins || []).slice(0, 10), // Ensure max 10, already sorted by GPT
-      concerns: (aiResponse.challenges || []).slice(0, 10) // Ensure max 10, already sorted by GPT
+      wins: (aiResponse.wins || []).slice(0, 6), // Ensure max 6
+      concerns: (aiResponse.challenges || []).slice(0, 6), // Ensure max 6
+      goals: aiResponse.goals || [] // All goals with tracking
     };
 
   } catch (error: any) {
-    console.error(`[Lead ${leadId}] Error in GPT sentiment analysis:`, error.message);
-    console.log(`[Lead ${leadId}] Falling back to keyword-based analysis`);
-    return extractAlertsFallback(sessions, responses);
+    console.error(`[Lead ${leadId}] ❌ GPT analysis failed:`, error.message);
+    return { 
+      wins: [], 
+      concerns: [], 
+      goals: [],
+      error: `GPT analysis failed: ${error.message}` 
+    };
   }
 }
 
-/**
- * Fallback: Basic keyword-based sentiment analysis
- * Used when OpenAI API is unavailable or fails
- */
-function extractAlertsFallback(sessions: any[], responses: any[]) {
-  const wins: any[] = [];
-  const challenges: any[] = [];
-  
-  // Group responses by session
-  const sessionMap = new Map<number, any[]>();
-  for (const response of responses) {
-    if (!sessionMap.has(response.session_id)) {
-      sessionMap.set(response.session_id, []);
-    }
-    sessionMap.get(response.session_id)!.push(response);
-  }
-
-  // Extract from recent sessions (last 10)
-  const recentSessions = sessions.slice(-10);
-
-  // Define sentiment indicators
-  const positiveIndicators = [
-    'better', 'improved', 'improvement', 'great', 'excellent', 'amazing', 'fantastic',
-    'wonderful', 'good', 'positive', 'progress', 'successful', 'success',
-    'more energy', 'feeling better', 'less pain', 'decreased', 'reduction in',
-    'sleeping better', 'happier', 'clearer', 'stronger', 'healthier',
-    'motivated', 'confident', 'grateful', 'thankful', 'blessed',
-    'weight loss', 'lost weight', 'inches lost', 'feeling great'
-  ];
-
-  const negativeIndicators = [
-    'worse', 'worsened', 'getting worse', 'gotten worse', 'no improvement', 'not improved',
-    'not better', 'no change', 'same', 'still', 'haven\'t', 'hasn\'t', 'didn\'t help',
-    'don\'t feel', 'doesn\'t', 'failed', 'unfortunately', 'disappointed', 'frustrated',
-    'difficult', 'struggling', 'struggle', 'pain', 'painful', 'hurt', 'hurting',
-    'tired', 'exhausted', 'fatigue', 'anxious', 'anxiety', 'depressed', 'depression',
-    'stressed', 'stress', 'overwhelmed', 'confused', 'concerned', 'worried', 'worry',
-    'problem', 'issue', 'trouble', 'challenge', 'obstacle', 'setback',
-    'however', 'but ', 'although', 'despite', 'unfortunately',
-    'can\'t', 'cannot', 'unable', 'not able', 'no progress',
-    'gaining weight', 'gained weight', 'weight gain', 'heavier'
-  ];
-
-  for (const session of recentSessions) {
-    const sessionResponses = sessionMap.get(session.session_id) || [];
-    
-    for (const response of sessionResponses) {
-      const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
-      const answer = response.answer_text || '';
-      const answerLower = answer.toLowerCase();
-
-      // Skip empty, very short, or placeholder answers
-      if (!answer || answer.length < 5 || 
-          answerLower === 'none' || answerLower === 'n/a' || 
-          answerLower === 'no' || answerLower === 'yes') {
-        continue;
-      }
-
-      // Skip pure numeric answers or yes/no
-      if (/^\d+$/.test(answer.trim()) || /^(yes|no)$/i.test(answer.trim())) {
-        continue;
-      }
-
-      // Skip if question is asking for numeric data (weight, days, etc.)
-      if (questionText.includes('how many') || questionText.includes('your weight') ||
-          questionText.includes('rate') || questionText.includes('scale of')) {
-        continue;
-      }
-
-      // Analyze answer sentiment
-      const positiveCount = positiveIndicators.filter(indicator => 
-        answerLower.includes(indicator)
-      ).length;
-      
-      const negativeCount = negativeIndicators.filter(indicator => 
-        answerLower.includes(indicator)
-      ).length;
-
-      // Classify based on sentiment score
-      if (positiveCount > 0 || negativeCount > 0) {
-        if (positiveCount > negativeCount) {
-          // More positive sentiment → Win
-          wins.push({
-            date: session.completed_on,
-            message: answer.substring(0, 150),
-            type: 'positive_sentiment'
-          });
-        } else if (negativeCount > positiveCount) {
-          // More negative sentiment → Challenge
-          challenges.push({
-            date: session.completed_on,
-            message: answer.substring(0, 150),
-            severity: 'medium'
-          });
-        } else {
-          // Equal positive/negative (mixed sentiment) → Challenge (be cautious)
-          challenges.push({
-            date: session.completed_on,
-            message: answer.substring(0, 150),
-            severity: 'medium'
-          });
-        }
-      }
-    }
-  }
-
-  return {
-    wins: wins.slice(-10).reverse(), // Keep last 10, newest first
-    concerns: challenges.slice(-10).reverse() // Keep last 10, newest first
-  };
-}
 
 /**
  * Calculate timeline progress using survey_user_progress table
@@ -1001,9 +1029,10 @@ function extractWeightData(sessions: any[], responses: any[]) {
 }
 
 /**
- * Extract goals from "Goals & Whys" survey
+ * Extract initial goals from "Goals & Whys" survey
+ * Returns simple array of goal text strings (GPT will evaluate them)
  */
-async function extractGoals(supabase: any, memberId: number) {
+async function extractInitialGoals(supabase: any, memberId: number): Promise<string[]> {
   const { data: goalSession, error } = await supabase
     .from('survey_response_sessions')
     .select(`
@@ -1020,7 +1049,7 @@ async function extractGoals(supabase: any, memberId: number) {
     return [];
   }
 
-  const goals: any[] = [];
+  const goals: string[] = [];
   const responses = goalSession.survey_responses || [];
 
   for (const response of responses) {
@@ -1028,10 +1057,7 @@ async function extractGoals(supabase: any, memberId: number) {
     const answer = response.answer_text || '';
 
     if (questionText.includes('SMART Goal') && answer && answer !== '' && answer.toLowerCase() !== 'n/a') {
-      goals.push({
-        goal_text: answer,
-        status: 'on_track' // Default status
-      });
+      goals.push(answer); // Just the goal text
     }
   }
 
@@ -1039,12 +1065,19 @@ async function extractGoals(supabase: any, memberId: number) {
 }
 
 /**
- * Calculate overall status indicator with data quality weighting
+ * Calculate overall status indicator using weighted scoring system
  * 
- * Option 3: Weight by Data Quality
- * - Ignore nutrition if member has < 3 nutrition surveys
- * - Reduce concern weight if they're early in program (< 30 days)
- * - Require sufficient data before flagging issues
+ * NEW SCORING SYSTEM (100 points total):
+ * - Protocol Compliance: 35 points (avg of 4 compliance metrics)
+ * - Curriculum Progress: 35 points (On Track=100%, Behind=50%, Significantly Behind=0%)
+ * - Wins: 5 points (has wins = 5, no wins = 0)
+ * - Challenges: 5 points (has challenges = 5, no challenges = 0)
+ * - Health Vitals: 20 points (5 metrics x 4 points each, based on trend)
+ * 
+ * Status Thresholds:
+ * - Green: >= 70 points
+ * - Yellow: >= 40 and < 70 points
+ * - Red: < 40 points
  */
 function calculateStatusIndicator(
   healthVitals: any, 
@@ -1053,71 +1086,117 @@ function calculateStatusIndicator(
   userProgress: any | null,
   daysInProgram: number | null,
   totalSurveys: number
-): string {
-  // Data quality flags
-  const hasEnoughSurveys = totalSurveys >= 3;
-  const isEarlyInProgram = daysInProgram !== null && daysInProgram < 30;
+): { score: number; status: string } {
+  let totalScore = 0;
+
+  // ============================================================
+  // 1. PROTOCOL COMPLIANCE (35 points max)
+  // ============================================================
+  const complianceMetrics = [
+    compliance.nutrition_compliance_pct,
+    compliance.supplements_compliance_pct,
+    compliance.exercise_compliance_pct,
+    compliance.meditation_compliance_pct
+  ];
   
-  // Red flags (with data quality filtering)
+  // Filter out null values
+  const validComplianceScores = complianceMetrics.filter(score => score !== null && score !== undefined);
   
-  // 1. Concerns: Weight by program duration
-  // - Early in program (< 30 days): Need 5+ concerns for red (initial adjustment period)
-  // - Established in program (30+ days): Need 3+ concerns for red
-  const concernThreshold = isEarlyInProgram ? 5 : 3;
-  if (alerts.concerns.length >= concernThreshold) return 'red';
-  
-  // 2. Nutrition: Only flag if we have enough data (3+ surveys)
-  if (hasEnoughSurveys && compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 40) {
-    return 'red';
+  let complianceScore = 0;
+  if (validComplianceScores.length > 0) {
+    // Calculate average compliance percentage (0-100)
+    const avgCompliance = validComplianceScores.reduce((sum, score) => sum + score, 0) / validComplianceScores.length;
+    // Convert to points (35% weight)
+    complianceScore = (avgCompliance / 100) * 35;
   }
+  // If no compliance data, score = 0 (as per requirements: don't skip, score as 0)
   
-  // 3. Declining trends: Only flag if we have enough data (3+ surveys)
-  if (hasEnoughSurveys) {
-    const decliningCount = Object.keys(healthVitals)
-      .filter(key => key.includes('_trend'))
-      .filter(key => healthVitals[key] === 'declining')
-      .length;
+  totalScore += complianceScore;
+  console.log(`[Status Calc] Compliance: ${complianceScore.toFixed(2)}/35 (avg: ${validComplianceScores.length > 0 ? (complianceScore / 0.35).toFixed(1) : 0}%)`);
+
+  // ============================================================
+  // 2. CURRICULUM PROGRESS (35 points max)
+  // ============================================================
+  let curriculumScore = 0;
+  
+  if (userProgress && userProgress.status) {
+    if (userProgress.status === 'On Track' || userProgress.status === 'Current' || userProgress.status === 'Finished') {
+      curriculumScore = 35; // 100% of 35 points - up-to-date or completed
+    } else if (userProgress.status === 'Behind') {
+      curriculumScore = 17.5; // 50% of 35 points
+    } else if (userProgress.status === 'Inactive') {
+      curriculumScore = 0; // Inactive = 0 points
+    }
+    // Any other status = 0 points
+  }
+  // If no userProgress data, score = 0
+  
+  totalScore += curriculumScore;
+  console.log(`[Status Calc] Curriculum: ${curriculumScore}/35 (status: ${userProgress?.status || 'N/A'})`);
+
+  // ============================================================
+  // 3. WINS (5 points max)
+  // ============================================================
+  const winsScore = (alerts.wins && alerts.wins.length > 0) ? 5 : 0;
+  totalScore += winsScore;
+  console.log(`[Status Calc] Wins: ${winsScore}/5 (count: ${alerts.wins?.length || 0})`);
+
+  // ============================================================
+  // 4. CHALLENGES (5 points max)
+  // ============================================================
+  const challengesScore = (alerts.concerns && alerts.concerns.length > 0) ? 5 : 0;
+  totalScore += challengesScore;
+  console.log(`[Status Calc] Challenges: ${challengesScore}/5 (count: ${alerts.concerns?.length || 0})`);
+
+  // ============================================================
+  // 5. HEALTH VITALS (20 points max: 5 metrics x 4 points each)
+  // ============================================================
+  const vitalMetrics = ['energy', 'mood', 'motivation', 'wellbeing', 'sleep'];
+  let vitalsScore = 0;
+  const vitalBreakdown: string[] = [];
+  
+  vitalMetrics.forEach(metric => {
+    const trendKey = `${metric}_trend`;
+    const trend = healthVitals[trendKey];
     
-    if (decliningCount >= 3) return 'red';
-  }
-  
-  // 4. Behind on curriculum: Only flag if significantly behind (>14 days)
-  if (userProgress && userProgress.status === 'Behind' && userProgress.date_of_last_completed) {
-    const lastCompletionDate = new Date(userProgress.date_of_last_completed);
-    const today = new Date();
-    const daysSinceLastSurvey = Math.floor((today.getTime() - lastCompletionDate.getTime()) / (1000 * 60 * 60 * 24));
+    let points = 0;
+    if (trend === 'improving') {
+      points = 4;
+    } else if (trend === 'stable') {
+      points = 2;
+    } else if (trend === 'declining') {
+      points = 0;
+    } else {
+      // 'no_data' or any other value = 0 points (as per requirements)
+      points = 0;
+    }
     
-    if (daysSinceLastSurvey > 14) return 'red';
+    vitalsScore += points;
+    vitalBreakdown.push(`${metric}:${points}`);
+  });
+  
+  totalScore += vitalsScore;
+  console.log(`[Status Calc] Vitals: ${vitalsScore}/20 (${vitalBreakdown.join(', ')})`);
+
+  // ============================================================
+  // FINAL STATUS DETERMINATION
+  // ============================================================
+  const roundedScore = Math.round(totalScore);
+  console.log(`[Status Calc] TOTAL SCORE: ${roundedScore}/100`);
+  
+  let status: string;
+  if (totalScore >= 70) {
+    console.log(`[Status Calc] Result: GREEN (>= 70)`);
+    status = 'green';
+  } else if (totalScore >= 40) {
+    console.log(`[Status Calc] Result: YELLOW (40-69)`);
+    status = 'yellow';
+  } else {
+    console.log(`[Status Calc] Result: RED (< 40)`);
+    status = 'red';
   }
   
-  // Yellow flags (with data quality filtering)
-  
-  // 1. Concerns: Weight by program duration
-  // - Early in program (< 30 days): Need 3+ concerns for yellow
-  // - Established in program (30+ days): Need 1+ concerns for yellow
-  const yellowConcernThreshold = isEarlyInProgram ? 3 : 1;
-  if (alerts.concerns.length >= yellowConcernThreshold) return 'yellow';
-  
-  // 2. Nutrition: Only flag if we have enough data (3+ surveys)
-  if (hasEnoughSurveys && compliance.nutrition_compliance_pct !== null && compliance.nutrition_compliance_pct < 70) {
-    return 'yellow';
-  }
-  
-  // 3. Declining trends: Only flag if we have enough data (3+ surveys)
-  if (hasEnoughSurveys) {
-    const decliningCount = Object.keys(healthVitals)
-      .filter(key => key.includes('_trend'))
-      .filter(key => healthVitals[key] === 'declining')
-      .length;
-    
-    if (decliningCount >= 1) return 'yellow';
-  }
-  
-  // 4. Behind on curriculum: Any amount triggers yellow
-  if (userProgress && userProgress.status === 'Behind') return 'yellow';
-  
-  // Green - all good (or insufficient data to determine issues)
-  return 'green';
+  return { score: roundedScore, status };
 }
 
 /**
@@ -1140,6 +1219,7 @@ function getDefaultMetrics() {
     total_surveys_completed: 0,
     days_in_program: null,
     status_indicator: 'green',
+    status_score: 0,
     energy_score: null,
     energy_trend: 'no_data',
     energy_sparkline: JSON.stringify([]),
@@ -1169,7 +1249,8 @@ function getDefaultMetrics() {
     overdue_milestones: JSON.stringify([]),
     goals: JSON.stringify([]),
     current_weight: null,
-    weight_change: null
+    weight_change: null,
+    last_analyzed_session_count: 0 // Cache tracking
   };
 }
 

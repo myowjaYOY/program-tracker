@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -12,10 +12,14 @@ import {
   ListItemIcon,
   ListItemText,
   Alert as MuiAlert,
+  IconButton,
+  Collapse,
 } from '@mui/material';
 import {
   Warning as ChallengeIcon,
   InfoOutlined as InfoIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import type { MemberProgressDashboard, Alert } from '@/types/common';
 
@@ -96,62 +100,55 @@ function ChallengeItem({ alert }: ChallengeItemProps) {
  * Displays recent challenges and concerns from survey responses
  */
 export default function ChallengesCard({ data }: ChallengesCardProps) {
+  const [expanded, setExpanded] = useState(false);
   const hasChallenges = data.latest_concerns.length > 0;
 
   return (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <ChallengeIcon sx={{ fontSize: 24, color: '#f59e0b' }} />
-          <Typography variant="h6" fontWeight="bold" color="#f59e0b">
-            Challenges
-          </Typography>
-          {hasChallenges && (
-            <Box
-              sx={{
-                ml: 'auto',
-                backgroundColor: '#f59e0b20',
-                color: '#f59e0b',
-                fontWeight: 600,
-                fontSize: '0.75rem',
-                px: 1.5,
-                py: 0.5,
-                borderRadius: 2,
-              }}
-            >
-              {data.latest_concerns.length}
-            </Box>
-          )}
+    <Card variant="outlined" sx={{ display: 'flex', flexDirection: 'column', borderTop: 3, borderTopColor: '#f59e0b' }}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: expanded ? 2 : 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <ChallengeIcon sx={{ fontSize: 20, color: '#f59e0b' }} />
+            <Typography variant="subtitle2" fontWeight="bold" color="#f59e0b">
+              Challenges
+            </Typography>
+            {hasChallenges && (
+              <Chip
+                label={data.latest_concerns.length}
+                size="small"
+                sx={{
+                  backgroundColor: '#f59e0b20',
+                  color: '#f59e0b',
+                  height: 20,
+                  fontSize: '0.7rem',
+                }}
+              />
+            )}
+          </Box>
+          <IconButton size="small" onClick={() => setExpanded(!expanded)} sx={{ p: 0.5 }}>
+            {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
         </Box>
 
-        <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-          Recent obstacles, concerns, and areas needing support
-        </Typography>
+        <Collapse in={expanded} timeout="auto" unmountOnExit>
+          <Box sx={{ maxHeight: 420, overflow: 'auto' }}>
+            {/* No challenges state */}
+            {!hasChallenges && (
+              <MuiAlert severity="success" icon={<InfoIcon />}>
+                No challenges reported in recent surveys
+              </MuiAlert>
+            )}
 
-        {/* No challenges state */}
-        {!hasChallenges && (
-          <MuiAlert severity="success" icon={<InfoIcon />}>
-            No challenges reported in recent surveys
-          </MuiAlert>
-        )}
-
-        {/* Challenges List */}
-        {hasChallenges && (
-          <List disablePadding>
-            {data.latest_concerns.map((concern, idx) => (
-              <ChallengeItem key={`challenge-${idx}`} alert={concern} />
-            ))}
-          </List>
-        )}
-
-        {/* Action Recommendation */}
-        {hasChallenges && (
-          <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="caption" color="textSecondary" fontStyle="italic">
-              💡 Tip: High-severity challenges may require immediate follow-up
-            </Typography>
+            {/* Challenges List */}
+            {hasChallenges && (
+              <List disablePadding>
+                {data.latest_concerns.map((concern, idx) => (
+                  <ChallengeItem key={`challenge-${idx}`} alert={concern} />
+                ))}
+              </List>
+            )}
           </Box>
-        )}
+        </Collapse>
       </CardContent>
     </Card>
   );

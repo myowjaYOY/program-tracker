@@ -138,7 +138,7 @@ export default function MemberProgressTab({ leadId }: MemberProgressTabProps) {
           <Box sx={{ mt: 4, pt: 3, borderTop: 1, borderColor: 'divider' }}>
             <Typography variant="caption" color="textSecondary" fontStyle="italic">
               ℹ️ Dashboard metrics are pre-calculated and updated automatically after each survey import.
-              Last calculated: {new Date(data.calculated_at).toLocaleString()}
+              {data.calculated_at && ` Last calculated: ${new Date(data.calculated_at).toLocaleString()}`}
             </Typography>
           </Box>
         </Box>
