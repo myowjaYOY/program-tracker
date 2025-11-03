@@ -781,10 +781,13 @@ export interface InventoryForecastRow {
   id: string | number;               // Required ID for data grid (generated in frontend)
   therapy_type_name: string;
   therapy_name: string;
+  therapy_id: number;
   dispensed_count: number;
   owed_count: number;
   total_count: number;
-  item_cost: number;
+  member_cost: number;               // What members pay (from member_program_items.item_cost)
+  current_cost: number;              // Current supplier cost (from therapies.cost)
+  quantity_on_hand: number;
 }
 
 export interface InventoryForecastMetrics {

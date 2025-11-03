@@ -95,6 +95,11 @@ const operationsNav = [
     path: '/dashboard/inventory-forecast',
   },
   {
+    label: 'Inventory Management',
+    icon: <ItemRequestsIcon />,
+    path: '/dashboard/inventory-management',
+  },
+  {
     label: 'Item Requests',
     icon: <ItemRequestsIcon />,
     path: '/dashboard/item-requests',

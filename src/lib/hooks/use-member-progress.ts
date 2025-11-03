@@ -129,7 +129,6 @@ export function useMemberProgressDashboard(leadId?: number | null) {
 export function useMultipleMemberProgressDashboards(leadIds: number[]) {
   // Create a separate query for each lead
   const queries = leadIds.map((leadId) =>
-    // eslint-disable-next-line react-hooks/rules-of-hooks
     useMemberProgressDashboard(leadId)
   );
 

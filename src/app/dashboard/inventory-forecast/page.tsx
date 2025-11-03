@@ -10,13 +10,13 @@ import {
   CircularProgress,
   TextField,
   MenuItem,
-  Divider,
   Checkbox,
   ListItemText,
   Select,
   InputLabel,
   FormControl,
   OutlinedInput,
+  Button,
 } from '@mui/material';
 import { alpha, Theme } from '@mui/material/styles';
 import {
@@ -27,8 +27,9 @@ import {
 } from '@mui/icons-material';
 import { useInventoryForecast } from '@/lib/hooks/use-inventory-forecast';
 import { useActiveTherapyTypes } from '@/lib/hooks/use-therapy-types';
-import { GridColDef } from '@mui/x-data-grid-pro';
+import { GridColDef, GridRenderCellParams } from '@mui/x-data-grid-pro';
 import BaseDataTable, { renderCurrency } from '@/components/tables/base-data-table';
+import CreatePOModal from '@/components/purchase-orders/create-po-modal';
 import type { InventoryForecastRow } from '@/types/database.types';
 
 export default function InventoryForecastPage() {
@@ -37,6 +38,13 @@ export default function InventoryForecastPage() {
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [therapyTypeFilter, setTherapyTypeFilter] = useState<number[]>([]);
+
+  // Order modal state
+  const [selectedItems, setSelectedItems] = useState<InventoryForecastRow[]>([]);
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+
+  // Checkbox selection state
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
 
   // Fetch therapy types for filter
   const { data: therapyTypes = [], isLoading: therapyTypesLoading } = useActiveTherapyTypes();
@@ -69,7 +77,7 @@ export default function InventoryForecastPage() {
   const handleDateRangeChange = (value: string) => {
     const newRange = value as 'this_month' | 'next_month' | 'custom';
     setDateRange(newRange);
-    
+
     // Set default dates for custom range
     if (newRange === 'custom' && !startDate && !endDate) {
       const today = new Date();
@@ -78,6 +86,31 @@ export default function InventoryForecastPage() {
       setStartDate(firstDay.toISOString().slice(0, 10));
       setEndDate(lastDay.toISOString().slice(0, 10));
     }
+  };
+
+  // Handle Order Items button click
+  const handleOrderItems = () => {
+    console.log('Order Items clicked, selectedItemIds:', selectedItemIds);
+    console.log('inventoryData length:', inventoryData.length);
+
+    const selected = inventoryData.filter((row) => {
+      const itemId = `${row.therapy_type_name}-${row.therapy_name}-${row.dispensed_count}-${row.owed_count}`;
+      const isSelected = selectedItemIds.has(itemId);
+      console.log('Checking item:', itemId, 'selected:', isSelected);
+      return isSelected;
+    });
+
+    console.log('Selected items:', selected);
+
+    if (selected.length === 0) {
+      console.log('No items selected, showing alert');
+      alert('Please select at least one item to order.');
+      return;
+    }
+
+    console.log('Opening modal with selected items:', selected);
+    setSelectedItems(selected);
+    setOrderModalOpen(true);
   };
 
   // Define data grid columns
@@ -130,8 +163,8 @@ export default function InventoryForecastPage() {
       ),
     },
     {
-      field: 'total_count',
-      headerName: 'Total',
+      field: 'quantity_on_hand',
+      headerName: 'Qty on Hand',
       width: 120,
       type: 'number',
       align: 'center',
@@ -143,11 +176,64 @@ export default function InventoryForecastPage() {
       ),
     },
     {
-      field: 'item_cost',
-      headerName: 'Cost (per item)',
+      field: 'order',
+      headerName: 'Order',
+      width: 100,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params) => {
+        const itemId = `${params.row.therapy_type_name}-${params.row.therapy_name}-${params.row.dispensed_count}-${params.row.owed_count}`;
+        return (
+          <Checkbox
+            size="small"
+            sx={{ p: 0 }}
+            checked={selectedItemIds.has(itemId)}
+            onChange={(event) => {
+              const newSelected = new Set(selectedItemIds);
+              if (event.target.checked) {
+                newSelected.add(itemId);
+              } else {
+                newSelected.delete(itemId);
+              }
+              setSelectedItemIds(newSelected);
+            }}
+          />
+        );
+      },
+    },
+    {
+      field: 'member_cost',
+      headerName: 'Program Cost',
       width: 140,
       type: 'number',
+      align: 'right',
+      headerAlign: 'right',
       renderCell: renderCurrency as any,
+    },
+    {
+      field: 'current_cost',
+      headerName: 'Current Cost',
+      width: 140,
+      type: 'number',
+      align: 'right',
+      headerAlign: 'right',
+      renderCell: (params) => {
+        const memberCost = params.row.member_cost || 0;
+        const currentCost = params.value || 0;
+        const isHigher = currentCost > memberCost;
+        
+        return (
+          <Typography
+            variant="body2"
+            sx={{
+              color: isHigher ? 'error.main' : 'inherit',
+              fontWeight: isHigher ? 'bold' : 'normal',
+            }}
+          >
+            ${currentCost.toFixed(2)}
+          </Typography>
+        );
+      },
     },
   ];
 
@@ -432,9 +518,23 @@ export default function InventoryForecastPage() {
             )}
           </Box>
 
-          {/* Divider */}
-          <Box sx={{ mb: 2 }}>
-            <Divider />
+          {/* Order Items Button - Above grid, below filters */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleOrderItems}
+              disabled={selectedItemIds.size === 0}
+              sx={{
+                borderRadius: 0,
+                fontWeight: 600,
+                width: { xs: '100%', sm: 'auto' },
+                minWidth: 120,
+                py: 1,
+              }}
+            >
+              Order Items ({selectedItemIds.size})
+            </Button>
           </Box>
 
           {/* Loading State */}
@@ -474,6 +574,18 @@ export default function InventoryForecastPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Order Modal */}
+      <CreatePOModal
+        open={orderModalOpen}
+        onClose={() => setOrderModalOpen(false)}
+        initialItems={selectedItems}
+        onSuccess={() => {
+          setSelectedItems([]);
+          setSelectedItemIds(new Set());
+          setOrderModalOpen(false);
+        }}
+      />
     </Box>
   );
 }

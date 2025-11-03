@@ -78,6 +78,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'Assessment',
   },
   {
+    path: '/dashboard/inventory-management',
+    label: 'Inventory Management',
+    section: 'operations',
+    icon: 'Inventory',
+  },
+  {
     path: '/dashboard/item-requests',
     label: 'Item Requests',
     section: 'operations',

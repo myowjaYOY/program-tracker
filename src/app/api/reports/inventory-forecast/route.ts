@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
     
     let therapiesQuery = supabase
       .from('therapies')
-      .select('therapy_id, therapy_name, therapy_type_id, bucket_id')
+      .select('therapy_id, therapy_name, therapy_type_id, bucket_id, cost')
       .in('therapy_id', therapyIds);
     
     // Exclude "no show" buckets
@@ -227,14 +227,29 @@ export async function GET(req: NextRequest) {
     // Create item lookup map
     const itemMap = new Map(validItems.map((i: any) => [i.member_program_item_id, i]));
 
+    // Get inventory items for quantity on hand
+    const { data: inventoryItems, error: invErr } = await supabase
+      .from('inventory_items')
+      .select('therapy_id, quantity_on_hand')
+      .in('therapy_id', Array.from(therapyMap.keys()));
+    
+    if (invErr) {
+      console.error('Error fetching inventory items:', invErr);
+    }
+
+    const inventoryMap = new Map((inventoryItems || []).map((inv: any) => [inv.therapy_id, inv.quantity_on_hand]));
+
     // Aggregate data by therapy_type_name and therapy_name
     const aggregationMap = new Map<string, {
       therapy_type_name: string;
       therapy_name: string;
+      therapy_id: number;
       dispensed_count: number;
       owed_count: number;
       total_count: number;
-      item_cost: number;
+      member_cost: number;
+      current_cost: number;
+      quantity_on_hand: number;
     }>();
 
     (scheduleRows || []).forEach((row: any) => {
@@ -252,10 +267,13 @@ export async function GET(req: NextRequest) {
         aggregationMap.set(key, {
           therapy_type_name: therapyTypeName,
           therapy_name: therapyName,
+          therapy_id: therapy.therapy_id,
           dispensed_count: 0,
           owed_count: 0,
           total_count: 0,
-          item_cost: item.item_cost || 0,
+          member_cost: item.item_cost || 0,
+          current_cost: therapy.cost || 0,
+          quantity_on_hand: inventoryMap.get(therapy.therapy_id) || 0,
         });
       }
 

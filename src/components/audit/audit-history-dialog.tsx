@@ -5,8 +5,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Button,
   Box,
   Typography,
   Chip,
@@ -41,6 +39,14 @@ export default function AuditHistoryDialog({
 }: AuditHistoryDialogProps) {
   const { data, isLoading, error } = useAuditLogsForRecord(tableName, recordId);
 
+  // Check if any logs have member/program data
+  const hasMemberProgramData = React.useMemo(() => {
+    if (!data?.data) return false;
+    return data.data.some(
+      log => log.related_member_name || log.related_program_name
+    );
+  }, [data]);
+
   const getOperationColor = (operation: string) => {
     switch (operation.toLowerCase()) {
       case 'insert':
@@ -73,17 +79,7 @@ export default function AuditHistoryDialog({
           alignItems: 'center',
         }}
       >
-        <Box>
-          <Typography variant="h6">Audit History</Typography>
-          {recordTitle && (
-            <Typography variant="body2" color="text.secondary">
-              {recordTitle}
-            </Typography>
-          )}
-          <Typography variant="body2" color="text.secondary">
-            {tableName} - Record ID: {recordId}
-          </Typography>
-        </Box>
+        <Typography variant="h6">Audit History</Typography>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />
         </IconButton>
@@ -114,8 +110,8 @@ export default function AuditHistoryDialog({
                   <TableCell>Event At</TableCell>
                   <TableCell>Operation</TableCell>
                   <TableCell>Changed By</TableCell>
-                  <TableCell>Member</TableCell>
-                  <TableCell>Program</TableCell>
+                  {hasMemberProgramData && <TableCell>Member</TableCell>}
+                  {hasMemberProgramData && <TableCell>Program</TableCell>}
                   <TableCell>Summary</TableCell>
                 </TableRow>
               </TableHead>
@@ -133,14 +129,18 @@ export default function AuditHistoryDialog({
                       />
                     </TableCell>
                     <TableCell>
-                      {log.changed_by_email || '-'}
+                      {log.changed_by || log.changed_by_email || '-'}
                     </TableCell>
-                    <TableCell>
-                      {log.related_member_name || '-'}
-                    </TableCell>
-                    <TableCell>
-                      {log.related_program_name || '-'}
-                    </TableCell>
+                    {hasMemberProgramData && (
+                      <TableCell>
+                        {log.related_member_name || '-'}
+                      </TableCell>
+                    )}
+                    {hasMemberProgramData && (
+                      <TableCell>
+                        {log.related_program_name || '-'}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <Box
                         sx={{
@@ -161,12 +161,6 @@ export default function AuditHistoryDialog({
           </TableContainer>
         )}
       </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose} sx={{ borderRadius: 0 }}>
-          Close
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

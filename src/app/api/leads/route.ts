@@ -43,7 +43,9 @@ export async function GET(_req: NextRequest) {
   const mapped = (data || []).map(lead => ({
     ...lead,
     created_by_email: lead.created_user?.email || null,
+    created_by_name: lead.created_user?.full_name || null,
     updated_by_email: lead.updated_user?.email || null,
+    updated_by_name: lead.updated_user?.full_name || null,
     campaign_name: lead.campaign?.campaign_name || null,
     status_name: lead.status?.status_name || null,
     note_count: noteCounts[lead.lead_id] || 0,

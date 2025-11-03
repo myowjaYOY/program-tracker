@@ -37,23 +37,39 @@ export async function POST(request: NextRequest) {
     // Get raw body for signature verification
     const rawBody = await request.text();
 
-    // Verify webhook signature (optional but recommended)
+    // Verify webhook signature (REQUIRED for security)
     const signature = request.headers.get('x-ghl-signature');
     const webhookSecret = process.env.GHL_WEBHOOK_SECRET;
 
-    if (signature && webhookSecret) {
-      const isValid = verifyGHLWebhookSignature(
-        rawBody,
-        signature,
-        webhookSecret
+    // Require signature verification if webhook secret is configured
+    if (!webhookSecret) {
+      console.error('GHL_WEBHOOK_SECRET not configured');
+      return NextResponse.json(
+        { error: 'Webhook not properly configured' },
+        { status: 500 }
       );
-      if (!isValid) {
-        console.log('Invalid webhook signature');
-        return NextResponse.json(
-          { error: 'Invalid signature' },
-          { status: 401 }
-        );
-      }
+    }
+
+    if (!signature) {
+      console.log('Missing webhook signature');
+      return NextResponse.json(
+        { error: 'Missing signature' },
+        { status: 401 }
+      );
+    }
+
+    const isValid = verifyGHLWebhookSignature(
+      rawBody,
+      signature,
+      webhookSecret
+    );
+    
+    if (!isValid) {
+      console.log('Invalid webhook signature');
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
     }
 
     const payload: GHLWebhookPayload = JSON.parse(rawBody);

@@ -151,11 +151,13 @@ const onSubmit = async (values: LeadFormData) => {
             <MenuItem value="">
               <em>Select a status</em>
             </MenuItem>
-            {statuses?.map(status => (
-              <MenuItem key={status.status_id} value={status.status_id}>
-                {status.status_name}
-              </MenuItem>
-            ))}
+            {statuses
+              ?.sort((a, b) => a.status_name.localeCompare(b.status_name))
+              .map(status => (
+                <MenuItem key={status.status_id} value={status.status_id}>
+                  {status.status_name}
+                </MenuItem>
+              ))}
           </TextField>
         )}
       />

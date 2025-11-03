@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react';
 import { GridColDef } from '@mui/x-data-grid';
-import { Box, IconButton, Chip, Tooltip } from '@mui/material';
+import { Box, IconButton, Chip, Tooltip, Typography } from '@mui/material';
 import BaseDataTable, {
   commonColumns,
   renderDate,
 } from '@/components/tables/base-data-table';
+import { getUserDisplayName } from '@/lib/utils/item-request-status';
 import LeadForm from '@/components/forms/lead-form';
 import { useLeads, useDeleteLead } from '@/lib/hooks/use-leads';
 import { Leads } from '@/types/database.types';
@@ -133,10 +134,20 @@ const leadColumns: GridColDef[] = [
     flex: 1,
   },
   commonColumns.activeFlag,
-  commonColumns.createdAt,
-  commonColumns.createdBy,
+  {
+    field: 'updated_by',
+    headerName: 'Updated By',
+    width: 150,
+    renderCell: (params: any) => (
+      <Typography variant="body2">
+        {getUserDisplayName(
+          params.row.updated_by_name,
+          params.row.updated_by_email
+        )}
+      </Typography>
+    ),
+  },
   commonColumns.updatedAt,
-  commonColumns.updatedBy,
 ];
 
 export default function LeadTable() {

@@ -27,15 +27,47 @@ GHL_DEFAULT_STATUS_NAME=New
 GHL_DEFAULT_CAMPAIGN_NAME=GHL Import
 ```
 
-### 2. GoHighLevel Webhook Setup
+### 2. GoHighLevel Webhook Setup (Using Workflows)
 
 1. **Log into your GoHighLevel account**
-2. **Navigate to Settings > Integrations > Webhooks**
-3. **Create a new webhook with these settings:**
-   - **URL**: `https://yourdomain.com/api/webhooks/ghl`
-   - **Events**: Select "Contact Stage Update"
-   - **Method**: POST
-   - **Secret**: Use the same secret you set in `GHL_WEBHOOK_SECRET`
+2. **Navigate to Workflows** (not Integrations - webhooks are configured in Workflows)
+3. **Create a new workflow:**
+   - Click "Create Workflow" or "Add Workflow"
+   - Give it a name like "Create Lead in Program Tracker"
+4. **Add a Trigger:**
+   - Click "Add Trigger"
+   - Select **"Contact Stage Changed"** or **"Contact Stage Updated"**
+   - Optionally, filter by specific stages (e.g., "confirmed", "qualified", "ready to book", "appointment scheduled")
+5. **Add a Webhook Action:**
+   - Click "Add Action"
+   - Select **"Webhook"** or **"Outbound Webhook"**
+   - Configure the webhook:
+     - **Method**: POST
+     - **URL**: `https://yourdomain.com/api/webhooks/ghl`
+     - **Headers**: **REQUIRED** - Add custom header for security:
+       - Header Name: `x-ghl-signature`
+       - Header Value: Use GHL's custom value to compute HMAC-SHA256 signature of the payload with your secret
+       - (Note: If GHL doesn't support automatic signature generation, you'll need to use a shared secret token instead)
+     - **Payload**: Configure the webhook to send contact data. The payload should include:
+       ```json
+       {
+         "type": "ContactStageUpdate",
+         "locationId": "{{location.id}}",
+         "contactId": "{{contact.id}}",
+         "contact": {
+           "id": "{{contact.id}}",
+           "firstName": "{{contact.firstName}}",
+           "lastName": "{{contact.lastName}}",
+           "email": "{{contact.email}}",
+           "phone": "{{contact.phone}}"
+         },
+         "stage": {
+           "id": "{{stage.id}}",
+           "name": "{{stage.name}}"
+         }
+       }
+       ```
+6. **Activate the workflow** and test it with a contact stage change
 
 ### 3. Database Setup
 

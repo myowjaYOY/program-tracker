@@ -10,24 +10,25 @@ interface AuthLayoutProps {
 
 // Array of login images from public/logonPics folder
 const LOGIN_IMAGES = [
+  '/logonPics/Aldana.png',
+  '/logonPics/Camilla.png',
+  '/logonPics/Emma.png',
   '/logonPics/james%20astronut.jpg',
-  '/logonPics/James%20Award.jpg',
   '/logonPics/James%20Bigfoot.jpg',
   '/logonPics/James%20Dracul.jpg',
-  '/logonPics/james%20flyfish.jpg',
-  '/logonPics/james%20Fredy.jpg',
-  '/logonPics/james%20Pumpkin.jpg',
+  '/logonPics/Kami.png',
+  '/logonPics/Tara.png',
 ];
 
 // Function to get a random image
 const getRandomImage = (): string => {
   const randomIndex = Math.floor(Math.random() * LOGIN_IMAGES.length);
-  return LOGIN_IMAGES[randomIndex] || '/logonPics/James%20Award.jpg'; // Fallback to default
+  return LOGIN_IMAGES[randomIndex] || '/logonPics/Aldana.png'; // Fallback to default
 };
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
   // Start with a default image to avoid hydration mismatch, then switch to random on client
-  const [randomImage, setRandomImage] = useState<string>('/logonPics/James%20Award.jpg');
+  const [randomImage, setRandomImage] = useState<string>('/logonPics/Aldana.png');
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
