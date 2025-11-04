@@ -83,7 +83,7 @@ export default function NotesHistoryGrid({ leadId, onRefresh }: NotesHistoryGrid
       ),
     },
     {
-      field: 'created_by_email',
+      field: 'created_by_name',
       headerName: 'Created By',
       width: 200,
       renderCell: (params) => (

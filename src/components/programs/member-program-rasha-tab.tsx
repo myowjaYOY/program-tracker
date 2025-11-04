@@ -15,6 +15,7 @@ import {
   Grid,
   Tooltip,
   Chip,
+  Alert,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import {
@@ -38,6 +39,9 @@ import {
 } from '@/lib/hooks/use-member-program-rasha';
 import { useRashaLists } from '@/lib/hooks/use-rasha-list';
 import MemberProgramRashaForm from './member-program-rasha-form';
+import { useMemberProgram } from '@/lib/hooks/use-member-programs';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface MemberProgramRashaTabProps {
   program: MemberPrograms;
@@ -52,6 +56,16 @@ interface MemberProgramRashaEntity
 }
 
 export default function MemberProgramRashaTab({ program }: MemberProgramRashaTabProps) {
+  const { data: freshProgram } = useMemberProgram(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = statuses.find(
+    s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -306,6 +320,7 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
               onClick={() => handleEditItem(params.row)}
               color="primary"
               size="small"
+              disabled={isReadOnly}
             >
               <EditIcon />
             </IconButton>
@@ -313,6 +328,7 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
               onClick={() => handleDeleteItem(params.row)}
               color="error"
               size="small"
+              disabled={isReadOnly}
             >
               <DeleteIcon />
             </IconButton>
@@ -324,6 +340,12 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
 
   return (
     <Box>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
+      <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
       {/* Group Summary Cards with Add Button */}
       <Box sx={{ mb: 3 }}>
         <Grid container spacing={2}>
@@ -387,6 +409,7 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
               color="primary"
               startIcon={<AddIcon />}
               onClick={() => setIsAddModalOpen(true)}
+              disabled={isReadOnly}
               sx={{ borderRadius: 0 }}
             >
               Add RASHA Item
@@ -547,6 +570,7 @@ export default function MemberProgramRashaTab({ program }: MemberProgramRashaTab
           </Button>
         </DialogActions>
       </Dialog>
+      </fieldset>
     </Box>
   );
 }

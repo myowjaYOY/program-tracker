@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Box, Chip } from '@mui/material';
+import { Box, Chip, Alert } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import { MemberPrograms } from '@/types/database.types';
@@ -12,6 +12,9 @@ import {
   Cancel as MissedIcon,
   RadioButtonUnchecked as PendingIcon,
 } from '@mui/icons-material';
+import { useMemberProgram } from '@/lib/hooks/use-member-programs';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramToDoTabProps {
   program: MemberPrograms;
@@ -23,6 +26,15 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
     isLoading,
     error,
   } = useProgramToDo(program.member_program_id);
+  const { data: freshProgram } = useMemberProgram(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = statuses.find(
+    s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
   const rows = (data as any[]).map(r => {
     const tt =
@@ -94,6 +106,12 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
 
   return (
     <Box>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
+      <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
       <BaseDataTable<any>
         title=""
         data={rows}
@@ -108,6 +126,7 @@ export default function ProgramToDoTab({ program }: ProgramToDoTabProps) {
         autoHeight={true}
         persistStateKey="programToDoGrid"
       />
+      </fieldset>
     </Box>
   );
 }

@@ -8,7 +8,7 @@ import BaseDataTable, {
 } from '@/components/tables/base-data-table';
 import AddProgramWizard from './add-program-wizard';
 import {
-  useMemberPrograms,
+  useActiveMemberPrograms,
   useDeleteMemberProgram,
 } from '@/lib/hooks/use-member-programs';
 import { MemberPrograms } from '@/types/database.types';
@@ -150,15 +150,31 @@ const memberProgramColumns: GridColDef[] = [
     },
   },
   {
-    field: 'active_flag',
-    headerName: 'Flag',
-    width: 120,
-    renderCell: renderActiveFlag,
+    field: 'created_by',
+    headerName: 'Created By',
+    width: 180,
+    renderCell: (params: any) => {
+      const value = params.row.created_by_full_name;
+      if (value == null || value === undefined || value === '') {
+        return '-';
+      }
+      return value;
+    },
   },
   commonColumns.createdAt,
-  commonColumns.createdBy,
+  {
+    field: 'updated_by',
+    headerName: 'Updated By',
+    width: 180,
+    renderCell: (params: any) => {
+      const value = params.row.updated_by_full_name;
+      if (value == null || value === undefined || value === '') {
+        return '-';
+      }
+      return value;
+    },
+  },
   commonColumns.updatedAt,
-  commonColumns.updatedBy,
 ];
 
 interface ProgramsGridProps {
@@ -170,7 +186,7 @@ export default function ProgramsGrid({
   onProgramSelect,
   selectedProgram,
 }: ProgramsGridProps) {
-  const { data: programs, isLoading, error } = useMemberPrograms();
+  const { data: programs, isLoading, error } = useActiveMemberPrograms();
   const deleteProgram = useDeleteMemberProgram();
 
   const handleDelete = (id: string | number) => {
@@ -214,9 +230,9 @@ export default function ProgramsGrid({
       id: program.member_program_id,
       created_at: program.created_at || new Date().toISOString(),
       updated_at: program.updated_at || new Date().toISOString(),
-      // Use the proper user email fields from the API joins (following vendors pattern)
-      created_by: program.created_by_email || '-',
-      updated_by: program.updated_by_email || '-',
+      // Use the proper user full name fields from the API joins
+      created_by: program.created_by_full_name || '-',
+      updated_by: program.updated_by_full_name || '-',
     })
   );
 
@@ -273,7 +289,7 @@ export default function ProgramsGrid({
       autoHeight={true}
       showActionsColumn={false}
       sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
-      enableExport={false}
+      enableExport={true}
       aggregationModel={{ margin: 'avg' }}
       showAggregationFooter={true}
       aggregationLabel="Average Margin:"

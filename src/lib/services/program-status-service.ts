@@ -35,7 +35,8 @@ export type ProgramStatusException =
   | 'paused'        // Add Paused programs
   | 'quote'         // Add Quote programs
   | 'cancelled'     // Add Cancelled programs
-  | 'completed';    // Add Completed programs
+  | 'completed'     // Add Completed programs
+  | 'lost';         // Add Lost programs
 
 /**
  * Options for filtering valid programs

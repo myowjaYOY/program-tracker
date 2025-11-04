@@ -115,6 +115,8 @@ export default function DashboardProgramInfoTab({
                     ? 'warning'
                     : currentStatus?.status_name?.toLowerCase() === 'completed'
                     ? 'info'
+                    : currentStatus?.status_name?.toLowerCase() === 'lost'
+                    ? 'error'
                     : 'default'
                 }
                 variant="outlined"

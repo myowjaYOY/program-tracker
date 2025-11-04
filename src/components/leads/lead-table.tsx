@@ -248,6 +248,7 @@ export default function LeadTable() {
         pageSizeOptions={[10, 25, 50, 100]}
         autoHeight={false}
         gridHeight="calc(100vh - 120px)"
+        enableExport={true}
       />
 
       {/* Lead Notes Modal */}

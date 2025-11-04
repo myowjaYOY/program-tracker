@@ -51,12 +51,12 @@ export function useLeadsForProgramCreation() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to fetch leads');
       
-      // Filter for leads with status: Confirmed, PME Scheduled, Follow Up
-      // These correspond to status_id: 5, 2, 11 respectively
+      // Filter for leads with status: PME Scheduled, Won, Confirmed, Follow Up
+      // These correspond to status_id: 2, 4, 5, 11 respectively
       return (json.data as Leads[]).filter(l => 
         l.active_flag && 
         l.status_id && 
-        [5, 2, 11].includes(l.status_id)
+        [2, 4, 5, 11].includes(l.status_id)
       );
     },
   });

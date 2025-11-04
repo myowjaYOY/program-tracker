@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ import {
 } from '@/lib/validations/member-program';
 import { MemberPrograms } from '@/types/database.types';
 import { useLeadsForProgramCreation } from '@/lib/hooks/use-leads';
-import { useActiveProgramStatus } from '@/lib/hooks/use-program-status';
+import { useActiveProgramStatus, useProgramStatus } from '@/lib/hooks/use-program-status';
 import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
@@ -40,6 +41,7 @@ import { downloadQuoteFromTemplate, downloadContractFromTemplate } from '@/lib/u
 import { loadTemplate, TEMPLATE_PATHS } from '@/lib/utils/template-loader';
 import { generatePlanSummary } from '@/lib/utils/generate-plan-summary';
 import { toast } from 'sonner';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramInfoTabProps {
   program: MemberPrograms;
@@ -70,6 +72,14 @@ export default function ProgramInfoTab({
 
   const { data: leads = [] } = useLeadsForProgramCreation();
   const { data: programStatuses = [] } = useActiveProgramStatus();
+  const { data: allStatuses = [] } = useProgramStatus();
+
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = allStatuses.find(
+    s => s.program_status_id === program.program_status_id
+  );
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
   // Status transition validation rules
   const getValidStatusTransitions = (currentStatusName: string): string[] => {
@@ -484,7 +494,13 @@ export default function ProgramInfoTab({
 
   return (
     <Box>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
       <Paper sx={{ p: 3 }}>
+        <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
         <Box sx={{ display: 'flex', gap: 4 }}>
           {/* Column 1: Program Name, Member, Status, Start Date */}
           <Box
@@ -499,6 +515,7 @@ export default function ProgramInfoTab({
                   label="Program Name"
                   fullWidth
                   required
+                  disabled={isReadOnly}
                   error={!!errors.program_template_name}
                   helperText={errors.program_template_name?.message}
                 />
@@ -514,7 +531,7 @@ export default function ProgramInfoTab({
                   label="Member"
                   fullWidth
                   {...field}
-                  disabled={!!program.member_program_id}
+                  disabled={!!program.member_program_id || isReadOnly}
                   value={
                     field.value &&
                     leads.some(lead => lead.lead_id === field.value)
@@ -552,6 +569,7 @@ export default function ProgramInfoTab({
                   select
                   label="Status"
                   fullWidth
+                  disabled={isReadOnly}
                   {...field}
                   value={
                     field.value &&
@@ -637,6 +655,7 @@ export default function ProgramInfoTab({
                   label="Start Date"
                   type="date"
                   fullWidth
+                  disabled={isReadOnly}
                   InputLabelProps={{ shrink: true }}
                   {...field}
                   value={field.value || ''}
@@ -672,6 +691,7 @@ export default function ProgramInfoTab({
                     <Switch
                       checked={field.value ?? false}
                       onChange={e => field.onChange(e.target.checked)}
+                      disabled={isReadOnly}
                     />
                   }
                   label="Active Flag"
@@ -689,6 +709,7 @@ export default function ProgramInfoTab({
                   fullWidth
                   multiline
                   rows={4}
+                  disabled={isReadOnly}
                   error={!!errors.description}
                   helperText={errors.description?.message}
                   sx={{
@@ -736,7 +757,7 @@ export default function ProgramInfoTab({
             <Button
               variant="outlined"
               onClick={handleGenerateNewContractOptions}
-              disabled={isGenerating}
+              disabled={isGenerating || isReadOnly}
               sx={{ minWidth: 100, borderRadius: 0 }}
               startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
             >
@@ -745,7 +766,7 @@ export default function ProgramInfoTab({
             <Button
               variant="outlined"
               onClick={handleGeneratePlanSummary}
-              disabled={isGeneratingPlanSummary}
+              disabled={isGeneratingPlanSummary || isReadOnly}
               sx={{ minWidth: 100, borderRadius: 0 }}
               startIcon={isGeneratingPlanSummary ? <CircularProgress size={16} /> : undefined}
             >
@@ -831,7 +852,7 @@ export default function ProgramInfoTab({
                   )?.status_name || ''
                 ).toLowerCase();
                 const date = getValues('start_date') || program.start_date;
-                return isGenerating || currentStatus !== 'active' || !date;
+                return isGenerating || currentStatus !== 'active' || !date || isReadOnly;
               })()}
               sx={{ borderRadius: 0, fontWeight: 600 }}
             >
@@ -848,7 +869,7 @@ export default function ProgramInfoTab({
               variant="contained"
               color="primary"
               onClick={handleSubmit(onSubmit)}
-              disabled={!isDirty || isSaving}
+              disabled={!isDirty || isSaving || isReadOnly}
               startIcon={isSaving ? <CircularProgress size={16} /> : null}
               sx={{ borderRadius: 0, fontWeight: 600 }}
             >
@@ -935,6 +956,7 @@ export default function ProgramInfoTab({
             </Button>
           </DialogActions>
         </Dialog>
+        </fieldset>
       </Paper>
     </Box>
   );

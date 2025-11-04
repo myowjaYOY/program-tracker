@@ -45,6 +45,7 @@ import { isProgramLocked } from '@/lib/utils/program-lock';
 import useFinancialsLock from '@/lib/hooks/use-financials-lock';
 import { useFinancialsDerived } from '@/lib/hooks/use-financials-derived';
 import { shouldRegeneratePayments } from '@/lib/utils/payments-rules';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramFinancialsTabProps {
   program: MemberPrograms;
@@ -111,6 +112,13 @@ export default function ProgramFinancialsTab({
   const isLockedByStatus = lock.isLockedByStatus;
   const isLocked = lock.locked;
   const [baselineVersion, setBaselineVersion] = React.useState(0);
+
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = allStatuses.find(
+    s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
   const {
     register,
@@ -487,14 +495,20 @@ export default function ProgramFinancialsTab({
 
   return (
     <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
+      {isLocked && !isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Program must be in Quote status to change any information on this
+          tab.
+        </Alert>
+      )}
       <Card>
         <CardContent>
-          {isLocked && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              Program must be in Quote status to change any information on this
-              tab.
-            </Alert>
-          )}
+          <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
           {/* Items/Program Price banner removed per simplified rules */}
           <Grid container spacing={3}>
             {/* Row 1: Items Cost, Items Charge, Margin */}
@@ -761,6 +775,7 @@ export default function ProgramFinancialsTab({
               {isSaving ? 'Saving...' : 'Save and Update Payments'}
             </Button>
           </Box>
+          </fieldset>
         </CardContent>
       </Card>
     </Box>

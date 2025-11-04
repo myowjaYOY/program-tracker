@@ -155,6 +155,9 @@ export async function PUT(
 
     // Validate status transitions if program_status_id is being changed
     if (body.program_status_id !== undefined) {
+      // DEBUG: Log the incoming status ID
+      console.log('[DEBUG] Incoming program_status_id:', body.program_status_id, 'Type:', typeof body.program_status_id);
+      
       // Fetch current program with status
       const { data: currentProgram, error: fetchError } = await supabase
         .from('member_programs')
@@ -170,8 +173,11 @@ export async function PUT(
         );
       }
 
+      console.log('[DEBUG] Current program status_id:', currentProgram.program_status_id);
+
       // Only validate if status is actually changing
       if (currentProgram.program_status_id !== body.program_status_id) {
+        console.log('[DEBUG] Status is changing, validating...');
         // Fetch new status name
         const { data: newStatus, error: statusError } = await supabase
           .from('program_status')
@@ -180,12 +186,15 @@ export async function PUT(
           .single();
 
         if (statusError) {
-          console.error('Error fetching new status:', statusError);
+          console.error('[DEBUG] Error fetching new status for ID:', body.program_status_id);
+          console.error('[DEBUG] Status error details:', statusError);
           return NextResponse.json(
             { error: 'Invalid status ID' },
             { status: 400 }
           );
         }
+        
+        console.log('[DEBUG] New status found:', newStatus);
 
         // Validate transition
         const currentStatusName = ((currentProgram as any).program_status?.status_name || '').toLowerCase();

@@ -12,6 +12,7 @@ import {
   Chip,
   Typography,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import {
@@ -42,6 +43,7 @@ import AddProgramItemForm from './add-program-item-form';
 import useFinancialsLock from '@/lib/hooks/use-financials-lock';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
 import { todoKeys } from '@/lib/hooks/use-program-todo';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramItemsTabProps {
   program: MemberPrograms;
@@ -101,17 +103,14 @@ export default function ProgramItemsTab({
   );
   const { data: freshProgram } = useMemberProgram(program.member_program_id);
   const { data: statuses = [] } = useProgramStatus();
-  const statusName = (
-    statuses.find(
-      s =>
-        s.program_status_id ===
-        (freshProgram?.program_status_id ?? program.program_status_id)
-    )?.status_name || ''
-  ).toLowerCase();
-  const readOnlyAll =
-    statusName === 'paused' ||
-    statusName === 'completed' ||
-    statusName === 'cancelled';
+  const currentStatus = statuses.find(
+    s =>
+      s.program_status_id ===
+      (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const statusName = (currentStatus?.status_name || '').toLowerCase();
+  const readOnlyAll = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
   // Update parent component when program data changes
   React.useEffect(() => {
@@ -366,6 +365,11 @@ export default function ProgramItemsTab({
 
   return (
     <Box>
+      {readOnlyAll && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
       <Box
         sx={{
           display: 'flex',

@@ -55,13 +55,38 @@ export async function POST(req: NextRequest) {
   if (!parse.success) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
+  
+  // Separate track_inventory from therapy data
+  const { track_inventory, ...therapyData } = parse.data;
+  
   const { data, error } = await supabase
     .from('therapies')
-    .insert([{ ...parse.data, created_by: user.id, updated_by: user.id }])
+    .insert([{ ...therapyData, created_by: user.id, updated_by: user.id }])
     .select()
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // If track_inventory is true, create inventory_items record
+  if (track_inventory && data.therapy_id) {
+    const { error: invError } = await supabase
+      .from('inventory_items')
+      .insert([{
+        therapy_id: data.therapy_id,
+        quantity_on_hand: 0,
+        reorder_point: 0,
+        reorder_quantity: 0,
+        active_flag: true,
+        created_by: user.id,
+        updated_by: user.id,
+      }]);
+    
+    if (invError) {
+      // Log error but don't fail the therapy creation
+      console.error('Failed to create inventory item:', invError);
+    }
+  }
+
   return NextResponse.json({ data }, { status: 201 });
 }

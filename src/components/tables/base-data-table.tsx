@@ -24,6 +24,7 @@ import {
   GridFooterContainer,
   GridFooter,
   useGridApiRef,
+  gridFilteredSortedRowIdsSelector,
 } from '@mui/x-data-grid-pro';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -45,21 +46,59 @@ function CustomAggregationFooter({
   columns,
   aggregationModel,
   aggregationLabel,
+  apiRef,
 }: {
   data: any[];
   columns: GridColDef[];
   aggregationModel?: AggregationModel;
   aggregationLabel?: string;
+  apiRef?: any;
 }) {
+  const [visibleRows, setVisibleRows] = React.useState(data);
+
+  // Use effect to update visible rows when filters change
+  React.useEffect(() => {
+    if (!apiRef?.current) {
+      setVisibleRows(data);
+      return;
+    }
+
+    const updateVisibleRows = () => {
+      try {
+        const filteredSortedRowIds = gridFilteredSortedRowIdsSelector(apiRef);
+        const filteredRows = filteredSortedRowIds.map((id) => apiRef.current.getRow(id)).filter(Boolean);
+        
+        // Use filtered rows if available, otherwise use all data
+        setVisibleRows(filteredRows.length > 0 ? filteredRows : data);
+      } catch (error) {
+        setVisibleRows(data);
+      }
+    };
+
+    // Small delay to ensure grid is fully initialized
+    const timeoutId = setTimeout(updateVisibleRows, 100);
+
+    // Subscribe to filter changes
+    const unsubscribeFilter = apiRef.current.subscribeEvent('filterModelChange', updateVisibleRows);
+    // Also subscribe to state restore (for initial load with saved filters)
+    const unsubscribeState = apiRef.current.subscribeEvent('stateRestorePostProcessing', updateVisibleRows);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      if (unsubscribeFilter) unsubscribeFilter();
+      if (unsubscribeState) unsubscribeState();
+    };
+  }, [apiRef, data]);
+
   if (!aggregationModel || Object.keys(aggregationModel).length === 0) {
     return <GridFooter />;
   }
 
-  // Calculate aggregations
+  // Calculate aggregations using only visible/filtered rows
   const aggregations: Record<string, number> = {};
   Object.keys(aggregationModel).forEach(field => {
     const aggType = aggregationModel[field];
-    const values = data.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
+    const values = visibleRows.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
     
     if (aggType === 'sum') {
       aggregations[field] = values.reduce((sum, val) => sum + val, 0);
@@ -565,7 +604,7 @@ export default function BaseDataTable<T extends BaseEntity>({
               footer: CustomAggregationFooter as any,
             },
             slotProps: {
-              footer: { data, columns: allColumns, aggregationModel, aggregationLabel } as any,
+              footer: { data, columns: allColumns, aggregationModel, aggregationLabel, apiRef } as any,
             },
           })}
           getRowClassName={params => {

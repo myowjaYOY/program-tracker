@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Box } from '@mui/material';
+import { Box, Alert } from '@mui/material';
 import BaseDataTable, {
   commonColumns,
   renderCurrency,
@@ -10,7 +10,9 @@ import BaseDataTable, {
 import { MemberPrograms, MemberProgramPayments } from '@/types/database.types';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
 import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { useMemberProgram } from '@/lib/hooks/use-member-programs';
 import MemberProgramPaymentForm from '@/components/forms/member-program-payment-form';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramPaymentsTabProps {
   program: MemberPrograms;
@@ -28,12 +30,17 @@ export default function ProgramPaymentsTab({
     isLoading,
     error,
   } = useMemberProgramPayments(program.member_program_id);
+  const { data: freshProgram } = useMemberProgram(program.member_program_id);
   const { data: statuses = [] } = useProgramStatus();
-  const statusName = (
-    statuses.find(s => s.program_status_id === program.program_status_id)
-      ?.status_name || ''
-  ).toLowerCase();
-  const canEdit = statusName === 'quote' || statusName === 'active';
+  
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = statuses.find(
+    s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const statusName = (currentStatus?.status_name || '').toLowerCase();
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
+  const canEdit = !isReadOnly && (statusName === 'quote' || statusName === 'active');
 
   const rows: PaymentRow[] = (data || []).map(p => ({
     ...p,
@@ -72,6 +79,12 @@ export default function ProgramPaymentsTab({
 
   return (
     <Box>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
+      <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
       <BaseDataTable<any>
         title="Payments"
         data={rows}
@@ -99,6 +112,7 @@ export default function ProgramPaymentsTab({
         showAggregationFooter={true}
         aggregationLabel="Total of Payments:"
       />
+      </fieldset>
     </Box>
   );
 }

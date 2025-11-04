@@ -14,6 +14,7 @@ import {
   FormControlLabel,
   TextField,
   CircularProgress,
+  Alert,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { Delete as DeleteIcon, Edit as EditIcon } from '@mui/icons-material';
@@ -27,6 +28,9 @@ import {
 import { MemberProgramItemTaskFormData } from '@/lib/validations/member-program-item-task';
 import { useForm, Controller } from 'react-hook-form';
 import { GridColDef } from '@mui/x-data-grid';
+import { useMemberProgram } from '@/lib/hooks/use-member-programs';
+import { useProgramStatus } from '@/lib/hooks/use-program-status';
+import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
 
 interface ProgramTasksTabProps {
   program: MemberPrograms;
@@ -46,6 +50,15 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
   const { data: programTasks = [], isLoading } = useMemberProgramItemTasks(
     program.member_program_id
   );
+  const { data: freshProgram } = useMemberProgram(program.member_program_id);
+  const { data: statuses = [] } = useProgramStatus();
+
+  // Check if program is in read-only state (Completed or Cancelled)
+  const currentStatus = statuses.find(
+    s => s.program_status_id === (freshProgram?.program_status_id ?? program.program_status_id)
+  );
+  const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
+  const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
   const updateTask = useUpdateMemberProgramItemTask();
   const deleteTask = useDeleteMemberProgramItemTask();
@@ -217,6 +230,7 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
               size="small"
               onClick={() => handleEditTask(params.row)}
               color="primary"
+              disabled={isReadOnly}
             >
               <EditIcon fontSize="small" />
             </IconButton>
@@ -226,6 +240,7 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
                 handleDeleteTask(params.row.member_program_item_task_id)
               }
               color="error"
+              disabled={isReadOnly}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -237,6 +252,12 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
 
   return (
     <Box>
+      {isReadOnly && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {readOnlyMessage}
+        </Alert>
+      )}
+      <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
       <BaseDataTable<any>
         title=""
         data={mappedProgramTasks}
@@ -391,6 +412,7 @@ export default function ProgramTasksTab({ program }: ProgramTasksTabProps) {
           </Button>
         </DialogActions>
       </Dialog>
+      </fieldset>
     </Box>
   );
 }

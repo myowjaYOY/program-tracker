@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/reports/inventory-forecast?range=this_month|next_month|custom&start=&end=&therapyTypes=1,2,3
 // Returns aggregated inventory forecast data grouped by therapy type and therapy name
@@ -50,33 +51,10 @@ export async function GET(req: NextRequest) {
       endDate = lastDay.toISOString().slice(0, 10);
     }
 
-    // Get Active program status IDs (exclude Cancelled, Completed, Quote)
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    
-    const excludedStatusNames = ['cancelled', 'completed', 'quote'];
-    const excludedStatusIds = (statuses || [])
-      .filter((s: any) => excludedStatusNames.includes((s.status_name || '').toLowerCase()))
-      .map((s: any) => s.program_status_id);
-
-    // Get Active programs only
-    const { data: programs, error: progErr } = await supabase
-      .from('member_programs')
-      .select('member_program_id, program_status_id');
-    
-    if (progErr) {
-      console.error('Error fetching programs:', progErr);
-      return NextResponse.json(
-        { error: 'Failed to load programs' },
-        { status: 500 }
-      );
-    }
-
-    const activePrograms = (programs || []).filter(
-      (p: any) => !excludedStatusIds.includes(p.program_status_id)
-    );
-    const activeProgramIds = activePrograms.map((p: any) => p.member_program_id);
+    // Get valid program IDs (Active + Paused only) using centralized service
+    const activeProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
+      includeStatuses: ['paused']
+    });
 
     if (activeProgramIds.length === 0) {
       return NextResponse.json({ 

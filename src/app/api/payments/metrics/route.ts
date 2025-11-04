@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,35 +24,12 @@ export async function GET(req: NextRequest) {
       .toISOString()
       .slice(0, 10);
 
-    // Use the same filtering logic as the main payments API
-    // Step 1: Load status ids to exclude Cancelled/Completed/Quote
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    const excluded = new Set(
-      (statuses || [])
-        .filter((s: any) =>
-          ['cancelled', 'completed', 'quote'].includes(
-            (s.status_name || '').toLowerCase()
-          )
-        )
-        .map((s: any) => s.program_status_id)
-    );
+    // Step 1: Get valid program IDs (Active + Paused only) using centralized service
+    const validProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
+      includeStatuses: ['paused']
+    });
 
-    // Step 2: Get all programs with leads (filtered by status)
-    const { data: programs } = await supabase.from('member_programs').select(`
-        member_program_id,
-        lead_id,
-        program_status_id,
-        lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
-      `);
-    
-    // Filter out excluded statuses (same as main payments API)
-    const validPrograms = (programs || []).filter(
-      (p: any) => !excluded.has(p.program_status_id)
-    );
-    const programIds = validPrograms.map((p: any) => p.member_program_id);
-    if (programIds.length === 0) {
+    if (validProgramIds.length === 0) {
       return NextResponse.json({
         data: {
           totalAmountOwed: 0,
@@ -62,6 +40,17 @@ export async function GET(req: NextRequest) {
         }
       });
     }
+
+    // Step 2: Get programs with leads for the valid program IDs
+    const { data: validPrograms } = await supabase.from('member_programs').select(`
+        member_program_id,
+        lead_id,
+        program_status_id,
+        lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
+      `)
+      .in('member_program_id', validProgramIds);
+    
+    const programIds = validProgramIds;
 
     // Step 2: Get all payments for those programs
     const { data: allPayments } = await supabase

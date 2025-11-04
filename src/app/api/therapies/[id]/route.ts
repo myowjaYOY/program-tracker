@@ -71,15 +71,63 @@ export async function PUT(
   if (!parse.success) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
+  
+  // Separate track_inventory from therapy data
+  const { track_inventory, ...therapyData } = parse.data;
+  
   const { data, error } = await supabase
     .from('therapies')
-    .update({ ...parse.data, updated_by: user.id })
+    .update({ ...therapyData, updated_by: user.id })
     .eq('therapy_id', id)
     .select()
     .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Handle inventory tracking changes if track_inventory is provided
+  if (track_inventory !== undefined) {
+    // Check if inventory item exists
+    const { data: existingInv } = await supabase
+      .from('inventory_items')
+      .select('inventory_item_id, active_flag')
+      .eq('therapy_id', id)
+      .single();
+
+    if (track_inventory) {
+      // User wants to track in inventory
+      if (existingInv) {
+        // Reactivate existing inventory item
+        await supabase
+          .from('inventory_items')
+          .update({ active_flag: true, updated_by: user.id })
+          .eq('therapy_id', id);
+      } else {
+        // Create new inventory item
+        await supabase
+          .from('inventory_items')
+          .insert([{
+            therapy_id: parseInt(id),
+            quantity_on_hand: 0,
+            reorder_point: 0,
+            reorder_quantity: 0,
+            active_flag: true,
+            created_by: user.id,
+            updated_by: user.id,
+          }]);
+      }
+    } else {
+      // User wants to remove from inventory tracking
+      if (existingInv && existingInv.active_flag) {
+        // Deactivate inventory item
+        await supabase
+          .from('inventory_items')
+          .update({ active_flag: false, updated_by: user.id })
+          .eq('therapy_id', id);
+      }
+    }
+  }
+
   return NextResponse.json({ data }, { status: 200 });
 }
 

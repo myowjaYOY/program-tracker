@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
@@ -23,6 +23,7 @@ export default function TherapyForm({
   mode = 'create',
 }: TherapyFormProps) {
   const isEdit = mode === 'edit';
+  const [isLoadingInventoryStatus, setIsLoadingInventoryStatus] = useState(false);
   const { data: therapyTypes = [], isLoading: therapyTypesLoading } =
     useActiveTherapyTypes();
   const { data: buckets = [], isLoading: bucketsLoading } = useActiveBuckets();
@@ -47,6 +48,7 @@ export default function TherapyForm({
       charge: initialValues?.charge || 0,
       active_flag: initialValues?.active_flag ?? true,
       taxable: initialValues?.taxable ?? false,
+      track_inventory: false,
     },
   });
 
@@ -59,6 +61,24 @@ export default function TherapyForm({
       setValue('program_role_id', initialValues.program_role_id);
     }
   }, [isEdit, initialValues?.program_role_id, setValue]);
+
+  // Fetch inventory status when editing
+  useEffect(() => {
+    if (isEdit && initialValues?.therapy_id) {
+      setIsLoadingInventoryStatus(true);
+      fetch(`/api/inventory/check-therapy/${initialValues.therapy_id}`)
+        .then(res => res.json())
+        .then(data => {
+          setValue('track_inventory', data.tracked || false);
+        })
+        .catch(() => {
+          setValue('track_inventory', false);
+        })
+        .finally(() => {
+          setIsLoadingInventoryStatus(false);
+        });
+    }
+  }, [isEdit, initialValues?.therapy_id, setValue]);
 
   // Show loading state while data is being fetched
   if (therapyTypesLoading || bucketsLoading || programRolesLoading) {
@@ -223,6 +243,17 @@ export default function TherapyForm({
           />
         }
         label="Taxable"
+      />
+      <FormControlLabel
+        control={
+          <Switch
+            color="primary"
+            checked={!!watch('track_inventory')}
+            onChange={(_, checked) => setValue('track_inventory', checked)}
+            disabled={isLoadingInventoryStatus}
+          />
+        }
+        label="Track in Inventory"
       />
     </BaseForm>
   );

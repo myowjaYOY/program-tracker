@@ -58,9 +58,9 @@ export function validateActiveProgramChanges(params: ActiveProgramValidationPara
 /**
  * Calculate projected price from items, taxes, finance charges, and discounts
  * Business rule:
- * - Negative finance charges: REDUCE customer payment (affects PRICE)
- * - Positive finance charges: INCREASE customer payment (affects both PRICE and MARGIN)
- * Formula: price = totalCharge + taxes + financeCharges + discounts
+ * - Negative finance charges: External partner cost - does NOT affect customer price (only margin)
+ * - Positive finance charges: Internal financing revenue - INCREASES customer payment
+ * Formula: price = totalCharge + taxes + max(financeCharges, 0) + discounts
  */
 export function calculateProjectedPrice(
   totalCharge: number,
@@ -68,19 +68,19 @@ export function calculateProjectedPrice(
   financeCharges: number,
   discounts: number
 ): number {
-  // Business rule: Both positive and negative finance charges affect price
-  // - Negative finance charge: Reduces customer payment (affects price)
-  // - Positive finance charge: Increases customer payment (affects price AND margin)
-  return totalCharge + taxes + Number(financeCharges || 0) + discounts;
+  // Business rule: Only positive finance charges affect customer price
+  // - Negative finance charge: Partner cost, does NOT reduce customer payment (only affects margin)
+  // - Positive finance charge: Your financing fee, increases customer payment
+  return totalCharge + taxes + Math.max(Number(financeCharges || 0), 0) + discounts;
 }
 
 /**
  * Calculate projected margin from projected price and total cost
- * Excludes taxes (pass-through) and treats negative finance charges as expenses
+ * Excludes taxes (pass-through) and adjusts cost based on finance charges
  * 
  * @param projectedPrice - Full program price including taxes and finance charges
  * @param totalCost - Cost of items
- * @param financeCharges - Finance charges (positive = revenue, negative = expense)
+ * @param financeCharges - Finance charges (positive = revenue offset to cost, negative = added expense)
  * @param taxes - Tax amount (pass-through, excluded from margin calculation)
  * @returns Margin percentage based on pre-tax revenue
  */
@@ -95,11 +95,12 @@ export function calculateProjectedMargin(
   
   if (preTaxRevenue <= 0) return 0;
   
-  // If finance charges are negative, treat them as an expense (add to cost)
-  // If positive, they're already in preTaxRevenue as revenue
+  // Finance charges affect cost calculation:
+  // - Negative: External partner cost (expense) - ADD to cost
+  // - Positive: Internal financing revenue - SUBTRACT from cost
   const adjustedCost = financeCharges < 0 
-    ? totalCost + Math.abs(financeCharges)
-    : totalCost;
+    ? totalCost + Math.abs(financeCharges)  // Negative: add to cost (expense)
+    : totalCost - financeCharges;            // Positive: subtract from cost (revenue)
   
   const margin = ((preTaxRevenue - adjustedCost) / preTaxRevenue) * 100;
   // Do not allow negative margins per business rule
