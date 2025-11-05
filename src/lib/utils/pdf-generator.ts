@@ -36,17 +36,19 @@ export async function generatePdfFromHtml(
     console.log('🚀 Launching Puppeteer...');
     
     // Detect if we're in production (serverless) or local development
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+    
+    // Configure chromium for serverless
+    chromium.setHeadlessMode = true;
+    chromium.setGraphicsMode = false;
+    
+    // Get executable path (property, not function)
+    let executablePath: string;
     
     if (isProduction) {
-      // Production: Use serverless chromium with exact recommended pattern
+      // Production: Use serverless chromium
       console.log('📦 Using serverless Chromium for production...');
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
+      executablePath = await chromium.executablePath();
     } else {
       // Local: Use system Chrome/Chromium/Edge
       console.log('💻 Using local Chrome/Edge for development...');
@@ -62,41 +64,50 @@ export async function generatePdfFromHtml(
         '/usr/bin/chromium-browser', // Linux alternative
       ];
       
-      let executablePath: string | undefined;
+      let localPath: string | undefined;
       
       // Try to find Chrome on the system
       const fs = await import('fs');
       for (const path of possiblePaths) {
         if (fs.existsSync(path)) {
-          executablePath = path;
+          localPath = path;
           console.log(`   Found Chrome at: ${path}`);
           break;
         }
       }
       
-      if (!executablePath) {
+      if (!localPath) {
         console.warn('⚠️ Chrome not found on system. Install Chrome or set CHROME_PATH environment variable.');
         // Fallback: Try to use environment variable if set
-        executablePath = process.env.CHROME_PATH;
+        localPath = process.env.CHROME_PATH;
       }
       
-      if (!executablePath) {
+      if (!localPath) {
         throw new Error('Chrome executable not found. Please install Chrome or set CHROME_PATH environment variable.');
       }
       
-      // Launch headless browser for local development
-      browser = await puppeteer.launch({
-        executablePath,
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-web-security',
-        ],
-      });
+      executablePath = localPath;
     }
+    
+    // Launch headless browser
+    browser = await puppeteer.launch({
+      executablePath,
+      headless: isProduction ? chromium.headless : true,
+      // In prod, use what chromium gives you
+      defaultViewport: isProduction
+        ? chromium.defaultViewport
+        : { width: 1280, height: 720 },
+      // In prod, use chromium.args (these include --no-sandbox, etc.)
+      args: isProduction
+        ? chromium.args
+        : [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+          ],
+    });
 
     page = await browser.newPage();
 

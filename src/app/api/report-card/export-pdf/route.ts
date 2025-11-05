@@ -4,6 +4,10 @@ import { generatePdfFromHtml, wrapHtmlForPdf } from '@/lib/utils/pdf-generator';
 import { fetchReportCardData } from '@/lib/utils/report-data-fetcher';
 // Member progress data type removed - using any for flexibility
 
+// Force Node.js runtime (not Edge) for Puppeteer compatibility
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 interface ExportRequest {
   memberId: number;
   sections: {
