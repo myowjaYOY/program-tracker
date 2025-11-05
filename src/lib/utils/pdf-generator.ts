@@ -38,12 +38,15 @@ export async function generatePdfFromHtml(
     // Detect if we're in production (serverless) or local development
     const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
     
-    let executablePath: string | undefined;
-    
     if (isProduction) {
-      // Production: Use serverless chromium
+      // Production: Use serverless chromium with exact recommended pattern
       console.log('📦 Using serverless Chromium for production...');
-      executablePath = await chromium.executablePath();
+      browser = await puppeteer.launch({
+        args: chromium.args,
+        defaultViewport: chromium.defaultViewport,
+        executablePath: await chromium.executablePath(),
+        headless: chromium.headless,
+      });
     } else {
       // Local: Use system Chrome/Chromium/Edge
       console.log('💻 Using local Chrome/Edge for development...');
@@ -58,6 +61,8 @@ export async function generatePdfFromHtml(
         '/usr/bin/google-chrome', // Linux
         '/usr/bin/chromium-browser', // Linux alternative
       ];
+      
+      let executablePath: string | undefined;
       
       // Try to find Chrome on the system
       const fs = await import('fs');
@@ -78,21 +83,20 @@ export async function generatePdfFromHtml(
       if (!executablePath) {
         throw new Error('Chrome executable not found. Please install Chrome or set CHROME_PATH environment variable.');
       }
+      
+      // Launch headless browser for local development
+      browser = await puppeteer.launch({
+        executablePath,
+        headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-web-security',
+        ],
+      });
     }
-    
-    // Launch headless browser
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: isProduction ? chromium.headless : true,
-      defaultViewport: isProduction ? chromium.defaultViewport : { width: 1280, height: 720 },
-      args: isProduction ? chromium.args : [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--disable-web-security',
-      ],
-    });
 
     page = await browser.newPage();
 
