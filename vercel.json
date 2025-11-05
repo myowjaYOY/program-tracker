@@ -1,6 +1,6 @@
 {
   "functions": {
-    "app/api/report-card/export-pdf": {
+    "app/api/report-card/export-pdf/route.ts": {
       "runtime": "nodejs20.x"
     }
   }
