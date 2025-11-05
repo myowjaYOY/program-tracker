@@ -84,7 +84,11 @@ export async function generatePdfFromHtml(
     browser = await puppeteer.launch({
       executablePath,
       headless: true,
-      args: isProduction ? chromium.args : [
+      args: isProduction ? [
+        ...chromium.args,
+        '--single-process', // Critical for Vercel serverless
+        '--no-zygote',      // Required for single-process mode
+      ] : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
