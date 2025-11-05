@@ -25,10 +25,10 @@ export default function DashboardProgramNotesTab({ program, memberId = null }: D
   }));
 
   const cols: GridColDef[] = [
-    { field: 'note_type', headerName: 'Type', width: 140 },
-    { field: 'note', headerName: 'Note', width: 520 },
-    { field: 'created_by_name', headerName: 'Created By', width: 180 },
-    { field: 'created_at', headerName: 'Created Date', width: 160, renderCell: renderDate as any },
+    { field: 'note_type', headerName: 'Type' },
+    { field: 'note', headerName: 'Note' },
+    { field: 'created_by_name', headerName: 'Created By' },
+    { field: 'created_at', headerName: 'Created Date', renderCell: renderDate as any },
   ];
 
   const [open, setOpen] = React.useState(false);

@@ -48,7 +48,7 @@ interface PromisDomainCardsGridProps {
  * - Expandable question-level details
  */
 export default function PromisDomainCardsGrid({ domains }: PromisDomainCardsGridProps) {
-  // Sort domains by standard PROMIS order
+  // Sort domains alphabetically
   const sortedDomains = sortPromisDomains(domains);
 
   return (

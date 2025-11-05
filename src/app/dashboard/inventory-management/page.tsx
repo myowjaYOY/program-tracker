@@ -10,9 +10,13 @@ import {
   Pending as PendingIcon,
   AttachMoney as AttachMoneyIcon,
   Warning as WarningIcon,
+  AssignmentTurnedIn as AssignmentTurnedInIcon,
+  RuleFolder as RuleFolderIcon,
 } from '@mui/icons-material';
 import PurchaseOrderTable from '@/components/purchase-orders/purchase-order-table';
 import CreatePOModal from '@/components/purchase-orders/create-po-modal';
+import InventoryItemsTab from '@/components/inventory/inventory-items-tab';
+import PhysicalCountTab from '@/components/inventory/physical-count-tab';
 import { useInventoryMetrics } from '@/lib/hooks/use-inventory-metrics';
 
 interface TabPanelProps {
@@ -73,9 +77,9 @@ export default function InventoryManagementPage() {
       </Box>
 
       {/* Metrics Cards */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
         {/* Card 1: Pending Approval */}
-        <Grid size={3}>
+        <Grid size={2}>
           <Card
             sx={{
               height: '100%',
@@ -139,7 +143,7 @@ export default function InventoryManagementPage() {
         </Grid>
 
         {/* Card 2: Awaiting Receipt */}
-        <Grid size={3}>
+        <Grid size={2}>
           <Card
             sx={{
               height: '100%',
@@ -203,7 +207,7 @@ export default function InventoryManagementPage() {
         </Grid>
 
         {/* Card 3: Open PO Value */}
-        <Grid size={3}>
+        <Grid size={2}>
           <Card
             sx={{
               height: '100%',
@@ -267,7 +271,7 @@ export default function InventoryManagementPage() {
         </Grid>
 
         {/* Card 4: Low Stock Items */}
-        <Grid size={3}>
+        <Grid size={2}>
           <Card
             sx={{
               height: '100%',
@@ -329,6 +333,134 @@ export default function InventoryManagementPage() {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Card 5: In-Progress Counts */}
+        <Grid size={2}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: (theme) => `4px solid ${theme.palette.primary.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    In-Progress
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 700,
+                      color: 'primary.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metricsLoading ? (
+                      <CircularProgress size={32} />
+                    ) : (
+                      metrics?.in_progress_counts || 0
+                    )}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    color: 'primary.main',
+                    opacity: 0.8,
+                  }}
+                >
+                  <AssignmentTurnedInIcon sx={{ fontSize: 40 }} />
+                </Box>
+              </Box>
+              <Typography variant="caption" color="textSecondary">
+                Count Sessions
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Card 6: Pending Variances */}
+        <Grid size={2}>
+          <Card
+            sx={{
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              borderTop: (theme) => `4px solid ${theme.palette.secondary.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ flexGrow: 1, p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    color="textSecondary"
+                    variant="body2"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    Pending Variance
+                  </Typography>
+                  <Typography
+                    variant="h3"
+                    component="div"
+                    sx={{
+                      fontWeight: 700,
+                      color: 'secondary.main',
+                      mt: 1,
+                    }}
+                  >
+                    {metricsLoading ? (
+                      <CircularProgress size={32} />
+                    ) : (
+                      metrics?.pending_variances || 0
+                    )}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    color: 'secondary.main',
+                    opacity: 0.8,
+                  }}
+                >
+                  <RuleFolderIcon sx={{ fontSize: 40 }} />
+                </Box>
+              </Box>
+              <Typography variant="caption" color="textSecondary">
+                Require Approval
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
 
       {/* Tabs */}
@@ -365,6 +497,12 @@ export default function InventoryManagementPage() {
             label="Inventory" 
             {...a11yProps(2)} 
           />
+          <Tab 
+            icon={<AssignmentTurnedInIcon />} 
+            iconPosition="start" 
+            label="Physical Count" 
+            {...a11yProps(3)} 
+          />
         </Tabs>
       </Box>
 
@@ -398,12 +536,12 @@ export default function InventoryManagementPage() {
       </TabPanel>
 
       <TabPanel value={tabValue} index={2}>
-        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 0, minHeight: 400 }}>
-          <Typography variant="body1" color="text.secondary">
-          Inventory grid will appear here
-        </Typography>
-      </Box>
-    </TabPanel>
+        <InventoryItemsTab />
+      </TabPanel>
+
+      <TabPanel value={tabValue} index={3}>
+        <PhysicalCountTab />
+      </TabPanel>
 
       {/* Create PO Modal */}
       <CreatePOModal

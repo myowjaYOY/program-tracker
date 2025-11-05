@@ -97,7 +97,6 @@ export default function ActiveMembersModal({ open, onClose }: ActiveMembersModal
     {
       field: 'full_name',
       headerName: 'Name',
-      width: 250,
       renderCell: (params: any) => {
         const isNew = params.row.is_new;
         const daysAgo = params.row.days_since_start;
@@ -117,24 +116,20 @@ export default function ActiveMembersModal({ open, onClose }: ActiveMembersModal
     {
       field: 'email',
       headerName: 'Email',
-      width: 280,
     },
     {
       field: 'start_date',
       headerName: 'Start Date',
-      width: 140,
       valueFormatter: (value: any) => formatDate(value),
     },
     {
       field: 'end_date',
       headerName: 'End Date',
-      width: 140,
       valueFormatter: (value: any) => formatDate(value),
     },
     {
       field: 'has_coach',
       headerName: 'Coach',
-      width: 100,
       align: 'center',
       headerAlign: 'center',
       renderCell: (params: any) => {

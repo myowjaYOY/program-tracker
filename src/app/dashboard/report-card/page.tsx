@@ -18,12 +18,14 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import DownloadIcon from '@mui/icons-material/Download';
 import SummaryCards from '@/components/report-card/SummaryCards';
 import { MemberProgressTab } from '@/components/member-progress';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
 import { useReportCardSummary, useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
+import ExportReportModal from '@/components/report-card/ExportReportModal';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -54,6 +56,9 @@ export default function ReportCardPage() {
   
   // Notes modal state
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  
+  // Export modal state
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Fetch summary data
   const { data: summary, isLoading: summaryLoading } = useReportCardSummary(programId);
@@ -164,6 +169,27 @@ export default function ReportCardPage() {
             </span>
           </Tooltip>
         </Grid>
+        <Grid size="auto">
+          <Tooltip title={selectedMember ? 'Export Report Card (PDF)' : 'Select a member to export report'}>
+            <span>
+              <IconButton
+                onClick={() => setIsExportModalOpen(true)}
+                disabled={!selectedMember}
+                sx={{ 
+                  color: selectedMember ? 'primary.main' : 'text.disabled',
+                  '&:hover': { 
+                    backgroundColor: selectedMember ? 'primary.50' : 'transparent',
+                  },
+                  '&.Mui-disabled': {
+                    color: 'text.disabled',
+                  }
+                }}
+              >
+                <DownloadIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Grid>
       </Grid>
 
       {/* Tabs */}
@@ -224,6 +250,16 @@ export default function ReportCardPage() {
           onClose={handleCloseNotesModal}
           leadId={selectedMember.lead_id}
           leadName={selectedMember.full_name}
+        />
+      )}
+      
+      {/* Export Report Modal */}
+      {selectedMember && selectedMember.lead_id && (
+        <ExportReportModal
+          open={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          memberId={selectedMember.lead_id}
+          memberName={selectedMember.full_name}
         />
       )}
     </Box>

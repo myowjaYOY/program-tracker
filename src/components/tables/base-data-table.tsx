@@ -354,7 +354,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   // NOTE: We load state via initialGridState useMemo (above) - no restoration needed!
   
   useEffect(() => {
-    // Capture apiRef at effect time, not cleanup time
+    // Capture values at effect time, not cleanup time
     const apiRefCurrent = apiRef.current;
     const currentPersistKey = persistStateKey;
     const currentUserId = user?.id;
@@ -437,13 +437,27 @@ export default function BaseDataTable<T extends BaseEntity>({
     [onEdit, onDelete, editButtonText, deleteButtonText]
   );
 
+  // Ensure all columns have default sizing to prevent aggressive auto-sizing
+  // This allows saved dimensions from initialState to work properly
+  const columnsWithDefaults = useMemo(() => {
+    return columns.map(col => {
+      // If column already has width, flex, or minWidth, leave it alone
+      if (col.width !== undefined || col.flex !== undefined || col.minWidth !== undefined) {
+        return col;
+      }
+      // Otherwise, add a sensible default width of 150px
+      // This prevents MUI's auto-sizing from overriding saved dimensions
+      return { ...col, width: 150 };
+    });
+  }, [columns]);
+
   // All columns including actions
   const allColumns = useMemo(() => {
     if (showActionsColumn) {
-      return [...columns, actionsColumn];
+      return [...columnsWithDefaults, actionsColumn];
     }
-    return columns;
-  }, [columns, actionsColumn, showActionsColumn]);
+    return columnsWithDefaults;
+  }, [columnsWithDefaults, actionsColumn, showActionsColumn]);
 
   // Handle edit
   const handleEdit = (row: T) => {

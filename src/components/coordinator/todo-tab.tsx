@@ -195,7 +195,6 @@ export default function CoordinatorToDoTab({
     {
       field: 'notes',
       headerName: 'Note',
-      width: 80,
       sortable: false,
       renderCell: (params) => {
         const row = params.row as any;
@@ -243,21 +242,19 @@ export default function CoordinatorToDoTab({
         );
       },
     },
-    { field: 'member_name', headerName: 'Member', width: 200 },
+    { field: 'member_name', headerName: 'Member' },
     {
       field: 'due_date',
       headerName: 'Due',
-      width: 140,
       renderCell: renderDate as any,
     },
-    { field: 'therapy_type', headerName: 'Therapy Type', width: 180 },
-    { field: 'therapy_name', headerName: 'Therapy', width: 200 },
-    { field: 'task_name', headerName: 'Task', width: 240 },
-    { field: 'description', headerName: 'Description', width: 260 },
+    { field: 'therapy_type', headerName: 'Therapy Type' },
+    { field: 'therapy_name', headerName: 'Therapy' },
+    { field: 'task_name', headerName: 'Task' },
+    { field: 'description', headerName: 'Description' },
     {
       field: 'completed_flag',
       headerName: 'Redeemed',
-      width: 130,
       renderCell: params => {
         const row: any = params.row;
         const readOnly =
@@ -274,7 +271,6 @@ export default function CoordinatorToDoTab({
     {
       field: 'role_name',
       headerName: 'Responsible',
-      width: 100,
       renderCell: (params: any) => {
         const roleName = params.value || 'Admin';
         const roleColor = params.row.role_display_color || '#808080';
@@ -291,11 +287,10 @@ export default function CoordinatorToDoTab({
         );
       },
     },
-    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
+    { field: 'updated_by', headerName: 'Updated By' } as any,
     {
       field: 'updated_at',
       headerName: 'Updated Date',
-      width: 140,
       renderCell: renderDate as any,
     } as any,
   ];

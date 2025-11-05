@@ -290,15 +290,15 @@ export const PROMIS_DOMAIN_ORDER: PromisDomain[] = [
 ];
 
 /**
- * Sorts domains by standard order
+ * Sorts domains alphabetically by domain label
  */
 export function sortPromisDomains<T extends { domain_key: PromisDomain }>(
   domains: T[]
 ): T[] {
   return [...domains].sort((a, b) => {
-    const aIndex = PROMIS_DOMAIN_ORDER.indexOf(a.domain_key);
-    const bIndex = PROMIS_DOMAIN_ORDER.indexOf(b.domain_key);
-    return aIndex - bIndex;
+    const aLabel = PROMIS_DOMAIN_CONFIG[a.domain_key].label;
+    const bLabel = PROMIS_DOMAIN_CONFIG[b.domain_key].label;
+    return aLabel.localeCompare(bLabel);
   });
 }
 

@@ -208,7 +208,6 @@ export default function CoordinatorScriptTab({
     {
       field: 'notes',
       headerName: 'Note',
-      width: 80,
       sortable: false,
       renderCell: (params) => {
         const row = params.row as any;
@@ -256,25 +255,22 @@ export default function CoordinatorScriptTab({
         );
       },
     },
-    { field: 'member_name', headerName: 'Member', width: 200 },
+    { field: 'member_name', headerName: 'Member' },
     {
       field: 'scheduled_date',
       headerName: 'Scheduled',
-      width: 140,
       renderCell: renderDate as any,
     },
-    { field: 'therapy_type', headerName: 'Therapy Type', width: 180 },
-    { field: 'therapy_name', headerName: 'Therapy', width: 240 },
+    { field: 'therapy_type', headerName: 'Therapy Type' },
+    { field: 'therapy_name', headerName: 'Therapy' },
     {
       field: 'instance_number',
       headerName: 'Instance',
-      width: 110,
       type: 'number',
     },
     {
       field: 'completed_flag',
       headerName: 'Redeemed',
-      width: 130,
       renderCell: params => {
         const row = params.row as any as Row;
         const readOnly =
@@ -291,7 +287,6 @@ export default function CoordinatorScriptTab({
     {
       field: 'role_name',
       headerName: 'Responsible',
-      width: 100,
       renderCell: (params: any) => {
         const roleName = params.value || 'Admin';
         const roleColor = params.row.role_display_color || '#808080';
@@ -308,11 +303,10 @@ export default function CoordinatorScriptTab({
         );
       },
     },
-    { field: 'updated_by', headerName: 'Updated By', width: 180 } as any,
+    { field: 'updated_by', headerName: 'Updated By' } as any,
     {
       field: 'updated_at',
       headerName: 'Updated Date',
-      width: 140,
       renderCell: renderDate as any,
     } as any,
   ];

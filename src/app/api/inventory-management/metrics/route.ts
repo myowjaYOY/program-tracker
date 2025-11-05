@@ -70,12 +70,37 @@ export async function GET() {
       item => item.quantity_on_hand < item.reorder_point
     ).length || 0;
 
+    // Get in-progress count sessions
+    const { count: inProgressCountsCount, error: countsError } = await supabase
+      .from('inventory_count_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'in_progress');
+
+    if (countsError) {
+      console.error('[Inventory Metrics] In-progress counts error:', countsError);
+      throw countsError;
+    }
+
+    // Get pending variance approvals across all in-progress sessions
+    const { count: pendingVariancesCount, error: variancesError } = await supabase
+      .from('inventory_count_details')
+      .select('*', { count: 'exact', head: true })
+      .eq('requires_approval', true)
+      .in('status', ['counted']);
+
+    if (variancesError) {
+      console.error('[Inventory Metrics] Pending variances error:', variancesError);
+      throw variancesError;
+    }
+
     return NextResponse.json({
       data: {
         pending_approval_count: pendingApprovalCount || 0,
         awaiting_receipt_count: awaitingReceiptCount || 0,
         open_po_value: openPOValue,
         low_stock_count: lowStockCount || 0,
+        in_progress_counts: inProgressCountsCount || 0,
+        pending_variances: pendingVariancesCount || 0,
       },
     });
   } catch (error) {

@@ -30,8 +30,9 @@ export async function PUT(
       .select()
       .single();
     if (error) {
+      console.error('Supabase error updating schedule:', error);
       return NextResponse.json(
-        { error: 'Failed to update schedule' },
+        { error: error.message || 'Failed to update schedule' },
         { status: 500 }
       );
     }

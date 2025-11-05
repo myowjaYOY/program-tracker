@@ -5,6 +5,8 @@ export interface InventoryMetrics {
   awaiting_receipt_count: number;
   open_po_value: number;
   low_stock_count: number;
+  in_progress_counts: number;
+  pending_variances: number;
 }
 
 export const inventoryMetricsKeys = {

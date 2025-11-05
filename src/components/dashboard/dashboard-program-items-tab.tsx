@@ -31,12 +31,11 @@ export default function DashboardProgramItemsTab({ program }: DashboardProgramIt
   }));
 
   const cols: GridColDef[] = [
-    { field: 'therapy_type_name', headerName: 'Therapy Type', width: 150 },
-    { field: 'therapy_name', headerName: 'Therapy Name', width: 300 },
+    { field: 'therapy_type_name', headerName: 'Therapy Type' },
+    { field: 'therapy_name', headerName: 'Therapy Name' },
     {
       field: 'quantity',
       headerName: 'Quantity',
-      width: 120,
       type: 'number',
       renderCell: (params: any) => {
         const total = Number(params.value || 0);
@@ -54,7 +53,7 @@ export default function DashboardProgramItemsTab({ program }: DashboardProgramIt
         );
       },
     },
-    { field: 'instructions', headerName: 'Instructions', width: 250 },
+    { field: 'instructions', headerName: 'Instructions' },
   ];
 
   return (
