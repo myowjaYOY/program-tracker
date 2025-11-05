@@ -1,4 +1,5 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 
 export interface PdfGenerationOptions {
   html: string;
@@ -34,10 +35,56 @@ export async function generatePdfFromHtml(
   try {
     console.log('🚀 Launching Puppeteer...');
     
+    // Detect if we're in production (serverless) or local development
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    let executablePath: string | undefined;
+    
+    if (isProduction) {
+      // Production: Use serverless chromium
+      console.log('📦 Using serverless Chromium for production...');
+      executablePath = await chromium.executablePath();
+    } else {
+      // Local: Use system Chrome/Chromium/Edge
+      console.log('💻 Using local Chrome/Edge for development...');
+      // Puppeteer-core doesn't bundle Chrome, so we need to point to system Chrome or Edge
+      // Common paths for different OS
+      const possiblePaths = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', // Windows Chrome
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', // Windows Chrome 32-bit
+        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', // Windows Edge
+        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe', // Windows Edge 64-bit
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // macOS
+        '/usr/bin/google-chrome', // Linux
+        '/usr/bin/chromium-browser', // Linux alternative
+      ];
+      
+      // Try to find Chrome on the system
+      const fs = await import('fs');
+      for (const path of possiblePaths) {
+        if (fs.existsSync(path)) {
+          executablePath = path;
+          console.log(`   Found Chrome at: ${path}`);
+          break;
+        }
+      }
+      
+      if (!executablePath) {
+        console.warn('⚠️ Chrome not found on system. Install Chrome or set CHROME_PATH environment variable.');
+        // Fallback: Try to use environment variable if set
+        executablePath = process.env.CHROME_PATH;
+      }
+      
+      if (!executablePath) {
+        throw new Error('Chrome executable not found. Please install Chrome or set CHROME_PATH environment variable.');
+      }
+    }
+    
     // Launch headless browser
     browser = await puppeteer.launch({
+      executablePath,
       headless: true,
-      args: [
+      args: isProduction ? chromium.args : [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',

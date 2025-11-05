@@ -115,10 +115,10 @@ export async function POST(
       );
     }
 
-    // Get therapy cost, charge, and taxable status for calculations
+    // Get therapy cost, charge, taxable status, and program_role_id for calculations
     const { data: therapyData, error: therapyError } = await supabase
       .from('therapies')
-      .select('cost, charge, taxable')
+      .select('cost, charge, taxable, program_role_id')
       .eq('therapy_id', body.therapy_id)
       .single();
 
@@ -135,6 +135,7 @@ export async function POST(
       days_from_start: body.days_from_start,
       days_between: body.days_between || 0,
       instructions: body.instructions || '',
+      program_role_id: therapyData.program_role_id,
       active_flag: true,
       created_by: session.user.id,
       updated_by: session.user.id,

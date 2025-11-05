@@ -91,6 +91,7 @@ export interface MemberProgramItems {
   days_from_start: number | null;
   days_between: number | null;
   instructions: string | null;
+  program_role_id: number | null;
   active_flag: boolean;
   created_at: string | null;
   created_by: string | null;

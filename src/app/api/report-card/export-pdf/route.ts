@@ -337,7 +337,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
 }
 
 // Helper function to generate MSQ Assessment HTML
-function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string; lastName: string }): string {
+function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string; lastName: string }, isFirstSection: boolean = false): string {
   const summary = msqData.summary;
   const domains = msqData.domains;
   
@@ -418,7 +418,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
   };
   
   return `
-    <div style="margin-bottom: 32px; page-break-before: always; padding-top: 48px;">
+    <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
       <!-- Section Title -->
       <h2 style="font-weight: 700; font-size: 24px; margin-bottom: 24px; color: #8e24ff; border-bottom: 3px solid #8e24ff; padding-bottom: 12px;">
         MSQ Clinical Assessment
@@ -664,7 +664,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
 }
 
 // Helper function to generate PROMIS-29 Assessment HTML
-function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: string; lastName: string }): string {
+function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: string; lastName: string }, isFirstSection: boolean = false): string {
   const summary = promisData.summary;
   const domains = promisData.domains;
   
@@ -754,7 +754,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
   };
   
   return `
-    <div style="margin-bottom: 32px; page-break-before: always; padding-top: 48px;">
+    <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
       <!-- Section Title -->
       <h2 style="font-weight: 700; font-size: 24px; margin-bottom: 24px; color: #8e24ff; border-bottom: 3px solid #8e24ff; padding-bottom: 12px;">
         PROMIS-29 Health Assessment
@@ -1080,6 +1080,7 @@ export async function POST(request: NextRequest) {
     console.log('🎨 Generating HTML...');
     
     let contentHtml = '';
+    let isFirstSection = true; // Track if this is the first section to avoid blank pages
     
     if (sections.memberProgress) {
       if (reportData.memberProgress) {
@@ -1088,6 +1089,7 @@ export async function POST(request: NextRequest) {
           lastName: reportData.member.lastName,
         };
         contentHtml += generateMemberProgressHtml(reportData.memberProgress, memberInfo);
+        isFirstSection = false;
       } else {
         // No dashboard data available
         contentHtml += `
@@ -1100,6 +1102,7 @@ export async function POST(request: NextRequest) {
             </p>
           </div>
         `;
+        isFirstSection = false;
       }
     }
     
@@ -1110,11 +1113,12 @@ export async function POST(request: NextRequest) {
           firstName: reportData.member.firstName,
           lastName: reportData.member.lastName,
         };
-        contentHtml += generateMsqAssessmentHtml(reportData.msqAssessment, memberInfo);
+        contentHtml += generateMsqAssessmentHtml(reportData.msqAssessment, memberInfo, isFirstSection);
+        isFirstSection = false;
       } else {
         // No MSQ data available
         contentHtml += `
-          <div style="margin-bottom: 32px; page-break-before: always; padding-top: 48px;">
+          <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
             <h2 style="font-weight: 700; font-size: 24px; margin-bottom: 24px; color: #8e24ff; border-bottom: 3px solid #8e24ff; padding-bottom: 12px;">
               MSQ Clinical Assessment
             </h2>
@@ -1128,6 +1132,7 @@ export async function POST(request: NextRequest) {
             </div>
           </div>
         `;
+        isFirstSection = false;
       }
     }
     
@@ -1138,11 +1143,12 @@ export async function POST(request: NextRequest) {
           firstName: reportData.member.firstName,
           lastName: reportData.member.lastName,
         };
-        contentHtml += generatePromisAssessmentHtml(reportData.promisAssessment, memberInfo);
+        contentHtml += generatePromisAssessmentHtml(reportData.promisAssessment, memberInfo, isFirstSection);
+        isFirstSection = false;
       } else {
         // No PROMIS data available
         contentHtml += `
-          <div style="margin-bottom: 32px; page-break-before: always; padding-top: 48px;">
+          <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
             <h2 style="font-weight: 700; font-size: 24px; margin-bottom: 24px; color: #8e24ff; border-bottom: 3px solid #8e24ff; padding-bottom: 12px;">
               PROMIS-29 Health Assessment
             </h2>
@@ -1156,6 +1162,7 @@ export async function POST(request: NextRequest) {
             </div>
           </div>
         `;
+        isFirstSection = false;
       }
     }
     
