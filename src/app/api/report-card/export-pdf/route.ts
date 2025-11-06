@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { generatePdfFromHtml, wrapHtmlForPdf } from '@/lib/utils/pdf-generator';
 import { fetchReportCardData } from '@/lib/utils/report-data-fetcher';
+import { getMsqDomainIcon, getPromisDomainIcon, getUiIcon } from '@/lib/utils/pdf-icons';
 // Member progress data type removed - using any for flexibility
 
 // Force Node.js runtime (not Edge) for Puppeteer compatibility
@@ -65,7 +66,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
           <tr>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📊 CURRENT SCORE</div>
+                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('stats', { size: 14, color: '#8e24ff' })} CURRENT SCORE</div>
               </div>
               <div style="font-size: 36px; font-weight: 700; color: ${
                 data.status_indicator === 'green' ? '#10b981' :
@@ -76,26 +77,26 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
                 data.status_indicator === 'yellow' ? '#f59e0b' : '#ef4444'
               };">
                 ${
-                  data.status_indicator === 'green' ? '✓ On Track' :
-                  data.status_indicator === 'yellow' ? '⚠ Needs Monitoring' : '⚠ Needs Attention'
+                  data.status_indicator === 'green' ? `${getUiIcon('checkmark', { size: 16, color: '#10b981' })} On Track` :
+                  data.status_indicator === 'yellow' ? `${getUiIcon('warning', { size: 16, color: '#f59e0b' })} Needs Monitoring` : `${getUiIcon('warning', { size: 16, color: '#ef4444' })} Needs Attention`
                 }
               </div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⏱️ DAYS IN PROGRAM</div>
+                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('timer', { size: 14, color: '#8e24ff' })} DAYS IN PROGRAM</div>
               </div>
               <div style="font-size: 28px; font-weight: 700; color: #1a1a1a;">${safeValue(data.days_in_program, '0')}</div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">📋 SURVEYS COMPLETED</div>
+                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('surveys', { size: 14, color: '#8e24ff' })} SURVEYS COMPLETED</div>
               </div>
               <div style="font-size: 28px; font-weight: 700; color: #1a1a1a;">${safeValue(data.total_surveys_completed, '0')}</div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
               <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">⚖️ WEIGHT CHANGE</div>
+                <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('scale', { size: 14, color: '#8e24ff' })} WEIGHT CHANGE</div>
               </div>
               ${data.weight_change !== null ? `
                 <div style="font-size: 28px; font-weight: 700; color: ${
@@ -118,16 +119,16 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
       ${data.next_milestone ? `
       <div style="margin-bottom: 24px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          📚 Curriculum Progress
+          ${getUiIcon('curriculum', { size: 18, color: '#1a1a1a' })} Curriculum Progress
         </h3>
         <table style="width: 100%; border-collapse: collapse; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
           <tr>
             <td style="width: 40%; padding: 20px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">▶️ NEXT MILESTONE</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('play', { size: 14, color: '#8e24ff' })} NEXT MILESTONE</div>
               <div style="font-size: 18px; font-weight: 700; color: #1a1a1a; line-height: 1.3;">${data.next_milestone}</div>
             </td>
             <td style="width: 30%; padding: 20px; border-left: 1px solid #e5e7eb; vertical-align: top;">
-              <div style="font-size: 11px; color: #10b981; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">✓ COMPLETED</div>
+              <div style="font-size: 11px; color: #10b981; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('checkmark', { size: 14, color: '#10b981' })} COMPLETED</div>
               <div style="font-size: 32px; font-weight: 700; color: #10b981; line-height: 1;">${
                 (() => {
                   try {
@@ -143,7 +144,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
               <div style="font-size: 11px; color: #666666; font-weight: 600; margin-top: 4px;">modules</div>
             </td>
             <td style="width: 30%; padding: 20px; border-left: 1px solid #e5e7eb; vertical-align: top;">
-              <div style="font-size: 11px; color: #ef4444; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">⚠️ OVERDUE</div>
+              <div style="font-size: 11px; color: #ef4444; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;">${getUiIcon('warning', { size: 14, color: '#ef4444' })} OVERDUE</div>
               <div style="font-size: 32px; font-weight: 700; color: #ef4444; line-height: 1;">${
                 (() => {
                   try {
@@ -166,13 +167,13 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
       <!-- Health Vitals Section -->
       <div style="margin-bottom: 24px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          🏥 Health Vitals
+          ${getUiIcon('hospital', { size: 18, color: '#1a1a1a' })} Health Vitals
         </h3>
         <table style="width: 100%; border-collapse: collapse; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
           <tr>
             <td style="width: 20%; padding: 16px; border-bottom: 3px solid #f59e0b; background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);">
               <div style="font-size: 12px; color: #78350f; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                ⚡ ENERGY
+                ${getUiIcon('energy', { size: 14, color: '#f59e0b' })} ENERGY
               </div>
               <div style="font-size: 32px; font-weight: 700; color: #f59e0b; line-height: 1;">${safeValue(data.energy_score, 'N/A')}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${getTrendColor(data.energy_trend)}; margin-top: 4px;">
@@ -181,7 +182,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 20%; padding: 16px; border-bottom: 3px solid #8b5cf6; background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 100%);">
               <div style="font-size: 12px; color: #5b21b6; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                😊 MOOD
+                ${getUiIcon('mood', { size: 14, color: '#8b5cf6' })} MOOD
               </div>
               <div style="font-size: 32px; font-weight: 700; color: #8b5cf6; line-height: 1;">${safeValue(data.mood_score, 'N/A')}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${getTrendColor(data.mood_trend)}; margin-top: 4px;">
@@ -190,7 +191,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 20%; padding: 16px; border-bottom: 3px solid #06b6d4; background: linear-gradient(180deg, #ecfeff 0%, #ffffff 100%);">
               <div style="font-size: 12px; color: #164e63; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                🏃 MOTIVATION
+                ${getUiIcon('motivation', { size: 14, color: '#06b6d4' })} MOTIVATION
               </div>
               <div style="font-size: 32px; font-weight: 700; color: #06b6d4; line-height: 1;">${safeValue(data.motivation_score, 'N/A')}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${getTrendColor(data.motivation_trend)}; margin-top: 4px;">
@@ -199,7 +200,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 20%; padding: 16px; border-bottom: 3px solid #ec4899; background: linear-gradient(180deg, #fdf2f8 0%, #ffffff 100%);">
               <div style="font-size: 12px; color: #831843; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                ❤️ WELLBEING
+                ${getUiIcon('wellbeing', { size: 14, color: '#ec4899' })} WELLBEING
               </div>
               <div style="font-size: 32px; font-weight: 700; color: #ec4899; line-height: 1;">${safeValue(data.wellbeing_score, 'N/A')}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${getTrendColor(data.wellbeing_trend)}; margin-top: 4px;">
@@ -208,7 +209,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 20%; padding: 16px; border-bottom: 3px solid #6366f1; background: linear-gradient(180deg, #eef2ff 0%, #ffffff 100%);">
               <div style="font-size: 12px; color: #312e81; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                😴 SLEEP QUALITY
+                ${getUiIcon('sleep', { size: 14, color: '#6366f1' })} SLEEP QUALITY
               </div>
               <div style="font-size: 32px; font-weight: 700; color: #6366f1; line-height: 1;">${safeValue(data.sleep_score, 'N/A')}</div>
               <div style="font-size: 12px; font-weight: 600; color: ${getTrendColor(data.sleep_trend)}; margin-top: 4px;">
@@ -222,13 +223,13 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
       <!-- Protocol Compliance Section -->
       <div style="margin-bottom: 24px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          ✅ Protocol Compliance
+          ${getUiIcon('checkmark', { size: 18, color: '#1a1a1a' })} Protocol Compliance
         </h3>
         <table style="width: 100%; border-collapse: collapse; background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
           <tr>
             <td style="width: 25%; padding: 16px; vertical-align: top;">
               <div style="font-size: 12px; color: #666666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                🥗 NUTRITION
+                ${getUiIcon('nutrition', { size: 14, color: '#84cc16' })} NUTRITION
               </div>
               <div style="font-size: 36px; font-weight: 700; color: ${getComplianceColor(data.nutrition_compliance_pct)}; line-height: 1; margin-bottom: 8px;">
                 ${safePercent(data.nutrition_compliance_pct)}
@@ -237,12 +238,12 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
                 <div style="height: 100%; background-color: ${getComplianceColor(data.nutrition_compliance_pct)}; width: ${data.nutrition_compliance_pct || 0}%;"></div>
               </div>
               <div style="font-size: 11px; color: #f59e0b; font-weight: 600;">
-                🔥 ${safeValue(data.nutrition_streak, '0')} day streak
+                ${getUiIcon('streak', { size: 11, color: '#f59e0b' })} ${safeValue(data.nutrition_streak, '0')} day streak
               </div>
             </td>
             <td style="width: 25%; padding: 16px; vertical-align: top;">
               <div style="font-size: 12px; color: #666666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                💊 SUPPLEMENTS
+                ${getUiIcon('supplements', { size: 14, color: '#8b5cf6' })} SUPPLEMENTS
               </div>
               <div style="font-size: 36px; font-weight: 700; color: ${getComplianceColor(data.supplements_compliance_pct)}; line-height: 1; margin-bottom: 8px;">
                 ${safePercent(data.supplements_compliance_pct)}
@@ -253,7 +254,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 25%; padding: 16px; vertical-align: top;">
               <div style="font-size: 12px; color: #666666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                🏋️ EXERCISE
+                ${getUiIcon('exercise', { size: 14, color: '#06b6d4' })} EXERCISE
               </div>
               <div style="font-size: 36px; font-weight: 700; color: ${getComplianceColor(data.exercise_compliance_pct)}; line-height: 1; margin-bottom: 8px;">
                 ${safePercent(data.exercise_compliance_pct)}
@@ -267,7 +268,7 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
             </td>
             <td style="width: 25%; padding: 16px; vertical-align: top;">
               <div style="font-size: 12px; color: #666666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center;">
-                🧘 MEDITATION
+                ${getUiIcon('meditation', { size: 14, color: '#a855f7' })} MEDITATION
               </div>
               <div style="font-size: 36px; font-weight: 700; color: ${getComplianceColor(data.meditation_compliance_pct)}; line-height: 1; margin-bottom: 8px;">
                 ${safePercent(data.meditation_compliance_pct)}
@@ -289,14 +290,14 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
           return `
       <div style="margin-bottom: 24px; page-break-before: always; padding-top: 48px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          🎯 Goals and Progress
+          ${getUiIcon('goal', { size: 18, color: '#1a1a1a' })} Goals and Progress
         </h3>
         <div style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
           ${goals.map((goal: any, index: number) => {
               const statusConfig = {
-                'on_track': { color: '#10b981', icon: '✓', label: 'On Track', bgColor: '#f0fdf4' },
-                'win': { color: '#10b981', icon: '🏆', label: 'Win', bgColor: '#f0fdf4' },
-                'at_risk': { color: '#ef4444', icon: '⚠', label: 'At Risk', bgColor: '#fef2f2' },
+                'on_track': { color: '#10b981', icon: getUiIcon('checkmark', { size: 20, color: '#10b981' }), label: 'On Track', bgColor: '#f0fdf4' },
+                'win': { color: '#10b981', icon: getUiIcon('trophy', { size: 20, color: '#10b981' }), label: 'Win', bgColor: '#f0fdf4' },
+                'at_risk': { color: '#ef4444', icon: getUiIcon('warning', { size: 20, color: '#ef4444' }), label: 'At Risk', bgColor: '#fef2f2' },
                 'insufficient_data': { color: '#9ca3af', icon: '—', label: 'Insufficient Data', bgColor: '#f9fafb' }
               };
               const config = statusConfig[goal.status as keyof typeof statusConfig] || statusConfig.insufficient_data;
@@ -402,24 +403,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
   const topDomain = domains.reduce((max: any, d: any) => 
     d.average_score > (max?.average_score || 0) ? d : max, null);
   
-  // Get domain emoji mapping
-  const domainEmojis: Record<string, string> = {
-    'head': '🧠',
-    'eyes': '👁️',
-    'ears': '👂',
-    'nose': '👃',
-    'mouth_throat': '👄',
-    'digestive_tract': '🍽️',
-    'heart': '💓',
-    'lungs': '🫁',
-    'joints_muscle': '🦴',
-    'skin': '🧴',
-    'energy_activity': '💪',
-    'mind': '🤔',
-    'emotions': '😊',
-    'weight': '⚖️',
-    'other': '📋'
-  };
+  // Domain icons are now generated via getMsqDomainIcon() helper
   
   return `
     <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
@@ -433,14 +417,14 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📊 CURRENT SCORE</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('stats', { size: 14, color: '#8e24ff' })} CURRENT SCORE</div>
               <div style="font-size: 36px; font-weight: 700; color: ${currentLevel.color}; line-height: 1; margin-bottom: 4px;">${totalScore}</div>
               <div style="font-size: 13px; font-weight: 600; color: ${currentLevel.color};">
                 ${currentLevel.level}
               </div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📈 TREND</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('trending', { size: 14, color: '#8e24ff' })} TREND</div>
               <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
                 <div style="font-size: 32px; font-weight: 700; color: ${trendInfo.color}; line-height: 1;">
                   ${trendInfo.symbol}
@@ -454,10 +438,10 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
               </div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">🔍 TOP PROBLEM AREA</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('search', { size: 14, color: '#8e24ff' })} TOP PROBLEM AREA</div>
               ${topDomain ? `
                 <div style="font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px;">
-                  ${domainEmojis[topDomain.domain_key] || '📋'} ${topDomain.domain_label}
+                  ${getMsqDomainIcon(topDomain.domain_key, { size: 16 })} ${topDomain.domain_label}
                 </div>
                 <div style="font-size: 13px; color: ${getDomainSeverityColor(topDomain.severity)}; font-weight: 600;">
                   Score: ${topDomain.average_score.toFixed(1)}
@@ -467,7 +451,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
               `}
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📅 ASSESSMENT SCORES</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('calendar', { size: 14, color: '#8e24ff' })} ASSESSMENT SCORES</div>
               ${summary.all_total_scores && summary.all_total_scores.length > 0 ? `
                 <table style="width: 100%; border-collapse: collapse;">
                   ${(() => {
@@ -523,7 +507,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
       <!-- Body Systems Analysis (15 Domain Cards) -->
       <div style="margin-bottom: 24px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          🏥 Body Systems Analysis
+          ${getUiIcon('hospital', { size: 18, color: '#1a1a1a' })} Body Systems Analysis
         </h3>
         <table style="width: 100%; border-collapse: collapse;">
           ${domains.map((domain: any, index: number) => {
@@ -539,7 +523,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
                       <!-- Domain Header -->
                       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                          <span style="font-size: 16px;">${domainEmojis[d.domain_key] || '📋'}</span>
+                          ${getMsqDomainIcon(d.domain_key, { size: 16 })}
                           <span style="font-size: 12px; font-weight: 700; color: #1a1a1a;">${d.domain_label}</span>
                         </div>
                         <span style="font-size: 20px; color: ${getTrendInfo(d.trend).color}; font-weight: 700; line-height: 1;">
@@ -583,14 +567,14 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
       <!-- MSQ Interpretation Guide -->
       <div style="margin-top: 32px; padding-top: 48px; page-break-inside: avoid;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          📚 MSQ Interpretation Guide
+          ${getUiIcon('book', { size: 18, color: '#1a1a1a' })} MSQ Interpretation Guide
         </h3>
         
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
           <tr>
             <td style="width: 50%; padding: 8px; vertical-align: top;">
               <div style="background-color: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); height: 100%;">
-                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">📊 MSQ Score Interpretation</div>
+                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">${getUiIcon('stats', { size: 14, color: '#8e24ff' })} MSQ Score Interpretation</div>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
@@ -627,7 +611,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
             </td>
             <td style="width: 50%; padding: 8px; vertical-align: top;">
               <div style="background-color: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); height: 100%;">
-                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">📈 Trend Analysis Guidelines</div>
+                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">${getUiIcon('trending', { size: 14, color: '#8e24ff' })} Trend Analysis Guidelines</div>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
@@ -650,7 +634,7 @@ function generateMsqAssessmentHtml(msqData: any, memberInfo: { firstName: string
                 </table>
                 
                 <div style="margin-top: 16px; padding: 12px; background-color: #f3f0ff; border-radius: 6px;">
-                  <div style="font-size: 11px; font-weight: 600; color: #8e24ff; margin-bottom: 4px;">📌 Clinical Notes</div>
+                  <div style="font-size: 11px; font-weight: 600; color: #8e24ff; margin-bottom: 4px;">${getUiIcon('pin', { size: 11, color: '#8e24ff' })} Clinical Notes</div>
                   <div style="font-size: 10px; color: #666666; line-height: 1.5;">
                     • Changes of ≥10 points are clinically significant<br/>
                     • Focus intervention on domains scoring ≥10<br/>
@@ -745,17 +729,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
     }
   }, null);
   
-  // Get domain emoji mapping
-  const domainEmojis: Record<string, string> = {
-    'physical_function': '🏃',
-    'anxiety': '😰',
-    'depression': '😔',
-    'fatigue': '😴',
-    'sleep_disturbance': '🌙',
-    'social_roles': '👥',
-    'pain_interference': '🤕',
-    'pain_intensity': '⚡'
-  };
+  // Domain icons are now generated via getPromisDomainIcon() helper
   
   return `
     <div style="margin-bottom: 32px; ${isFirstSection ? '' : 'page-break-before: always; padding-top: 48px;'}">
@@ -769,14 +743,14 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
         <table style="width: 100%; border-collapse: collapse;">
           <tr>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📊 CURRENT SCORE</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('stats', { size: 14, color: '#8e24ff' })} CURRENT SCORE</div>
               <div style="font-size: 36px; font-weight: 700; color: ${currentLevel.color}; line-height: 1; margin-bottom: 4px;">${currentMeanTScore.toFixed(1)}</div>
               <div style="font-size: 13px; font-weight: 600; color: ${currentLevel.color};">
                 ${currentLevel.level}
               </div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📈 TREND</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('trending', { size: 14, color: '#8e24ff' })} TREND</div>
               <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px;">
                 <div style="font-size: 32px; font-weight: 700; color: ${trendInfo.color}; line-height: 1;">
                   ${trendInfo.symbol}
@@ -790,10 +764,10 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
               </div>
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">🔍 TOP CONCERN</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('search', { size: 14, color: '#8e24ff' })} TOP CONCERN</div>
               ${topDomain ? `
                 <div style="font-size: 18px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px;">
-                  ${domainEmojis[topDomain.domain_key] || '📋'} ${topDomain.domain_label}
+                  ${getPromisDomainIcon(topDomain.domain_key, { size: 16 })} ${topDomain.domain_label}
                 </div>
                 <div style="font-size: 13px; color: ${getDomainSeverityColor(topDomain.severity)}; font-weight: 600;">
                   ${topDomain.domain_key === 'pain_intensity' ? `Score: ${topDomain.current_score}/10` : `T-Score: ${topDomain.current_score.toFixed(0)}`}
@@ -803,7 +777,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
               `}
             </td>
             <td style="width: 25%; padding: 12px; vertical-align: top;">
-              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">📅 ASSESSMENT SCORES</div>
+              <div style="font-size: 11px; color: #8e24ff; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">${getUiIcon('calendar', { size: 14, color: '#8e24ff' })} ASSESSMENT SCORES</div>
               ${summary.all_mean_t_scores && summary.all_mean_t_scores.length > 0 ? `
                 <table style="width: 100%; border-collapse: collapse;">
                   ${(() => {
@@ -859,7 +833,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
       <!-- Health Domains Analysis (8 Domain Cards, 3 per row) -->
       <div style="margin-bottom: 24px;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          🏥 Health Domains Analysis
+          ${getUiIcon('hospital', { size: 18, color: '#1a1a1a' })} Health Domains Analysis
         </h3>
         <table style="width: 100%; border-collapse: collapse;">
           ${domains.map((domain: any, index: number) => {
@@ -877,7 +851,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
                       <!-- Domain Header -->
                       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                          <span style="font-size: 16px;">${domainEmojis[d.domain_key] || '📋'}</span>
+                          ${getPromisDomainIcon(d.domain_key, { size: 16 })}
                           <span style="font-size: 12px; font-weight: 700; color: #1a1a1a;">${d.domain_label}</span>
                         </div>
                         <span style="font-size: 20px; color: ${getTrendInfo(d.trend).color}; font-weight: 700; line-height: 1;">
@@ -914,14 +888,14 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
       <!-- PROMIS Interpretation Guide -->
       <div style="margin-top: 32px; padding-top: 48px; page-break-inside: avoid;">
         <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 16px; color: #1a1a1a;">
-          📚 PROMIS-29 Interpretation Guide
+          ${getUiIcon('book', { size: 18, color: '#1a1a1a' })} PROMIS-29 Interpretation Guide
         </h3>
         
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
           <tr>
             <td style="width: 50%; padding: 8px; vertical-align: top;">
               <div style="background-color: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); height: 100%;">
-                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">📊 T-Score Interpretation</div>
+                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">${getUiIcon('stats', { size: 14, color: '#8e24ff' })} T-Score Interpretation</div>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
@@ -958,7 +932,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
             </td>
             <td style="width: 50%; padding: 8px; vertical-align: top;">
               <div style="background-color: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); height: 100%;">
-                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">📈 Clinical Significance</div>
+                <div style="font-size: 14px; font-weight: 700; color: #8e24ff; margin-bottom: 12px;">${getUiIcon('trending', { size: 14, color: '#8e24ff' })} Clinical Significance</div>
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">
@@ -981,7 +955,7 @@ function generatePromisAssessmentHtml(promisData: any, memberInfo: { firstName: 
                 </table>
                 
                 <div style="margin-top: 16px; padding: 12px; background-color: #f3f0ff; border-radius: 6px;">
-                  <div style="font-size: 11px; font-weight: 600; color: #8e24ff; margin-bottom: 4px;">📌 Clinical Notes</div>
+                  <div style="font-size: 11px; font-weight: 600; color: #8e24ff; margin-bottom: 4px;">${getUiIcon('pin', { size: 11, color: '#8e24ff' })} Clinical Notes</div>
                   <div style="font-size: 10px; color: #666666; line-height: 1.5;">
                     • T-scores are standardized: Mean = 50, SD = 10<br/>
                     • Change of ≥5 points is clinically meaningful<br/>
@@ -1009,7 +983,7 @@ function generateReportHtml(memberName: string, reportDate: string, contentHtml:
           <tr>
             <td style="vertical-align: middle;">
               <h1 style="font-size: 36px; font-weight: 900; color: #ffffff; margin: 0 0 8px 0; letter-spacing: -0.5px;">
-                📊 Member Report Card
+                ${getUiIcon('report', { size: 36, color: '#ffffff' })} Member Report Card
               </h1>
               <p style="font-size: 20px; color: #e9d5ff; margin: 0; font-weight: 600;">
                 ${memberName}
@@ -1032,7 +1006,7 @@ function generateReportHtml(memberName: string, reportDate: string, contentHtml:
       <div style="margin-top: 48px; padding: 20px; background: linear-gradient(135deg, #f3f0ff 0%, #e9d5ff 50%, #ddd6fe 100%); border-radius: 12px; text-align: center;">
         <div style="margin-bottom: 12px; padding: 12px; background-color: rgba(255, 255, 255, 0.6); border-radius: 8px; display: inline-block;">
           <p style="margin: 0; font-size: 12px; color: #5a0ea4; font-weight: 600;">
-            🔒 This report contains confidential health information
+            ${getUiIcon('lock', { size: 12, color: '#5a0ea4' })} This report contains confidential health information
           </p>
           <p style="margin: 4px 0 0 0; font-size: 11px; color: #7c3aed;">
             Please handle with appropriate privacy and security measures
@@ -1179,12 +1153,11 @@ export async function POST(request: NextRequest) {
     const reportHtml = generateReportHtml(reportData.member.name, reportDate, contentHtml);
     const fullHtml = wrapHtmlForPdf(reportHtml);
 
-    // Debug: Log HTML length
-    console.log(`📝 Generated HTML length: ${fullHtml.length} characters`);
-    console.log(`📊 Content sections: memberProgress=${!!reportData.memberProgress}, msqAssessment=${!!reportData.msqAssessment}, promisAssessment=${!!reportData.promisAssessment}`);
+    // Log HTML generation complete
+    console.log(`[HTML] Generated HTML length: ${fullHtml.length} characters`);
 
     // 5. Generate PDF using Puppeteer
-    console.log('📄 Generating PDF...');
+    console.log('[PDF] Generating PDF...');
     
     const pdfBuffer = await generatePdfFromHtml({
       html: fullHtml,
@@ -1201,7 +1174,7 @@ export async function POST(request: NextRequest) {
     // 6. Return PDF as response
     const filename = `Report-Card-${reportData.member.firstName}-${reportData.member.lastName}-${new Date().toISOString().split('T')[0]}.pdf`;
     
-    console.log(`✅ PDF generated successfully: ${filename}`);
+    console.log(`[SUCCESS] PDF generated successfully: ${filename}`);
     
     return new NextResponse(pdfBuffer as unknown as BodyInit, {
       status: 200,
