@@ -118,7 +118,11 @@ export async function generatePdfFromHtml(
       timeout: 30000,
     });
 
-    console.log('⏳ Waiting for dynamic content...');
+    console.log('⏳ Waiting for fonts and dynamic content...');
+    
+    // Wait for fonts to load (critical for emoji rendering)
+    await page.evaluateHandle('document.fonts.ready');
+    console.log('✅ Fonts loaded');
     
     // Debug: Check if content is visible
     const bodyText = await page.evaluate(() => document.body.innerText);
