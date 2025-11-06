@@ -93,7 +93,11 @@ export async function generatePdfFromHtml(
       headless: true,
       defaultViewport: { width: 1280, height: 720 },
       args: isProduction
-        ? chromium.args
+        ? [
+            ...chromium.args,
+            '--font-render-hinting=none',
+            '--disable-font-subpixel-positioning',
+          ]
         : [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -174,6 +178,10 @@ export function wrapHtmlForPdf(bodyHtml: string, additionalStyles?: string): str
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Report Card</title>
+  <!-- Load emoji-compatible font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
   <style>
     /* Base styles */
     * {
@@ -187,7 +195,7 @@ export function wrapHtmlForPdf(bodyHtml: string, additionalStyles?: string): str
       height: 100%;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Color Emoji', sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
       color-adjust: exact;
