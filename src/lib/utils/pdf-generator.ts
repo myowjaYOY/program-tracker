@@ -1,5 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 
 export interface PdfGenerationOptions {
   html: string;
@@ -38,17 +38,15 @@ export async function generatePdfFromHtml(
     // Detect if we're in production (serverless) or local development
     const isProduction = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
     
-    // Configure chromium for serverless
-    chromium.setHeadlessMode = true;
-    chromium.setGraphicsMode = false;
-    
-    // Get executable path (property, not function)
+    // Get executable path
     let executablePath: string;
     
     if (isProduction) {
-      // Production: Use serverless chromium
+      // Production: Use serverless chromium (packed GitHub release)
       console.log('📦 Using serverless Chromium for production...');
-      executablePath = await chromium.executablePath();
+      executablePath = await chromium.executablePath(
+        'https://github.com/Sparticuz/chromium/releases/download/v141.0.0/chromium-v141.0.0-pack.x64.tar'
+      );
     } else {
       // Local: Use system Chrome/Chromium/Edge
       console.log('💻 Using local Chrome/Edge for development...');
@@ -92,12 +90,8 @@ export async function generatePdfFromHtml(
     // Launch headless browser
     browser = await puppeteer.launch({
       executablePath,
-      headless: isProduction ? chromium.headless : true,
-      // In prod, use what chromium gives you
-      defaultViewport: isProduction
-        ? chromium.defaultViewport
-        : { width: 1280, height: 720 },
-      // In prod, use chromium.args (these include --no-sandbox, etc.)
+      headless: true,
+      defaultViewport: { width: 1280, height: 720 },
       args: isProduction
         ? chromium.args
         : [
