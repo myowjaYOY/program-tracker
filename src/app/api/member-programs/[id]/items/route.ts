@@ -169,7 +169,7 @@ export async function POST(
     try {
       const { data: tasks } = await supabase
         .from('therapy_tasks')
-        .select('task_id, task_name, description, task_delay')
+        .select('task_id, task_name, description, task_delay, program_role_id')
         .eq('therapy_id', body.therapy_id)
         .eq('active_flag', true);
       if (tasks && tasks.length > 0 && data?.member_program_item_id) {
@@ -189,6 +189,7 @@ export async function POST(
             task_name: t.task_name,
             description: t.description,
             task_delay: t.task_delay,
+            program_role_id: t.program_role_id, // CRITICAL: Copy role from therapy_task
             created_by: session.user.id,
             updated_by: session.user.id,
           }));

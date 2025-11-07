@@ -49,7 +49,6 @@ export async function GET(
       );
     }
 
-    console.log('Fetching PROMIS-29 assessment for member:', memberId);
 
     // Step 1: Get member info from survey_user_mappings
     const { data: memberData, error: memberError } = await supabase

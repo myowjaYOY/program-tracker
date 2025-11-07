@@ -36,8 +36,6 @@
     "date-fns": "^4.1.0",
     "docx-templates": "^4.14.1",
     "docxmarks": "^2.3.0",
-    "docxtemplater": "^3.66.6",
-    "docxtemplater-image-module-free": "^1.1.1",
     "dotenv": "^16.4.5",
     "file-saver": "^2.0.5",
     "fs-extra": "^11.3.2",

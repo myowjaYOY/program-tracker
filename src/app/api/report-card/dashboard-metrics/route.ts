@@ -53,7 +53,6 @@ export interface DashboardMetrics {
  */
 export async function GET(request: NextRequest) {
   try {
-    console.log('[Dashboard Metrics] API called');
     const supabase = await createClient();
 
     // Authenticate
@@ -68,9 +67,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get active program IDs using centralized service
-    console.log('[Dashboard Metrics] Fetching active programs...');
     const activeProgramIds = await ProgramStatusService.getValidProgramIds(supabase);
-    console.log('[Dashboard Metrics] Active program count:', activeProgramIds.length);
 
     if (activeProgramIds.length === 0) {
       // No active programs - return empty metrics
@@ -281,12 +278,6 @@ export async function GET(request: NextRequest) {
 
     const programItemIds = (allProgramItems || []).map(item => item.member_program_item_id);
 
-    console.log('[Behind Schedule] Step 1 - Program Items:', {
-      activeProgramIds: activeProgramIds.length,
-      allProgramItems: allProgramItems?.length || 0,
-      programItemIds: programItemIds.length,
-    });
-
     // Get late/missed items from member_program_item_schedule (singular, not plural)
     const { data: itemSchedules, error: itemSchedulesError } = await supabase
       .from('member_program_item_schedule')
@@ -296,12 +287,6 @@ export async function GET(request: NextRequest) {
     if (itemSchedulesError) {
       console.error('[Behind Schedule] Error fetching item schedules:', itemSchedulesError);
     }
-
-    console.log('[Behind Schedule] Step 2 - Item Schedules:', {
-      programItemIds: programItemIds.length,
-      itemSchedules: itemSchedules?.length || 0,
-      sampleItemSchedule: itemSchedules?.[0],
-    });
 
     // Get task schedules (member_program_item_tasks with their schedules)
     const { data: itemTasks, error: itemTasksError } = await supabase
@@ -315,12 +300,6 @@ export async function GET(request: NextRequest) {
 
     const itemTaskIds = (itemTasks || []).map(task => task.member_program_item_task_id);
 
-    console.log('[Behind Schedule] Step 3 - Item Tasks:', {
-      programItemIds: programItemIds.length,
-      itemTasks: itemTasks?.length || 0,
-      itemTaskIds: itemTaskIds.length,
-    });
-
     // Get task schedules
     const { data: taskSchedules, error: taskSchedulesError } = await supabase
       .from('member_program_items_task_schedule')
@@ -330,12 +309,6 @@ export async function GET(request: NextRequest) {
     if (taskSchedulesError) {
       console.error('[Behind Schedule] Error fetching task schedules:', taskSchedulesError);
     }
-
-    console.log('[Behind Schedule] Step 4 - Task Schedules:', {
-      itemTaskIds: itemTaskIds.length,
-      taskSchedules: taskSchedules?.length || 0,
-      sampleTaskSchedule: taskSchedules?.[0],
-    });
 
     // Create mapping chains
     const itemToProgramMap = new Map(
@@ -399,11 +372,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('[Behind Schedule] Step 5 - Item Schedule Processing:', {
-      lateItemsFound,
-      missedMappings,
-      lateCountByMemberSize: lateCountByMember.size,
-    });
 
     // Process task schedules
     let lateTasksFound = 0;
@@ -458,12 +426,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('[Behind Schedule] Step 6 - Task Schedule Processing:', {
-      lateTasksFound,
-      taskMissedMappings,
-      lateCountByMemberSize: lateCountByMember.size,
-    });
-
     const behindScheduleList: MemberListItem[] = Array.from(lateCountByMember.values())
       .sort((a, b) => b.count - a.count) // Highest count first
       .slice(0, 6)
@@ -473,14 +435,6 @@ export async function GET(request: NextRequest) {
       }));
 
     const behindScheduleCount = lateCountByMember.size;
-
-    console.log('[Dashboard Metrics] Behind Schedule Summary:', {
-      totalItemSchedules: itemSchedules?.length || 0,
-      totalTaskSchedules: taskSchedules?.length || 0,
-      lateCountByMemberSize: lateCountByMember.size,
-      behindScheduleCount,
-      top6BehindSchedule: behindScheduleList.map(item => ({ name: item.name, value: item.value })),
-    });
 
     // ====================================
     // CARD 5: Worst Compliance (Top 6)
@@ -555,16 +509,6 @@ export async function GET(request: NextRequest) {
       bestProgressList,
       bestProgressAverage,
     };
-
-    console.log('[Dashboard Metrics] Successfully generated metrics:', {
-      totalActiveMembers,
-      membersWithProgress,
-      programsEndingSoon: programsEndingSoon.length,
-      worstMsqCount,
-      behindScheduleCount,
-      worstComplianceCount,
-      bestProgressCount,
-    });
 
     return NextResponse.json({ data: metrics });
   } catch (error) {

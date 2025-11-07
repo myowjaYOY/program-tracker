@@ -925,10 +925,19 @@ function calculateTimelineProgress(userProgress: any | null, sessions: any[], mo
   const lastCompletedIndex = moduleSequence.indexOf(lastCompleted);
   const workingOnIndex = moduleSequence.indexOf(workingOn);
 
-  // Warn if module not found (indicates bad data in survey_user_progress)
+  // FIX: If last_completed module not in sequence, use session-based fallback
+  // This handles cases like "[BONUS] HORMONE MODULE" which aren't in the standard sequence
   if (lastCompletedIndex === -1) {
-    console.warn(`[TIMELINE WARNING] Module not found in sequence: last_completed="${lastCompleted}" (available: ${moduleSequence.join(', ')})`);
+    console.warn(`[TIMELINE] Module "${lastCompleted}" not found in sequence. Using session-based fallback. (Available: ${moduleSequence.join(', ')})`);
+    const milestones = sessions.map(s => (s.survey_forms as any)?.form_name || 'Unknown');
+    return {
+      completed_milestones: JSON.stringify(milestones),
+      next_milestone: null,
+      overdue_milestones: JSON.stringify([])
+    };
   }
+
+  // Warn if working_on module not found (non-fatal)
   if (workingOn !== 'Finished' && workingOnIndex === -1) {
     console.warn(`[TIMELINE WARNING] Module not found in sequence: working_on="${workingOn}"`);
   }

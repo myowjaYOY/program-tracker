@@ -104,6 +104,11 @@ const operationsNav = [
     icon: <ItemRequestsIcon />,
     path: '/dashboard/item-requests',
   },
+  {
+    label: 'Program Analytics',
+    icon: <ReportsIcon />,
+    path: '/dashboard/program-analytics',
+  },
 ];
 
 // Admin navigation with nested Lookup submenu

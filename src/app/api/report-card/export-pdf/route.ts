@@ -1022,8 +1022,6 @@ function generateReportHtml(memberName: string, reportDate: string, contentHtml:
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('📥 Received PDF export request');
-    
     // 1. Authenticate user
     const supabase = await createClient();
     const {
@@ -1049,14 +1047,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`👤 Fetching data for member ID: ${memberId}`);
-    
     // 3. Fetch report data server-side
     const reportData = await fetchReportCardData(supabase, memberId, { sections });
 
     // 4. Generate HTML content
-    console.log('🎨 Generating HTML...');
-    
     let contentHtml = '';
     let isFirstSection = true; // Track if this is the first section to avoid blank pages
     
@@ -1153,12 +1147,7 @@ export async function POST(request: NextRequest) {
     const reportHtml = generateReportHtml(reportData.member.name, reportDate, contentHtml);
     const fullHtml = wrapHtmlForPdf(reportHtml);
 
-    // Log HTML generation complete
-    console.log(`[HTML] Generated HTML length: ${fullHtml.length} characters`);
-
     // 5. Generate PDF using Puppeteer
-    console.log('[PDF] Generating PDF...');
-    
     const pdfBuffer = await generatePdfFromHtml({
       html: fullHtml,
       filename: `report-card-${reportData.member.name}.pdf`,
@@ -1173,8 +1162,6 @@ export async function POST(request: NextRequest) {
 
     // 6. Return PDF as response
     const filename = `Report-Card-${reportData.member.firstName}-${reportData.member.lastName}-${new Date().toISOString().split('T')[0]}.pdf`;
-    
-    console.log(`[SUCCESS] PDF generated successfully: ${filename}`);
     
     return new NextResponse(pdfBuffer as unknown as BodyInit, {
       status: 200,

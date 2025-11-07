@@ -109,20 +109,20 @@ async function downloadDocumentFromTemplate(
       'PROGRAM_START_DATE': data.program.startDate || 'N/A',
       'PROGRAM_DURATION': data.program.duration || 'N/A',
       
-      // Financial Information
-      'FINANCE_CHARGES': `$${data.financials.financeCharges.toFixed(2)}`,
-      'TAXES': `$${data.financials.taxes.toFixed(2)}`,
-      'DISCOUNTS': `$${data.financials.discounts.toFixed(2)}`,
-      'FINAL_TOTAL_PRICE': `$${data.financials.finalTotalPrice.toFixed(2)}`,
+      // Financial Information (formatted with thousand separators)
+      'FINANCE_CHARGES': data.financials.financeCharges.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'TAXES': data.financials.taxes.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'DISCOUNTS': data.financials.discounts.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'FINAL_TOTAL_PRICE': data.financials.finalTotalPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
       'MARGIN': `${data.financials.margin.toFixed(2)}%`,
 
-      // New Contract Option Bookmarks
-      'DISCOUNTED_PRETAX_5_AMOUNT': `$${options.discountedPreTax5Amount.toFixed(2)}`,
-      'DISCOUNTED_PROGRAM_PRICE_5': `$${options.discountedProgramPrice5.toFixed(2)}`,
-      'FINANCE_FULL_AMOUNT': `$${options.financeFullAmount.toFixed(2)}`,
-      'FINANCE_DOWN_PAYMENT': `$${options.financeDownPayment.toFixed(2)}`,
-      'FINANCE_MONTHLY_PAYMENT': `$${options.financeMonthlyPayment.toFixed(2)}`,
-      'THREE_EQUAL_PAYMENTS': `$${options.threeEqualPayments.toFixed(2)}`,
+      // New Contract Option Bookmarks (formatted with thousand separators)
+      'DISCOUNTED_PRETAX_5_AMOUNT': options.discountedPreTax5Amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'DISCOUNTED_PROGRAM_PRICE_5': options.discountedProgramPrice5.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'FINANCE_FULL_AMOUNT': options.financeFullAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'FINANCE_DOWN_PAYMENT': options.financeDownPayment.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'FINANCE_MONTHLY_PAYMENT': options.financeMonthlyPayment.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+      'THREE_EQUAL_PAYMENTS': options.threeEqualPayments.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
       
       // Payment Schedule - will be handled separately as Word elements
       
@@ -145,10 +145,10 @@ async function downloadDocumentFromTemplate(
     // Second pass: Render payments table loop using docx-templates
     const intermediateDoc = Buffer.from(updatedDocxBuffer);
     
-    // Pre-format payment amounts as currency strings
+    // Pre-format payment amounts as currency strings with thousand separators
     const formattedPayments = data.payments.map(payment => ({
       paymentId: payment.paymentId,
-      amount: `$${payment.amount.toFixed(2)}`,
+      amount: payment.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
       dueDate: payment.dueDate,
       paymentDate: payment.paymentDate,
     }));

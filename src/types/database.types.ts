@@ -121,6 +121,7 @@ export interface MemberProgramItemTasks {
   task_name: string;
   description: string | null;
   task_delay: number;
+  program_role_id: number; // Role assignment for task (Member, Admin, Coordinator, etc.)
   completed_flag: boolean;
   completed_date: string | null;
   completed_by: string | null;

@@ -89,6 +89,12 @@ export const MENU_ITEMS: MenuItem[] = [
     section: 'operations',
     icon: 'Inventory',
   },
+  {
+    path: '/dashboard/program-analytics',
+    label: 'Program Analytics',
+    section: 'operations',
+    icon: 'BarChart',
+  },
 
   // Admin (alphabetical)
   {
