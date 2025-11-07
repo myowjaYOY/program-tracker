@@ -90,25 +90,16 @@ export default function InventoryForecastPage() {
 
   // Handle Order Items button click
   const handleOrderItems = () => {
-    console.log('Order Items clicked, selectedItemIds:', selectedItemIds);
-    console.log('inventoryData length:', inventoryData.length);
-
     const selected = inventoryData.filter((row) => {
       const itemId = `${row.therapy_type_name}-${row.therapy_name}-${row.dispensed_count}-${row.owed_count}`;
-      const isSelected = selectedItemIds.has(itemId);
-      console.log('Checking item:', itemId, 'selected:', isSelected);
-      return isSelected;
+      return selectedItemIds.has(itemId);
     });
 
-    console.log('Selected items:', selected);
-
     if (selected.length === 0) {
-      console.log('No items selected, showing alert');
       alert('Please select at least one item to order.');
       return;
     }
 
-    console.log('Opening modal with selected items:', selected);
     setSelectedItems(selected);
     setOrderModalOpen(true);
   };
@@ -182,6 +173,11 @@ export default function InventoryForecastPage() {
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => {
+        // Only show checkbox for items that exist in inventory_items table
+        if (!params.row.in_inventory) {
+          return null;
+        }
+        
         const itemId = `${params.row.therapy_type_name}-${params.row.therapy_name}-${params.row.dispensed_count}-${params.row.owed_count}`;
         return (
           <Checkbox

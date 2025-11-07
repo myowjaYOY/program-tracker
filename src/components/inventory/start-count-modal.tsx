@@ -16,11 +16,18 @@ import {
   Box,
   Typography,
   Alert,
+  IconButton,
+  MenuItem,
+  Select,
+  InputLabel,
+  Chip,
+  OutlinedInput,
 } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { startCountSessionSchema, type StartCountSessionData } from '@/lib/validations/inventory-count';
-import { useStartCountSession } from '@/lib/hooks/use-inventory-counts';
+import { useStartCountSession, useInventoryItems } from '@/lib/hooks/use-inventory-counts';
 import { format } from 'date-fns';
 
 interface StartCountModalProps {
@@ -30,20 +37,25 @@ interface StartCountModalProps {
 
 export default function StartCountModal({ open, onClose }: StartCountModalProps) {
   const startMutation = useStartCountSession();
+  const { data: inventoryItems = [], isLoading: itemsLoading } = useInventoryItems();
 
   const {
     control,
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm<StartCountSessionData>({
     resolver: zodResolver(startCountSessionSchema),
     defaultValues: {
       count_type: 'full',
       session_date: format(new Date(), 'yyyy-MM-dd'),
       notes: '',
+      selected_item_ids: [],
     },
   });
+
+  const countType = watch('count_type');
 
   const onSubmit = async (data: StartCountSessionData) => {
     try {
@@ -75,14 +87,21 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Start New Physical Count
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Create a new inventory count session
-          </Typography>
-        </Box>
+        Start New Physical Count
+        <IconButton
+          onClick={handleClose}
+          disabled={startMutation.isPending}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          Create a new inventory count session
+        </Typography>
       </DialogTitle>
 
       <form onSubmit={handleSubmit(onSubmit)}>
@@ -135,11 +154,10 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
                             Custom Count
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            Select specific items to count (coming soon)
+                            Select specific items to count
                           </Typography>
                         </Box>
                       }
-                      disabled
                     />
                   </RadioGroup>
                 )}
@@ -171,6 +189,52 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
               )}
             />
 
+            {/* Custom Item Selection */}
+            {countType === 'custom' && (
+              <Controller
+                name="selected_item_ids"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth error={!!errors.selected_item_ids}>
+                    <InputLabel id="custom-items-label">Select Items to Count *</InputLabel>
+                    <Select
+                      labelId="custom-items-label"
+                      multiple
+                      value={field.value || []}
+                      onChange={field.onChange}
+                      input={<OutlinedInput label="Select Items to Count *" />}
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {(selected as number[]).map((id) => {
+                            const item = inventoryItems.find((i) => i.inventory_item_id === id);
+                            return (
+                              <Chip
+                                key={id}
+                                label={item?.therapy?.therapy_name || `ID: ${id}`}
+                                size="small"
+                              />
+                            );
+                          })}
+                        </Box>
+                      )}
+                      disabled={itemsLoading}
+                    >
+                      {inventoryItems.map((item) => (
+                        <MenuItem key={item.inventory_item_id} value={item.inventory_item_id}>
+                          {item.therapy.therapy_name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.selected_item_ids && (
+                      <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                        {errors.selected_item_ids.message}
+                      </Typography>
+                    )}
+                  </FormControl>
+                )}
+              />
+            )}
+
             {/* Notes */}
             <Controller
               name="notes"
@@ -191,20 +255,19 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
 
             {/* Info Alert */}
             <Alert severity="info">
-              A new count session will be created with all active inventory items. You can then
-              enter physical counts for each item.
+              {countType === 'custom'
+                ? 'A new count session will be created with the selected items. You can then enter physical counts for each item.'
+                : 'A new count session will be created with all active inventory items. You can then enter physical counts for each item.'}
             </Alert>
           </Box>
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={handleClose} disabled={startMutation.isPending}>
-            Cancel
-          </Button>
           <Button
             type="submit"
             variant="contained"
             disabled={startMutation.isPending}
+            sx={{ borderRadius: 0, fontWeight: 600 }}
           >
             {startMutation.isPending ? 'Starting...' : 'Start Count Session'}
           </Button>

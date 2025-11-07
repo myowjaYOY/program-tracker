@@ -2,13 +2,11 @@
 
 import { Box, Typography, Card, CardContent, Tabs, Tab, Button, CircularProgress, Grid } from '@mui/material';
 import { useState } from 'react';
-import { 
+import {
   Add as AddIcon,
   Description as DescriptionIcon,
-  LocalShipping as LocalShippingIcon,
   Inventory as InventoryIcon,
   Pending as PendingIcon,
-  AttachMoney as AttachMoneyIcon,
   Warning as WarningIcon,
   AssignmentTurnedIn as AssignmentTurnedInIcon,
   RuleFolder as RuleFolderIcon,
@@ -36,7 +34,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`inventory-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      {value === index && <Box>{children}</Box>}
     </div>
   );
 }
@@ -60,26 +58,32 @@ export default function InventoryManagementPage() {
   };
 
   return (
-    <Box sx={{ p: 3, height: '100%' }}>
+    <Box sx={{ p: 2 }}>
       {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          variant="h4"
-          component="h1"
-          gutterBottom
-          sx={{ fontWeight: 600 }}
+      <Box sx={{ mb: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 1,
+          }}
         >
-          Inventory Management
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Manage purchase orders, track inventory, and monitor stock levels
-        </Typography>
+          <Typography
+            variant="h4"
+            component="h1"
+            fontWeight="bold"
+            color="primary.main"
+          >
+            Inventory Management
+          </Typography>
+        </Box>
       </Box>
 
       {/* Metrics Cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Card 1: Pending Approval */}
-        <Grid size={2}>
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -143,7 +147,7 @@ export default function InventoryManagementPage() {
         </Grid>
 
         {/* Card 2: Awaiting Receipt */}
-        <Grid size={2}>
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -196,7 +200,7 @@ export default function InventoryManagementPage() {
                     opacity: 0.8,
                   }}
                 >
-                  <LocalShippingIcon sx={{ fontSize: 40 }} />
+                  <PendingIcon sx={{ fontSize: 40 }} />
                 </Box>
               </Box>
               <Typography variant="caption" color="textSecondary">
@@ -206,72 +210,8 @@ export default function InventoryManagementPage() {
           </Card>
         </Grid>
 
-        {/* Card 3: Open PO Value */}
-        <Grid size={2}>
-          <Card
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              borderTop: (theme) => `4px solid ${theme.palette.success.main}`,
-              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: (theme) => theme.shadows[4],
-              },
-            }}
-          >
-            <CardContent sx={{ flexGrow: 1, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <Typography
-                    color="textSecondary"
-                    variant="body2"
-                    sx={{ fontWeight: 500 }}
-                  >
-                    Open PO Value
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    component="div"
-                    sx={{
-                      fontWeight: 700,
-                      color: 'success.main',
-                      mt: 1,
-                    }}
-                  >
-                    {metricsLoading ? (
-                      <CircularProgress size={32} />
-                    ) : (
-                      `$${(metrics?.open_po_value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    )}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    color: 'success.main',
-                    opacity: 0.8,
-                  }}
-                >
-                  <AttachMoneyIcon sx={{ fontSize: 40 }} />
-                </Box>
-              </Box>
-              <Typography variant="caption" color="textSecondary">
-                Total Cost
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card 4: Low Stock Items */}
-        <Grid size={2}>
+        {/* Card 3: Low Stock Items */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -334,8 +274,8 @@ export default function InventoryManagementPage() {
           </Card>
         </Grid>
 
-        {/* Card 5: In-Progress Counts */}
-        <Grid size={2}>
+        {/* Card 4: In-Progress Counts */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -398,8 +338,8 @@ export default function InventoryManagementPage() {
           </Card>
         </Grid>
 
-        {/* Card 6: Pending Variances */}
-        <Grid size={2}>
+        {/* Card 5: Pending Variances */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -463,85 +403,75 @@ export default function InventoryManagementPage() {
         </Grid>
       </Grid>
 
-      {/* Tabs */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs
-          value={tabValue}
-          onChange={handleTabChange}
-          aria-label="inventory management tabs"
-          sx={{
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '1rem',
-              minWidth: 180,
-              mr: 2,
-            },
-          }}
-        >
-          <Tab 
-            icon={<DescriptionIcon />} 
-            iconPosition="start" 
-            label="Purchase Orders" 
-            {...a11yProps(0)} 
-          />
-          <Tab 
-            icon={<LocalShippingIcon />} 
-            iconPosition="start" 
-            label="Ordered Items" 
-            {...a11yProps(1)} 
-          />
-          <Tab 
-            icon={<InventoryIcon />} 
-            iconPosition="start" 
-            label="Inventory" 
-            {...a11yProps(2)} 
-          />
-          <Tab 
-            icon={<AssignmentTurnedInIcon />} 
-            iconPosition="start" 
-            label="Physical Count" 
-            {...a11yProps(3)} 
-          />
-        </Tabs>
-      </Box>
-
-      {/* Tab Panels */}
-      <TabPanel value={tabValue} index={0}>
-        {/* Create New PO Button */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => setCreatePOModalOpen(true)}
-            sx={{
-              borderRadius: 0,
-              fontWeight: 600,
+      {/* Tabs Section - Wrapped in Card for visual separation */}
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          {/* Tabs */}
+          <Tabs
+            value={tabValue}
+            onChange={handleTabChange}
+            aria-label="inventory management tabs"
+            sx={{ 
+              '& .MuiTabs-flexContainer': { gap: 4 },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '1rem',
+              },
             }}
           >
-            Create New PO
-          </Button>
-        </Box>
-        
-        <PurchaseOrderTable />
-      </TabPanel>
+            <Tab 
+              icon={<DescriptionIcon />} 
+              iconPosition="start" 
+              label="Purchase Orders" 
+              {...a11yProps(0)} 
+            />
+            <Tab 
+              icon={<InventoryIcon />} 
+              iconPosition="start" 
+              label="Inventory" 
+              {...a11yProps(1)} 
+            />
+            <Tab 
+              icon={<AssignmentTurnedInIcon />} 
+              iconPosition="start" 
+              label="Physical Count" 
+              {...a11yProps(2)} 
+            />
+          </Tabs>
 
-      <TabPanel value={tabValue} index={1}>
-        <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 0, minHeight: 400 }}>
-          <Typography variant="body1" color="text.secondary">
-            Ordered Items grid will appear here
-          </Typography>
-        </Box>
-      </TabPanel>
+          {/* Tab Panels */}
+          <Box sx={{ mt: 2 }}>
+            <TabPanel value={tabValue} index={0}>
+              {/* Create New PO Button */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => setCreatePOModalOpen(true)}
+                  sx={{
+                    borderRadius: 0,
+                    fontWeight: 600,
+                  }}
+                >
+                  Create New PO
+                </Button>
+              </Box>
+              
+              <PurchaseOrderTable />
+            </TabPanel>
 
-      <TabPanel value={tabValue} index={2}>
-        <InventoryItemsTab />
-      </TabPanel>
+            <TabPanel value={tabValue} index={1}>
+              <InventoryItemsTab />
+            </TabPanel>
 
-      <TabPanel value={tabValue} index={3}>
-        <PhysicalCountTab />
-      </TabPanel>
+            <TabPanel value={tabValue} index={2}>
+              <PhysicalCountTab />
+            </TabPanel>
+          </Box>
+        </CardContent>
+      </Card>
 
       {/* Create PO Modal */}
       <CreatePOModal

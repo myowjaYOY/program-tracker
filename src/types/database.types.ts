@@ -790,6 +790,7 @@ export interface InventoryForecastRow {
   member_cost: number;               // What members pay (from member_program_items.item_cost)
   current_cost: number;              // Current supplier cost (from therapies.cost)
   quantity_on_hand: number;
+  in_inventory: boolean;             // Whether item exists in inventory_items table
 }
 
 export interface InventoryForecastMetrics {

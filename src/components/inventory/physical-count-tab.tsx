@@ -322,6 +322,12 @@ export default function PhysicalCountTab() {
             '& .MuiDataGrid-row:hover': {
               backgroundColor: 'action.hover',
             },
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: 'grey.50',
+              borderBottom: 2,
+              borderColor: 'divider',
+              fontWeight: 600,
+            },
           }}
         />
       )}

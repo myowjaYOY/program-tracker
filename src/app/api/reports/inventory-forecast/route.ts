@@ -205,11 +205,12 @@ export async function GET(req: NextRequest) {
     // Create item lookup map
     const itemMap = new Map(validItems.map((i: any) => [i.member_program_item_id, i]));
 
-    // Get inventory items for quantity on hand
+    // Get inventory items for quantity on hand (only active items)
     const { data: inventoryItems, error: invErr } = await supabase
       .from('inventory_items')
       .select('therapy_id, quantity_on_hand')
-      .in('therapy_id', Array.from(therapyMap.keys()));
+      .in('therapy_id', Array.from(therapyMap.keys()))
+      .eq('active_flag', true);
     
     if (invErr) {
       console.error('Error fetching inventory items:', invErr);
@@ -228,6 +229,7 @@ export async function GET(req: NextRequest) {
       member_cost: number;
       current_cost: number;
       quantity_on_hand: number;
+      in_inventory: boolean;
     }>();
 
     (scheduleRows || []).forEach((row: any) => {
@@ -252,6 +254,7 @@ export async function GET(req: NextRequest) {
           member_cost: item.item_cost || 0,
           current_cost: therapy.cost || 0,
           quantity_on_hand: inventoryMap.get(therapy.therapy_id) || 0,
+          in_inventory: inventoryMap.has(therapy.therapy_id),
         });
       }
 

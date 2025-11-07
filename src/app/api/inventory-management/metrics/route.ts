@@ -39,20 +39,6 @@ export async function GET() {
       throw awaitingError;
     }
 
-    // Get open PO value (all POs not fully received)
-    const { data: openPOs, error: openPOError } = await supabase
-      .from('purchase_orders')
-      .select('total_cost')
-      .in('status', ['draft', 'pending_approval', 'approved', 'ordered', 'partially_received'])
-      .eq('active_flag', true);
-
-    if (openPOError) {
-      console.error('[Inventory Metrics] Open PO value error:', openPOError);
-      throw openPOError;
-    }
-
-    const openPOValue = openPOs?.reduce((sum, po) => sum + (po.total_cost || 0), 0) || 0;
-
     // Get low stock items count (items below reorder point)
     // Fetch all active items and filter in-memory since Supabase doesn't support column comparison
     const { data: allItems, error: lowStockError } = await supabase
@@ -97,7 +83,6 @@ export async function GET() {
       data: {
         pending_approval_count: pendingApprovalCount || 0,
         awaiting_receipt_count: awaitingReceiptCount || 0,
-        open_po_value: openPOValue,
         low_stock_count: lowStockCount || 0,
         in_progress_counts: inProgressCountsCount || 0,
         pending_variances: pendingVariancesCount || 0,

@@ -133,34 +133,28 @@ export default function InventoryItemsTab() {
   }
 
   return (
-    <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {items?.length || 0} item(s) in inventory
-      </Typography>
-
-      <DataGrid
-        rows={items || []}
-        columns={columns}
-        getRowId={(row) => row.inventory_item_id}
-        initialState={{
-          pagination: {
-            paginationModel: { pageSize: 25, page: 0 },
-          },
-        }}
-        pageSizeOptions={[10, 25, 50, 100]}
-        disableRowSelectionOnClick
-        autoHeight
-        sx={{
-          border: 0,
-          '& .MuiDataGrid-cell:focus': {
-            outline: 'none',
-          },
-          '& .MuiDataGrid-row:hover': {
-            backgroundColor: 'action.hover',
-          },
-        }}
-      />
-    </Box>
+    <DataGrid
+      rows={items || []}
+      columns={columns}
+      getRowId={(row) => row.inventory_item_id}
+      initialState={{
+        pagination: {
+          paginationModel: { pageSize: 25, page: 0 },
+        },
+      }}
+      pageSizeOptions={[10, 25, 50, 100]}
+      disableRowSelectionOnClick
+      autoHeight
+      sx={{
+        border: 0,
+        '& .MuiDataGrid-cell:focus': {
+          outline: 'none',
+        },
+        '& .MuiDataGrid-row:hover': {
+          backgroundColor: 'action.hover',
+        },
+      }}
+    />
   );
 }
 
