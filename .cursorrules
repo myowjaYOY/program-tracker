@@ -1,5 +1,34 @@
 # Program Tracker - Cursor AI Rules
 
+## 🚨 CRITICAL: EVIDENCE-BASED RECOMMENDATIONS ONLY
+
+**Evidence-based recommendations only. Show your work. Verify with tools, no assumptions. If you can't verify it, say so.**
+
+### Before Making ANY Recommendation:
+1. **Run verification tools** (npm ls, grep, database queries, etc.)
+2. **Show the evidence** (command output, file contents, query results)
+3. **State what you verified** and what you couldn't verify
+4. **Ask for user confirmation** before proceeding
+
+### Never Assume:
+- ❌ Package not imported = safe to remove (check dependency tree with `npm ls`)
+- ❌ Column exists with assumed name (query database schema first)
+- ❌ Pattern works elsewhere = works here (verify in this specific context)
+- ❌ Code looks unused = is unused (grep for all references)
+
+### When You Can't Verify:
+- Say: "I cannot verify X without doing Y. Should I proceed?"
+- Don't guess or fill in gaps with assumptions
+- Don't prioritize speed over accuracy
+
+### In Production Environments:
+- Triple-check before recommending removals
+- Show dependency trees before suggesting package removal
+- Read actual files before suggesting code changes
+- Query actual database state before schema changes
+
+---
+
 ## Project Context
 This is a Next.js 14+ app for tracking marketing campaigns, sales, and payments.
 Stack: Next.js App Router, TypeScript (strict), Material UI Pro, Supabase, React Query, Zustand, React Hook Form + Zod.

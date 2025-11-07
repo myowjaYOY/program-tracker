@@ -19,11 +19,11 @@ import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import DownloadIcon from '@mui/icons-material/Download';
-import SummaryCards from '@/components/report-card/SummaryCards';
+import DashboardMetricsCards from '@/components/report-card/DashboardMetricsCards';
 import { MemberProgressTab } from '@/components/member-progress';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
-import { useReportCardSummary, useReportCardParticipants } from '@/lib/hooks/use-report-card';
+import { useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
 import ExportReportModal from '@/components/report-card/ExportReportModal';
 
@@ -51,7 +51,6 @@ function TabPanel(props: TabPanelProps) {
 
 export default function ReportCardPage() {
   const [tabValue, setTabValue] = useState(0);
-  const [programId, setProgramId] = useState<number | undefined>(undefined);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   
   // Notes modal state
@@ -59,9 +58,6 @@ export default function ReportCardPage() {
   
   // Export modal state
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-
-  // Fetch summary data
-  const { data: summary, isLoading: summaryLoading } = useReportCardSummary(programId);
   
   // Fetch members for dropdown
   const { data: membersData, isLoading: membersLoading } = useReportCardParticipants();
@@ -108,8 +104,8 @@ export default function ReportCardPage() {
         </Typography>
       </Box>
 
-      {/* Summary Cards */}
-      <SummaryCards data={summary} isLoading={summaryLoading} />
+      {/* Dashboard Metrics Cards */}
+      <DashboardMetricsCards />
 
       {/* Member Filter - Above Tabs */}
       <Grid container spacing={2} sx={{ mt: 4, mb: 3 }} alignItems="center">

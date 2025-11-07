@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ProgramStatusService } from '@/lib/services/program-status-service';
 import type { ParticipantOption } from '@/types/database.types';
 
 /**
  * GET /api/report-card/participants
  * 
  * Returns list of survey participants from survey_user_mappings
- * Includes ALL mapped users and attaches MSQ survey counts (0 if none)
+ * FILTERED to only members on active programs that have member_progress_summary data
+ * (Matches the Member Progress Coverage card logic)
  * 
  * Query params:
  * - program_id (optional): Filter by specific survey program
@@ -26,10 +28,10 @@ export async function GET(request: NextRequest) {
 
     // Check authentication
     const {
-      data: { session },
+      data: { user },
       error: authError,
-    } = await supabase.auth.getSession();
-    if (authError || !session) {
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,10 +39,74 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const programId = searchParams.get('program_id');
 
-    // Query survey_user_mappings for all users with survey data
+    // ====================================
+    // Get active program IDs using centralized service
+    // ====================================
+    const activeProgramIds = await ProgramStatusService.getValidProgramIds(supabase);
+
+    if (!activeProgramIds || activeProgramIds.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // ====================================
+    // Get member_programs for active programs
+    // ====================================
+    const { data: activePrograms, error: programsError } = await supabase
+      .from('member_programs')
+      .select('lead_id')
+      .in('member_program_id', activeProgramIds);
+
+    if (programsError) {
+      console.error('Error fetching active programs:', programsError);
+      return NextResponse.json(
+        { error: 'Failed to fetch active programs' },
+        { status: 500 }
+      );
+    }
+
+    if (!activePrograms || activePrograms.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // Get unique lead_ids
+    const uniqueLeadIds = [...new Set(activePrograms.map(p => p.lead_id).filter(Boolean))];
+
+    if (uniqueLeadIds.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // ====================================
+    // Get member_progress_summary to identify members with progress data
+    // ====================================
+    const { data: progressData, error: progressError } = await supabase
+      .from('member_progress_summary')
+      .select('lead_id')
+      .in('lead_id', uniqueLeadIds);
+
+    if (progressError) {
+      console.error('Error fetching progress data:', progressError);
+      return NextResponse.json(
+        { error: 'Failed to fetch progress data' },
+        { status: 500 }
+      );
+    }
+
+    // Filter to only lead_ids that have progress data
+    const leadIdsWithProgress = progressData 
+      ? [...new Set(progressData.map(p => p.lead_id))]
+      : [];
+
+    if (leadIdsWithProgress.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // ====================================
+    // Query survey_user_mappings filtered by lead_ids with progress data
+    // ====================================
     const { data: userMappings, error: mappingsError } = await supabase
       .from('survey_user_mappings')
       .select('external_user_id, lead_id, first_name, last_name')
+      .in('lead_id', leadIdsWithProgress)
       .order('last_name', { ascending: true })
       .order('first_name', { ascending: true });
 
@@ -55,6 +121,13 @@ export async function GET(request: NextRequest) {
     if (!userMappings || userMappings.length === 0) {
       return NextResponse.json({ data: [] });
     }
+
+    console.log('[Participants API] Filtered results:', {
+      totalActiveProgramIds: activeProgramIds.length,
+      uniqueLeadIds: uniqueLeadIds.length,
+      leadIdsWithProgress: leadIdsWithProgress.length,
+      userMappingsFound: userMappings.length,
+    });
 
     // Query MSQ-95 sessions for each user
     const MSQ_FORM_ID = 3;
