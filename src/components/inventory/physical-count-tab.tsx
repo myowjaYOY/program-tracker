@@ -7,11 +7,13 @@ import {
   Button,
   CircularProgress,
   Alert,
-  Card,
-  CardContent,
   Chip,
   IconButton,
-  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  DialogContentText,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -29,6 +31,8 @@ export default function PhysicalCountTab() {
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [sessionToCancel, setSessionToCancel] = useState<number | null>(null);
 
   const { data: sessions, isLoading, error } = useCountSessions();
   const cancelMutation = useCancelCountSession();
@@ -38,10 +42,22 @@ export default function PhysicalCountTab() {
     setDetailModalOpen(true);
   };
 
-  const handleCancelSession = async (sessionId: number) => {
-    if (confirm('Are you sure you want to cancel this count session?')) {
-      await cancelMutation.mutateAsync(sessionId);
+  const handleCancelSession = (sessionId: number) => {
+    setSessionToCancel(sessionId);
+    setCancelConfirmOpen(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (sessionToCancel) {
+      await cancelMutation.mutateAsync(sessionToCancel);
+      setCancelConfirmOpen(false);
+      setSessionToCancel(null);
     }
+  };
+
+  const handleCancelClose = () => {
+    setCancelConfirmOpen(false);
+    setSessionToCancel(null);
   };
 
   const columns: GridColDef[] = [
@@ -49,9 +65,11 @@ export default function PhysicalCountTab() {
       field: 'session_number',
       headerName: 'Session #',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          {params.value}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     {
@@ -64,15 +82,17 @@ export default function PhysicalCountTab() {
       field: 'count_type',
       headerName: 'Type',
       renderCell: (params: GridRenderCellParams) => (
-        <Chip
-          label={params.value}
-          size="small"
-          sx={{
-            textTransform: 'capitalize',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-          }}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+          <Chip
+            label={params.value}
+            size="small"
+            sx={{
+              textTransform: 'capitalize',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+            }}
+          />
+        </Box>
       ),
     },
     {
@@ -85,16 +105,18 @@ export default function PhysicalCountTab() {
           cancelled: 'default',
         };
         return (
-          <Chip
-            label={params.value.replace('_', ' ')}
-            size="small"
-            color={statusColors[params.value] as any}
-            sx={{
-              textTransform: 'capitalize',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-            }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
+            <Chip
+              label={params.value.replace('_', ' ')}
+              size="small"
+              color={statusColors[params.value] as any}
+              sx={{
+                textTransform: 'capitalize',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+              }}
+            />
+          </Box>
         );
       },
     },
@@ -112,18 +134,20 @@ export default function PhysicalCountTab() {
       align: 'center',
       headerAlign: 'center',
       renderCell: (params: GridRenderCellParams) => (
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 600,
-            color:
-              params.row.items_counted === params.row.items_total
-                ? 'success.main'
-                : 'text.secondary',
-          }}
-        >
-          {params.value} / {params.row.items_total}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 600,
+              color:
+                params.row.items_counted === params.row.items_total
+                  ? 'success.main'
+                  : 'text.secondary',
+            }}
+          >
+            {params.value} / {params.row.items_total}
+          </Typography>
+        </Box>
       ),
     },
     {
@@ -132,16 +156,19 @@ export default function PhysicalCountTab() {
       type: 'number',
       align: 'center',
       headerAlign: 'center',
-      renderCell: (params: GridRenderCellParams) =>
-        params.value > 0 ? (
-          <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main' }}>
-            {params.value}
-          </Typography>
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            0
-          </Typography>
-        ),
+      renderCell: (params: GridRenderCellParams) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          {params.value > 0 ? (
+            <Typography variant="body2" sx={{ fontWeight: 600, color: 'warning.main' }}>
+              {params.value}
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              0
+            </Typography>
+          )}
+        </Box>
+      ),
     },
     {
       field: 'items_pending_approval',
@@ -149,19 +176,22 @@ export default function PhysicalCountTab() {
       type: 'number',
       align: 'center',
       headerAlign: 'center',
-      renderCell: (params: GridRenderCellParams) =>
-        params.value > 0 ? (
-          <Chip
-            label={params.value}
-            size="small"
-            color="secondary"
-            sx={{ fontWeight: 600 }}
-          />
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            0
-          </Typography>
-        ),
+      renderCell: (params: GridRenderCellParams) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+          {params.value > 0 ? (
+            <Chip
+              label={params.value}
+              size="small"
+              color="secondary"
+              sx={{ fontWeight: 600 }}
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              0
+            </Typography>
+          )}
+        </Box>
+      ),
     },
     {
       field: 'counted_by_user',
@@ -174,7 +204,7 @@ export default function PhysicalCountTab() {
       headerName: 'Actions',
       sortable: false,
       renderCell: (params: GridRenderCellParams) => (
-        <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
           <IconButton
             size="small"
             color="primary"
@@ -215,23 +245,14 @@ export default function PhysicalCountTab() {
 
   return (
     <Box>
-      {/* Header Section */}
+      {/* Header with Start New Count button */}
       <Box
         sx={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
+          justifyContent: 'flex-end',
           mb: 3,
         }}
       >
-        <Box>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            Physical Count Sessions
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage physical inventory counts and variance approvals
-          </Typography>
-        </Box>
         <Button
           variant="contained"
           color="primary"
@@ -244,46 +265,6 @@ export default function PhysicalCountTab() {
         >
           Start New Count
         </Button>
-      </Box>
-
-      {/* Summary Cards */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <Card sx={{ flex: 1, borderTop: (theme) => `4px solid ${theme.palette.primary.main}` }}>
-          <CardContent>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              In-Progress Sessions
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: 'primary.main' }}>
-              {sessions?.filter((s) => s.status === 'in_progress').length || 0}
-            </Typography>
-          </CardContent>
-        </Card>
-
-        <Card sx={{ flex: 1, borderTop: (theme) => `4px solid ${theme.palette.success.main}` }}>
-          <CardContent>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              Completed Today
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: 'success.main' }}>
-              {sessions?.filter(
-                (s) =>
-                  s.status === 'completed' &&
-                  new Date(s.session_date).toDateString() === new Date().toDateString()
-              ).length || 0}
-            </Typography>
-          </CardContent>
-        </Card>
-
-        <Card sx={{ flex: 1, borderTop: (theme) => `4px solid ${theme.palette.warning.main}` }}>
-          <CardContent>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              Pending Approvals
-            </Typography>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: 'warning.main' }}>
-              {sessions?.reduce((sum, s) => sum + (s.items_pending_approval || 0), 0) || 0}
-            </Typography>
-          </CardContent>
-        </Card>
       </Box>
 
       {/* Count Sessions Table */}
@@ -348,6 +329,38 @@ export default function PhysicalCountTab() {
           sessionId={selectedSessionId}
         />
       )}
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog
+        open={cancelConfirmOpen}
+        onClose={handleCancelClose}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Cancel Count Session</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to cancel this count session? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleCancelClose}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
+            No, Keep Session
+          </Button>
+          <Button
+            onClick={handleConfirmCancel}
+            color="error"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+          >
+            Yes, Cancel Session
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

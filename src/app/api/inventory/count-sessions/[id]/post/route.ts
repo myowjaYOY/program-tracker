@@ -25,7 +25,7 @@ export async function POST(
     // Fetch session
     const { data: session, error: sessionError } = await supabase
       .from('inventory_count_sessions')
-      .select('status, count_session_id')
+      .select('status, count_session_id, started_at, session_number')
       .eq('count_session_id', id)
       .single();
 
@@ -89,19 +89,71 @@ export async function POST(
     // Filter out rejected items
     const approvedDetails = details.filter((d) => d.status !== 'rejected');
 
+    // Get movements during count for transaction-based posting
+    const completedAt = new Date().toISOString();
+    let movementsDuringCount = new Map<number, number>();
+
+    if (session.started_at) {
+      // NEW LOGIC: Calculate movements that occurred during the count
+      const itemIds = approvedDetails.map((d) => d.inventory_item_id);
+      
+      const { data: transactions } = await supabase
+        .from('inventory_transactions')
+        .select('inventory_item_id, quantity_change')
+        .in('inventory_item_id', itemIds)
+        .gte('transaction_date', session.started_at)
+        .lt('transaction_date', completedAt)
+        .neq('reference_type', 'count_session'); // Exclude count adjustments
+      
+      (transactions || []).forEach((tx: any) => {
+        const current = movementsDuringCount.get(tx.inventory_item_id) || 0;
+        movementsDuringCount.set(tx.inventory_item_id, current + tx.quantity_change);
+      });
+    }
+
     // Update inventory quantities and create transactions
     const updatePromises = approvedDetails.map(async (detail) => {
-      if (detail.variance === 0) {
-        // No change needed
+      const movementDuringCount = movementsDuringCount.get(detail.inventory_item_id) || 0;
+      
+      // Calculate true adjustment
+      // If started_at exists: adjustment = physical - (expected + movements)
+      // If started_at is NULL (old sessions): adjustment = variance (old logic)
+      const trueAdjustment = session.started_at
+        ? detail.physical_quantity - (detail.expected_quantity + movementDuringCount)
+        : detail.variance;
+
+      if (trueAdjustment === 0) {
+        // No adjustment needed, but still update last_counted_at
+        await supabase
+          .from('inventory_items')
+          .update({
+            last_counted_at: completedAt,
+            updated_by: user.id,
+          })
+          .eq('inventory_item_id', detail.inventory_item_id);
+
+        await supabase
+          .from('inventory_count_details')
+          .update({ status: 'posted' })
+          .eq('count_detail_id', detail.count_detail_id);
+
         return { success: true };
       }
 
-      // Update inventory_items quantity
+      // Update inventory_items quantity by adjustment (not absolute set)
+      const { data: currentItem } = await supabase
+        .from('inventory_items')
+        .select('quantity_on_hand')
+        .eq('inventory_item_id', detail.inventory_item_id)
+        .single();
+
+      const newQuantity = (currentItem?.quantity_on_hand || 0) + trueAdjustment;
+
       const { error: updateError } = await supabase
         .from('inventory_items')
         .update({
-          quantity_on_hand: detail.physical_quantity,
-          last_counted_at: new Date().toISOString(),
+          quantity_on_hand: newQuantity,
+          last_counted_at: completedAt,
           updated_by: user.id,
         })
         .eq('inventory_item_id', detail.inventory_item_id);
@@ -111,18 +163,22 @@ export async function POST(
         return { success: false, error: updateError };
       }
 
-      // Create inventory transaction
+      // Create inventory transaction with detailed notes
+      const transactionNotes = session.started_at && movementDuringCount !== 0
+        ? `Physical count adjustment - ${session.session_number}. Expected: ${detail.expected_quantity}, Movements during count: ${movementDuringCount}, Physical: ${detail.physical_quantity}, Adjustment: ${trueAdjustment}`
+        : detail.notes || `Physical count adjustment - ${session.session_number}`;
+
       const { error: transactionError } = await supabase
         .from('inventory_transactions')
         .insert([
           {
             inventory_item_id: detail.inventory_item_id,
             transaction_type: 'adjustment',
-            quantity_change: detail.variance,
+            quantity_change: trueAdjustment,
             reference_type: 'count_session',
             reference_id: parseInt(id),
-            transaction_date: new Date().toISOString(),
-            notes: detail.notes || `Physical count adjustment - Session ${session.count_session_id}`,
+            transaction_date: completedAt,
+            notes: transactionNotes,
             created_by: user.id,
             updated_by: user.id,
           },
@@ -190,6 +246,7 @@ export async function POST(
     );
   }
 }
+
 
 
 

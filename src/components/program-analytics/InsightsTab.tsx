@@ -1,8 +1,21 @@
 'use client';
 
 import { Box, Grid, Card, CardContent, Typography, Alert, Chip, Button, CircularProgress } from '@mui/material';
-import { TrendingUp, TrendingDown, Warning, CheckCircle, Info, Refresh } from '@mui/icons-material';
-import { useState } from 'react';
+import { TrendingUp, TrendingDown, Warning, CheckCircle, Info, Refresh, ArrowForward, TrendingFlat } from '@mui/icons-material';
+import { useState, useMemo } from 'react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  Cell,
+  ReferenceLine,
+  LabelList
+} from 'recharts';
 
 interface InsightsTabProps {
   metrics: any;
@@ -95,6 +108,32 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
   const msqOrInterpretation = interpretOddsRatio(msqOddsRatio);
   const promisOrInterpretation = interpretOddsRatio(promisOddsRatio);
 
+  // Transform data for visualizations
+  const barChartData = useMemo(() => {
+    return msqSuccessRates.map((msqTier: any, index: number) => {
+      const promisTier = promisSuccessRates[index] || {};
+      const tierLabel = msqTier.tier
+        .replace(' (≥70%)', '')
+        .replace(' (0-40%)', '')
+        .replace(' (40-70%)', '');
+      
+      return {
+        tier: tierLabel,
+        msq: msqTier.success_rate || 0,
+        promis: promisTier.success_rate || 0,
+        msqCount: `${msqTier.improved || 0}/${msqTier.total || 0}`,
+        promisCount: `${promisTier.improved || 0}/${promisTier.total || 0}`,
+      };
+    });
+  }, [msqSuccessRates, promisSuccessRates]);
+
+  // Get tier colors for bars
+  const getTierBarColor = (tierName: string) => {
+    if (tierName.includes('Low')) return '#f44336'; // error.main
+    if (tierName.includes('Medium')) return '#ff9800'; // warning.main
+    return '#4caf50'; // success.main
+  };
+
   // Key insights
   const criticalCompliance = Object.entries(complianceByCategory).filter(
     ([_, value]) => (value as number) < 50
@@ -139,71 +178,163 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
       </Alert>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* MSQ Analysis (Left Column) */}
+        {/* Success Rates by Compliance Tier - Grouped Bar Chart */}
+        <Grid size={12}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.primary.main}`, mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight={600} gutterBottom>
+                Success Rates by Compliance Tier
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Percentage of members showing improvement in each compliance tier
+              </Typography>
+              
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={barChartData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="tier" 
+                    tick={{ fill: '#666', fontSize: 12 }}
+                    axisLine={{ stroke: '#ddd' }}
+                  />
+                  <YAxis 
+                    label={{ value: 'Success Rate (%)', angle: -90, position: 'insideLeft', style: { fill: '#666' } }}
+                    tick={{ fill: '#666', fontSize: 12 }}
+                    axisLine={{ stroke: '#ddd' }}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px' }}
+                    formatter={(value: any, name: string, props: any) => {
+                      const count = name === 'MSQ' ? props.payload.msqCount : props.payload.promisCount;
+                      return [`${value.toFixed(1)}% (${count})`, name];
+                    }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="rect"
+                  />
+                  <Bar dataKey="msq" fill="#8e24ff" name="MSQ (Symptoms)" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="msq" position="top" formatter={(value: any) => `${Number(value).toFixed(0)}%`} />
+                  </Bar>
+                  <Bar dataKey="promis" fill="#f50057" name="PROMIS-29 (Quality of Life)" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="promis" position="top" formatter={(value: any) => `${Number(value).toFixed(0)}%`} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+
+              {/* Legend explanation */}
+              <Box sx={{ mt: 2, display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 12, height: 12, bgcolor: '#f44336', borderRadius: '2px' }} />
+                  <Typography variant="caption" color="text.secondary">Low (0-40%)</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 12, height: 12, bgcolor: '#ff9800', borderRadius: '2px' }} />
+                  <Typography variant="caption" color="text.secondary">Medium (40-70%)</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 12, height: 12, bgcolor: '#4caf50', borderRadius: '2px' }} />
+                  <Typography variant="caption" color="text.secondary">High (≥70%)</Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Effect Size Comparison - MSQ vs PROMIS */}
         <Grid size={6}>
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, color: 'primary.main' }}>
             MSQ: Medical Symptoms Questionnaire
           </Typography>
-          
-          {/* MSQ Success Rates */}
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.primary.main}`, mb: 2 }}>
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Success Rates by Tier
-              </Typography>
-              <Grid container spacing={1} sx={{ mt: 1 }}>
-                {msqSuccessRates.map((tier: any) => (
-                  <Grid size={12} key={tier.tier}>
-                    <Box sx={{ p: 1.5, bgcolor: `${getTierColor(tier.tier)}.lighter`, borderRadius: 1, border: `2px solid`, borderColor: `${getTierColor(tier.tier)}.main` }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" fontWeight={600} color={`${getTierColor(tier.tier)}.main`}>
-                          {tier.tier}
-                        </Typography>
-                        <Typography variant="h6" fontWeight="bold" color={`${getTierColor(tier.tier)}.main`}>
-                          {tier.success_rate || 0}%
-                        </Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {tier.improved || 0}/{tier.total || 0} improved (Avg: {tier.avg_change || 0} pts)
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </CardContent>
-          </Card>
 
           {/* MSQ Effect Size */}
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.info.main}`, mb: 2 }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.primary.main}`, mb: 2 }}>
             <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Effect Size
+              <Typography variant="subtitle2" fontWeight={600} gutterBottom color="primary.main">
+                Effect Size (Mean Difference)
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8rem' }}>
-                High (≥70%): {msqEffectSize.high_compliance_avg || 0} pts · 
-                Low (&lt;40%): {msqEffectSize.low_compliance_avg || 0} pts
-              </Typography>
-              <Typography variant="h4" fontWeight="bold" color="info.main">
-                +{msqEffectSize.effect_size || 0} points
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {msqEffectSize.interpretation}
-              </Typography>
+              
+              {/* Visual representation of the difference */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Low Compliance
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="error.main">
+                    {msqEffectSize.low_compliance_avg || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    pts
+                  </Typography>
+                </Box>
+                
+                <ArrowForward sx={{ color: 'primary.main', fontSize: 32 }} />
+                
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    High Compliance
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="success.main">
+                    {msqEffectSize.high_compliance_avg || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    pts
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'primary.lighter', 
+                borderRadius: 1,
+                border: '2px solid',
+                borderColor: 'primary.main'
+              }}>
+                <Typography variant="h4" fontWeight="bold" color="primary.main" textAlign="center">
+                  +{msqEffectSize.effect_size || 0} points
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
+                  {msqEffectSize.interpretation}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
 
           {/* MSQ Odds Ratio */}
           <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.success.main}` }}>
             <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Odds Ratio
-              </Typography>
-              <Typography variant="h4" fontWeight="bold" color="success.main" sx={{ my: 1 }}>
-                {msqOddsRatio.odds_ratio ? `${msqOddsRatio.odds_ratio}x` : 'N/A'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {msqOddsRatio.interpretation}
-              </Typography>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <CheckCircle sx={{ color: 'success.main' }} />
+                <Typography variant="subtitle2" fontWeight={600} color="success.main">
+                  Odds Ratio (Likelihood of Improvement)
+                </Typography>
+              </Box>
+              
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'success.lighter', 
+                borderRadius: 1,
+                border: '2px solid',
+                borderColor: 'success.main',
+                textAlign: 'center'
+              }}>
+                <Typography variant="h3" fontWeight="bold" color="success.main">
+                  {msqOddsRatio.odds_ratio ? `${msqOddsRatio.odds_ratio}x` : 'N/A'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {msqOddsRatio.interpretation}
+                </Typography>
+              </Box>
+
+              <Alert severity={msqOrInterpretation.severity} sx={{ mt: 2 }}>
+                <Typography variant="caption">
+                  {msqOrInterpretation.message}
+                </Typography>
+              </Alert>
             </CardContent>
           </Card>
         </Grid>
@@ -213,66 +344,91 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 2, color: 'secondary.main' }}>
             PROMIS-29: Quality of Life Assessment
           </Typography>
-          
-          {/* PROMIS Success Rates */}
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.secondary.main}`, mb: 2 }}>
-            <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Success Rates by Tier
-              </Typography>
-              <Grid container spacing={1} sx={{ mt: 1 }}>
-                {promisSuccessRates.map((tier: any) => (
-                  <Grid size={12} key={tier.tier}>
-                    <Box sx={{ p: 1.5, bgcolor: `${getTierColor(tier.tier)}.lighter`, borderRadius: 1, border: `2px solid`, borderColor: `${getTierColor(tier.tier)}.main` }}>
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" fontWeight={600} color={`${getTierColor(tier.tier)}.main`}>
-                          {tier.tier}
-                        </Typography>
-                        <Typography variant="h6" fontWeight="bold" color={`${getTierColor(tier.tier)}.main`}>
-                          {tier.success_rate || 0}%
-                        </Typography>
-                      </Box>
-                      <Typography variant="caption" color="text.secondary">
-                        {tier.improved || 0}/{tier.total || 0} improved (Avg: {tier.avg_change || 0} T-score)
-                      </Typography>
-                    </Box>
-                  </Grid>
-                ))}
-              </Grid>
-            </CardContent>
-          </Card>
 
           {/* PROMIS Effect Size */}
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.info.main}`, mb: 2 }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.secondary.main}`, mb: 2 }}>
             <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Effect Size
+              <Typography variant="subtitle2" fontWeight={600} gutterBottom color="secondary.main">
+                Effect Size (Mean Difference)
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8rem' }}>
-                High (≥70%): {promisEffectSize.high_compliance_avg || 0} T-score · 
-                Low (&lt;40%): {promisEffectSize.low_compliance_avg || 0} T-score
-              </Typography>
-              <Typography variant="h4" fontWeight="bold" color="info.main">
-                +{promisEffectSize.effect_size || 0} T-score
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {promisEffectSize.interpretation}
-              </Typography>
+              
+              {/* Visual representation of the difference */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, my: 2 }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    Low Compliance
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="error.main">
+                    {promisEffectSize.low_compliance_avg || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    T-score
+                  </Typography>
+                </Box>
+                
+                <ArrowForward sx={{ color: 'secondary.main', fontSize: 32 }} />
+                
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="caption" color="text.secondary" display="block">
+                    High Compliance
+                  </Typography>
+                  <Typography variant="h5" fontWeight="bold" color="success.main">
+                    {promisEffectSize.high_compliance_avg || 0}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    T-score
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'secondary.lighter', 
+                borderRadius: 1,
+                border: '2px solid',
+                borderColor: 'secondary.main'
+              }}>
+                <Typography variant="h4" fontWeight="bold" color="secondary.main" textAlign="center">
+                  +{promisEffectSize.effect_size || 0} T-score
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" textAlign="center">
+                  {promisEffectSize.interpretation}
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
 
           {/* PROMIS Odds Ratio */}
           <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.success.main}` }}>
             <CardContent>
-              <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                Odds Ratio
-              </Typography>
-              <Typography variant="h4" fontWeight="bold" color="success.main" sx={{ my: 1 }}>
-                {promisOddsRatio.odds_ratio ? `${promisOddsRatio.odds_ratio}x` : 'N/A'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {promisOddsRatio.interpretation}
-              </Typography>
+              <Box display="flex" alignItems="center" gap={1} mb={1}>
+                <CheckCircle sx={{ color: 'success.main' }} />
+                <Typography variant="subtitle2" fontWeight={600} color="success.main">
+                  Odds Ratio (Likelihood of Improvement)
+                </Typography>
+              </Box>
+              
+              <Box sx={{ 
+                p: 2, 
+                bgcolor: 'success.lighter', 
+                borderRadius: 1,
+                border: '2px solid',
+                borderColor: 'success.main',
+                textAlign: 'center'
+              }}>
+                <Typography variant="h3" fontWeight="bold" color="success.main">
+                  {promisOddsRatio.odds_ratio ? `${promisOddsRatio.odds_ratio}x` : 'N/A'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {promisOddsRatio.interpretation}
+                </Typography>
+              </Box>
+
+              <Alert severity={promisOrInterpretation.severity} sx={{ mt: 2 }}>
+                <Typography variant="caption">
+                  {promisOrInterpretation.message}
+                </Typography>
+              </Alert>
             </CardContent>
           </Card>
         </Grid>

@@ -19,6 +19,8 @@ import {
   InputLabel,
   FormControl,
   OutlinedInput,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { alpha, Theme } from '@mui/material/styles';
 import {
@@ -26,6 +28,8 @@ import {
   LocalShipping as ShippingIcon,
   CheckCircle as ReceivedIcon,
   Cancel as CancelledIcon,
+  ShoppingCart as OrderIcon,
+  Inventory2 as InventoryIcon,
 } from '@mui/icons-material';
 import {
   useItemRequests,
@@ -41,8 +45,34 @@ import {
   isItemRequestOverdue,
 } from '@/lib/utils/item-request-status';
 import ItemRequestForm from '@/components/forms/item-request-form';
+import InventoryItemsTab from '@/components/inventory/inventory-items-tab';
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`order-items-tabpanel-${index}`}
+      aria-labelledby={`order-items-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box>{children}</Box>}
+    </div>
+  );
+}
 
 export default function OrderItemsPage() {
+  // Tab state
+  const [tabValue, setTabValue] = useState(0);
+
   // Filter state
   const [statusFilter, setStatusFilter] = useState<
     ('Pending' | 'Ordered' | 'Received' | 'Cancelled')[]
@@ -448,101 +478,143 @@ export default function OrderItemsPage() {
         </Grid>
       </Grid>
 
-      {/* Data Grid with Filters */}
-      <Card>
-        <CardContent>
-          {/* Filters */}
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>Status</InputLabel>
-              <Select
-                multiple
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as ('Pending' | 'Ordered' | 'Received' | 'Cancelled')[])}
-                input={<OutlinedInput label="Status" />}
-                renderValue={(selected) => 
-                  selected.length === 0 
-                    ? 'All Statuses' 
-                    : selected.join(', ')
-                }
-              >
-                <MenuItem value="Pending">
-                  <Checkbox checked={statusFilter.includes('Pending')} />
-                  <ListItemText primary="Pending" />
-                </MenuItem>
-                <MenuItem value="Ordered">
-                  <Checkbox checked={statusFilter.includes('Ordered')} />
-                  <ListItemText primary="Ordered" />
-                </MenuItem>
-                <MenuItem value="Received">
-                  <Checkbox checked={statusFilter.includes('Received')} />
-                  <ListItemText primary="Received" />
-                </MenuItem>
-                <MenuItem value="Cancelled">
-                  <Checkbox checked={statusFilter.includes('Cancelled')} />
-                  <ListItemText primary="Cancelled" />
-                </MenuItem>
-              </Select>
-            </FormControl>
-
-            <TextField
-              select
-              label="Requested By"
-              value={requestedByFilter ?? ''}
-              onChange={(e) =>
-                setRequestedByFilter(e.target.value ? e.target.value : null)
-              }
-              size="small"
-              sx={{ minWidth: 220 }}
-            >
-              <MenuItem value="">All Users</MenuItem>
-              {users.map((user: any) => (
-                <MenuItem key={user.id} value={user.id}>
-                  {user.full_name || user.email}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-
-          {/* Divider */}
-          <Box sx={{ mb: 2 }}>
-            <Divider />
-          </Box>
-
-          <BaseDataTable
-            title=""
-            data={requests.map((req) => ({
-              ...req,
-              id: req.item_request_id,
-            }))}
-            columns={columns}
-            loading={requestsLoading}
-            getRowId={(row) => row.item_request_id}
-            sortModel={[{ field: 'requested_date', sort: 'asc' }]}
-            rowClassName={(row) => {
-              // Highlight overdue requests (>10 days old, not cancelled/received)
-              if (isItemRequestOverdue(row)) {
-                return 'row-overdue';
-              }
-              return '';
-            }}
-            sx={{
-              '& .row-overdue': {
-                bgcolor: (theme: Theme) => alpha(theme.palette.error.main, 0.15),
-              },
-            }}
-            renderForm={({ onClose, initialValues, mode }) => (
-              <ItemRequestForm
-                initialValues={initialValues as any}
-                onSuccess={onClose}
-                mode={mode}
-              />
-            )}
-            showCreateButton={true}
-            createButtonText="Add Request"
-            showActionsColumn={false}
+      {/* Tabs */}
+      <Card sx={{ mt: 3 }}>
+        <Tabs
+          value={tabValue}
+          onChange={(e, newValue) => setTabValue(newValue)}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            px: 2,
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.95rem',
+              minWidth: 120,
+              mx: 1.5, // Add horizontal margin for spacing between tabs
+            },
+          }}
+        >
+          <Tab
+            icon={<OrderIcon />}
+            iconPosition="start"
+            label="Order"
+            id="order-items-tab-0"
+            aria-controls="order-items-tabpanel-0"
           />
-        </CardContent>
+          <Tab
+            icon={<InventoryIcon />}
+            iconPosition="start"
+            label="Inventory"
+            id="order-items-tab-1"
+            aria-controls="order-items-tabpanel-1"
+          />
+        </Tabs>
+
+        {/* Order Tab */}
+        <TabPanel value={tabValue} index={0}>
+          <CardContent>
+            {/* Filters */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+              <FormControl size="small" sx={{ minWidth: 220 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  multiple
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as ('Pending' | 'Ordered' | 'Received' | 'Cancelled')[])}
+                  input={<OutlinedInput label="Status" />}
+                  renderValue={(selected) => 
+                    selected.length === 0 
+                      ? 'All Statuses' 
+                      : selected.join(', ')
+                  }
+                >
+                  <MenuItem value="Pending">
+                    <Checkbox checked={statusFilter.includes('Pending')} />
+                    <ListItemText primary="Pending" />
+                  </MenuItem>
+                  <MenuItem value="Ordered">
+                    <Checkbox checked={statusFilter.includes('Ordered')} />
+                    <ListItemText primary="Ordered" />
+                  </MenuItem>
+                  <MenuItem value="Received">
+                    <Checkbox checked={statusFilter.includes('Received')} />
+                    <ListItemText primary="Received" />
+                  </MenuItem>
+                  <MenuItem value="Cancelled">
+                    <Checkbox checked={statusFilter.includes('Cancelled')} />
+                    <ListItemText primary="Cancelled" />
+                  </MenuItem>
+                </Select>
+              </FormControl>
+
+              <TextField
+                select
+                label="Requested By"
+                value={requestedByFilter ?? ''}
+                onChange={(e) =>
+                  setRequestedByFilter(e.target.value ? e.target.value : null)
+                }
+                size="small"
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">All Users</MenuItem>
+                {users.map((user: any) => (
+                  <MenuItem key={user.id} value={user.id}>
+                    {user.full_name || user.email}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            {/* Divider */}
+            <Box sx={{ mb: 2 }}>
+              <Divider />
+            </Box>
+
+            <BaseDataTable
+              title=""
+              data={requests.map((req) => ({
+                ...req,
+                id: req.item_request_id,
+              }))}
+              columns={columns}
+              loading={requestsLoading}
+              getRowId={(row) => row.item_request_id}
+              sortModel={[{ field: 'requested_date', sort: 'asc' }]}
+              rowClassName={(row) => {
+                // Highlight overdue requests (>10 days old, not cancelled/received)
+                if (isItemRequestOverdue(row)) {
+                  return 'row-overdue';
+                }
+                return '';
+              }}
+              sx={{
+                '& .row-overdue': {
+                  bgcolor: (theme: Theme) => alpha(theme.palette.error.main, 0.15),
+                },
+              }}
+              renderForm={({ onClose, initialValues, mode }) => (
+                <ItemRequestForm
+                  initialValues={initialValues as any}
+                  onSuccess={onClose}
+                  mode={mode}
+                />
+              )}
+              showCreateButton={true}
+              createButtonText="Add Request"
+              showActionsColumn={false}
+            />
+          </CardContent>
+        </TabPanel>
+
+        {/* Inventory Tab */}
+        <TabPanel value={tabValue} index={1}>
+          <CardContent>
+            <InventoryItemsTab hideCostColumns={true} />
+          </CardContent>
+        </TabPanel>
       </Card>
     </Box>
   );

@@ -155,13 +155,26 @@ export default function InventoryForecastPage() {
     },
     {
       field: 'quantity_on_hand',
-      headerName: 'Qty on Hand',
+      headerName: 'On Hand',
       width: 120,
       type: 'number',
       align: 'center',
       headerAlign: 'center',
       renderCell: (params) => (
         <Typography variant="body2" fontWeight="bold">
+          {params.value}
+        </Typography>
+      ),
+    },
+    {
+      field: 'quantity_on_order',
+      headerName: 'On Order',
+      width: 120,
+      type: 'number',
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params) => (
+        <Typography variant="body2" fontWeight="bold" color="primary.main">
           {params.value}
         </Typography>
       ),

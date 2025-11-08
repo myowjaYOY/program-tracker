@@ -790,6 +790,7 @@ export interface InventoryForecastRow {
   member_cost: number;               // What members pay (from member_program_items.item_cost)
   current_cost: number;              // Current supplier cost (from therapies.cost)
   quantity_on_hand: number;
+  quantity_on_order: number;         // Quantity in purchase orders with status 'ordered'
   in_inventory: boolean;             // Whether item exists in inventory_items table
 }
 
@@ -915,6 +916,7 @@ export interface ParticipantOption {
   full_name: string;
   survey_count: number; // Count of MSQ-95 surveys completed
   latest_survey_date: string | null;
+  risk_level: string | null; // Risk level from member_individual_insights ('green' | 'yellow' | 'red' | null)
 }
 
 // Program Filter Option (for dropdowns)

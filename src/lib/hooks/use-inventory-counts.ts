@@ -11,6 +11,7 @@ export interface InventoryItem {
   quantity_on_hand: number;
   reorder_point: number;
   reorder_quantity: number;
+  quantity_on_order: number;
   last_counted_at: string | null;
   active_flag: boolean;
   therapy: {
@@ -353,6 +354,7 @@ export function usePostCountSession() {
     },
   });
 }
+
 
 
 

@@ -22,6 +22,8 @@ import {
   InputLabel,
   Chip,
   OutlinedInput,
+  Checkbox,
+  ListItemText,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
@@ -56,6 +58,11 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
   });
 
   const countType = watch('count_type');
+
+  // Sort inventory items alphabetically by therapy name
+  const sortedInventoryItems = [...inventoryItems].sort((a, b) => 
+    (a.therapy?.therapy_name || '').localeCompare(b.therapy?.therapy_name || '')
+  );
 
   const onSubmit = async (data: StartCountSessionData) => {
     try {
@@ -206,7 +213,7 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
                       renderValue={(selected) => (
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                           {(selected as number[]).map((id) => {
-                            const item = inventoryItems.find((i) => i.inventory_item_id === id);
+                            const item = sortedInventoryItems.find((i) => i.inventory_item_id === id);
                             return (
                               <Chip
                                 key={id}
@@ -219,9 +226,12 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
                       )}
                       disabled={itemsLoading}
                     >
-                      {inventoryItems.map((item) => (
+                      {sortedInventoryItems.map((item) => (
                         <MenuItem key={item.inventory_item_id} value={item.inventory_item_id}>
-                          {item.therapy.therapy_name}
+                          <Checkbox 
+                            checked={(field.value || []).indexOf(item.inventory_item_id) > -1}
+                          />
+                          <ListItemText primary={item.therapy.therapy_name} />
                         </MenuItem>
                       ))}
                     </Select>

@@ -5,10 +5,14 @@ import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import { useInventoryItems } from '@/lib/hooks/use-inventory-counts';
 import { formatDistanceToNow } from 'date-fns';
 
-export default function InventoryItemsTab() {
+interface InventoryItemsTabProps {
+  hideCostColumns?: boolean;
+}
+
+export default function InventoryItemsTab({ hideCostColumns = false }: InventoryItemsTabProps) {
   const { data: items, isLoading, error } = useInventoryItems();
 
-  const columns: GridColDef[] = [
+  const allColumns: GridColDef[] = [
     {
       field: 'therapy_name',
       headerName: 'Item Name',
@@ -56,6 +60,24 @@ export default function InventoryItemsTab() {
       type: 'number',
       align: 'center',
       headerAlign: 'center',
+    },
+    {
+      field: 'quantity_on_order',
+      headerName: 'On Order',
+      type: 'number',
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params) => (
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+            color: 'primary.main',
+          }}
+        >
+          {params.value}
+        </Typography>
+      ),
     },
     {
       field: 'cost',
@@ -106,6 +128,11 @@ export default function InventoryItemsTab() {
       },
     },
   ];
+
+  // Filter columns based on hideCostColumns prop
+  const columns = hideCostColumns
+    ? allColumns.filter(col => col.field !== 'cost' && col.field !== 'charge')
+    : allColumns;
 
   if (error) {
     return (

@@ -218,6 +218,28 @@ export async function GET(req: NextRequest) {
 
     const inventoryMap = new Map((inventoryItems || []).map((inv: any) => [inv.therapy_id, inv.quantity_on_hand]));
 
+    // Get quantity on order from purchase orders (status = 'ordered')
+    const { data: poItems, error: poErr } = await supabase
+      .from('purchase_order_items')
+      .select(`
+        therapy_id,
+        quantity_ordered,
+        purchase_orders!inner(status)
+      `)
+      .in('therapy_id', Array.from(therapyMap.keys()))
+      .eq('purchase_orders.status', 'ordered');
+    
+    if (poErr) {
+      console.error('Error fetching purchase order items:', poErr);
+    }
+
+    // Aggregate quantity on order by therapy_id
+    const quantityOnOrderMap = new Map<number, number>();
+    (poItems || []).forEach((item: any) => {
+      const currentQty = quantityOnOrderMap.get(item.therapy_id) || 0;
+      quantityOnOrderMap.set(item.therapy_id, currentQty + (item.quantity_ordered || 0));
+    });
+
     // Aggregate data by therapy_type_name and therapy_name
     const aggregationMap = new Map<string, {
       therapy_type_name: string;
@@ -229,6 +251,7 @@ export async function GET(req: NextRequest) {
       member_cost: number;
       current_cost: number;
       quantity_on_hand: number;
+      quantity_on_order: number;
       in_inventory: boolean;
     }>();
 
@@ -254,6 +277,7 @@ export async function GET(req: NextRequest) {
           member_cost: item.item_cost || 0,
           current_cost: therapy.cost || 0,
           quantity_on_hand: inventoryMap.get(therapy.therapy_id) || 0,
+          quantity_on_order: quantityOnOrderMap.get(therapy.therapy_id) || 0,
           in_inventory: inventoryMap.has(therapy.therapy_id),
         });
       }

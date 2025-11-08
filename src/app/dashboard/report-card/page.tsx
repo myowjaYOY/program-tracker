@@ -13,16 +13,19 @@ import {
   Grid,
   IconButton,
   Tooltip,
+  useTheme,
 } from '@mui/material';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import DownloadIcon from '@mui/icons-material/Download';
 import DashboardMetricsCards from '@/components/report-card/DashboardMetricsCards';
 import { MemberProgressTab } from '@/components/member-progress';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
+import AnalyticsInsightsTab from '@/components/report-card/AnalyticsInsightsTab';
 import { useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
 import ExportReportModal from '@/components/report-card/ExportReportModal';
@@ -50,6 +53,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 export default function ReportCardPage() {
+  const theme = useTheme();
   const [tabValue, setTabValue] = useState(0);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
   
@@ -127,14 +131,50 @@ export default function ReportCardPage() {
               <MenuItem value="">
                 <em>Select a Member</em>
               </MenuItem>
-              {members?.map((member) => (
-                <MenuItem
-                  key={member.external_user_id}
-                  value={member.external_user_id}
-                >
-                  {member.full_name} ({member.survey_count} MSQ {member.survey_count === 1 ? 'survey' : 'surveys'})
-                </MenuItem>
-              ))}
+              {members?.map((member) => {
+                // Get risk indicator circle based on risk_level
+                const getRiskIndicator = (riskLevel: string | null) => {
+                  let backgroundColor: string;
+                  
+                  switch (riskLevel) {
+                    case 'red':
+                      backgroundColor = theme.palette.error.main;
+                      break;
+                    case 'yellow':
+                      backgroundColor = theme.palette.warning.main;
+                      break;
+                    case 'green':
+                      backgroundColor = theme.palette.success.main;
+                      break;
+                    default:
+                      backgroundColor = theme.palette.grey[400]; // Gray for no data
+                  }
+                  
+                  return (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-block',
+                        width: '12px',
+                        height: '12px',
+                        borderRadius: '50%',
+                        backgroundColor,
+                        mr: 0.5,
+                        verticalAlign: 'middle',
+                      }}
+                    />
+                  );
+                };
+
+                return (
+                  <MenuItem
+                    key={member.external_user_id}
+                    value={member.external_user_id}
+                  >
+                    {getRiskIndicator(member.risk_level)}{member.full_name}
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
         </Grid>
@@ -223,6 +263,13 @@ export default function ReportCardPage() {
             id="report-card-tab-2"
             aria-controls="report-card-tabpanel-2"
           />
+          <Tab
+            icon={<TrendingUpIcon />}
+            iconPosition="start"
+            label="ANALYTICS & INSIGHTS"
+            id="report-card-tab-3"
+            aria-controls="report-card-tabpanel-3"
+          />
         </Tabs>
       </Box>
 
@@ -237,6 +284,10 @@ export default function ReportCardPage() {
       
       <TabPanel value={tabValue} index={2}>
         <PromisAssessmentTab selectedMemberId={selectedMemberId} />
+      </TabPanel>
+      
+      <TabPanel value={tabValue} index={3}>
+        <AnalyticsInsightsTab leadId={selectedMember?.lead_id || null} />
       </TabPanel>
       
       {/* Lead Notes Modal */}

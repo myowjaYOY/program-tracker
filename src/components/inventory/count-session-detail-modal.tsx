@@ -6,6 +6,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
   Button,
   Box,
   Typography,
@@ -50,6 +51,7 @@ export default function CountSessionDetailModal({
 
   const [counts, setCounts] = useState<Record<number, { quantity: number; notes?: string }>>({});
   const [approvals, setApprovals] = useState<Record<number, boolean>>({});
+  const [postConfirmOpen, setPostConfirmOpen] = useState(false);
 
   // Determine if user is admin (for simplicity, checking if any variance requires approval)
   const isAdmin = true; // In production, fetch from user context
@@ -102,11 +104,18 @@ export default function CountSessionDetailModal({
     }
   };
 
-  const handlePostSession = async () => {
-    if (confirm('Are you sure you want to post this count session to inventory? This cannot be undone.')) {
-      await postMutation.mutateAsync(sessionId);
-      onClose();
-    }
+  const handlePostSession = () => {
+    setPostConfirmOpen(true);
+  };
+
+  const handleConfirmPost = async () => {
+    await postMutation.mutateAsync(sessionId);
+    setPostConfirmOpen(false);
+    onClose();
+  };
+
+  const handleCancelPost = () => {
+    setPostConfirmOpen(false);
   };
 
   const columns: GridColDef[] = [
@@ -274,15 +283,19 @@ export default function CountSessionDetailModal({
   ).length;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
-      <DialogTitle>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <>
+      <Dialog open={open} onClose={onClose} maxWidth="xl" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               Count Session: {session.session_number}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {format(new Date(session.session_date), 'MMMM dd, yyyy')} •{' '}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                {format(new Date(session.session_date), 'MMMM dd, yyyy')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">•</Typography>
               <Chip
                 label={session.status}
                 size="small"
@@ -295,95 +308,129 @@ export default function CountSessionDetailModal({
                 }
                 sx={{ textTransform: 'capitalize', fontSize: '0.75rem' }}
               />
-            </Typography>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {Object.keys(counts).length > 0 && (
-              <Button
-                variant="outlined"
-                startIcon={<SaveIcon />}
-                onClick={handleSaveCounts}
-                disabled={batchUpdateMutation.isPending}
-              >
-                Save Counts
-              </Button>
-            )}
-            {isAdmin && pendingApprovalCount > 0 && (
-              <Button
-                variant="outlined"
-                color="success"
-                startIcon={<CheckCircleIcon />}
-                onClick={handleApproveAll}
-                disabled={approveMutation.isPending}
-              >
-                Approve All ({pendingApprovalCount})
-              </Button>
-            )}
-            {canPost && (
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<PublishIcon />}
-                onClick={handlePostSession}
-                disabled={postMutation.isPending}
-              >
-                Post to Inventory
-              </Button>
-            )}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {Object.keys(counts).length > 0 && (
+                <Button
+                  variant="outlined"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSaveCounts}
+                  disabled={batchUpdateMutation.isPending}
+                >
+                  Save Counts
+                </Button>
+              )}
+              {isAdmin && pendingApprovalCount > 0 && (
+                <Button
+                  variant="outlined"
+                  color="success"
+                  startIcon={<CheckCircleIcon />}
+                  onClick={handleApproveAll}
+                  disabled={approveMutation.isPending}
+                >
+                  Approve All ({pendingApprovalCount})
+                </Button>
+              )}
+              {canPost && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<PublishIcon />}
+                  onClick={handlePostSession}
+                  disabled={postMutation.isPending}
+                >
+                  Post to Inventory
+                </Button>
+              )}
+            </Box>
           </Box>
-        </Box>
-      </DialogTitle>
+        </DialogTitle>
 
-      <DialogContent dividers>
-        <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
-          <Alert severity={pendingCount > 0 ? 'warning' : 'success'} sx={{ flex: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {pendingCount > 0
-                ? `${pendingCount} item(s) not counted yet`
-                : 'All items have been counted'}
-            </Typography>
-          </Alert>
-          {varianceCount > 0 && (
-            <Alert severity="warning" sx={{ flex: 1 }}>
+        <DialogContent dividers>
+          <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
+            <Alert severity={pendingCount > 0 ? 'warning' : 'success'} sx={{ flex: 1 }}>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {varianceCount} item(s) with variance
+                {pendingCount > 0
+                  ? `${pendingCount} item(s) not counted yet`
+                  : 'All items have been counted'}
               </Typography>
             </Alert>
-          )}
-          {pendingApprovalCount > 0 && (
-            <Alert severity="error" sx={{ flex: 1 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {pendingApprovalCount} variance(s) require admin approval
-              </Typography>
-            </Alert>
-          )}
-        </Box>
+            {varianceCount > 0 && (
+              <Alert severity="warning" sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {varianceCount} item(s) with variance
+                </Typography>
+              </Alert>
+            )}
+            {pendingApprovalCount > 0 && (
+              <Alert severity="error" sx={{ flex: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {pendingApprovalCount} variance(s) require admin approval
+                </Typography>
+              </Alert>
+            )}
+          </Box>
 
-        <DataGrid
-          rows={session.details}
-          columns={columns}
-          getRowId={(row) => row.count_detail_id}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 25, page: 0 },
-            },
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
-          disableRowSelectionOnClick
-          autoHeight
-          sx={{
-            border: 0,
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none',
-            },
-          }}
-        />
-      </DialogContent>
+          <DataGrid
+            rows={session.details}
+            columns={columns}
+            getRowId={(row) => row.count_detail_id}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 25, page: 0 },
+              },
+            }}
+            pageSizeOptions={[10, 25, 50, 100]}
+            disableRowSelectionOnClick
+            autoHeight
+            sx={{
+              border: 0,
+              '& .MuiDataGrid-cell:focus': {
+                outline: 'none',
+              },
+            }}
+          />
+        </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={onClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Post Confirmation Dialog */}
+      <Dialog
+        open={postConfirmOpen}
+        onClose={handleCancelPost}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Post Count to Inventory</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to post this count session to inventory? This will update the quantities on hand for all items in this count. This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleCancelPost}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmPost}
+            color="success"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+            disabled={postMutation.isPending}
+          >
+            {postMutation.isPending ? 'Posting...' : 'Post to Inventory'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }
 

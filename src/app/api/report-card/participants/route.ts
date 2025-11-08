@@ -189,10 +189,34 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build final participant list from user mappings + survey counts
+    // ====================================
+    // Get risk levels from member_individual_insights
+    // ====================================
+    const { data: insightsData, error: insightsError } = await supabase
+      .from('member_individual_insights')
+      .select('lead_id, risk_level')
+      .in('lead_id', leadIdsWithProgress);
+
+    if (insightsError) {
+      console.error('Error fetching insights data:', insightsError);
+      // Don't fail the request, just log the error
+    }
+
+    // Build a map of lead_id → risk_level
+    const riskLevelMap = new Map<number, string>();
+    if (insightsData) {
+      for (const insight of insightsData) {
+        if (insight.lead_id && insight.risk_level) {
+          riskLevelMap.set(insight.lead_id, insight.risk_level);
+        }
+      }
+    }
+
+    // Build final participant list from user mappings + survey counts + risk levels
     // Always include users; default survey_count to 0 when missing
     const participants: ParticipantOption[] = userMappings.map((user) => {
       const surveyData = surveyDataMap.get(user.external_user_id);
+      const riskLevel = user.lead_id ? riskLevelMap.get(user.lead_id) : null;
       return {
         external_user_id: user.external_user_id,
         lead_id: user.lead_id,
@@ -201,6 +225,7 @@ export async function GET(request: NextRequest) {
         full_name: `${user.first_name} ${user.last_name}`,
         survey_count: surveyData?.count ?? 0,
         latest_survey_date: surveyData?.latest_date ?? null,
+        risk_level: riskLevel ?? null,
       };
     });
 

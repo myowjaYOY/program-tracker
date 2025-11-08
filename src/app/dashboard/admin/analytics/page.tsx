@@ -15,7 +15,12 @@ import {
   Divider,
   LinearProgress,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -46,6 +51,7 @@ export default function AnalyticsAdminPage() {
   const queryClient = useQueryClient();
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
 
   // Fetch dashboard info
   const { data: dashboardInfo, isLoading: isLoadingInfo, error: infoError } = useQuery<DashboardInfo>({
@@ -101,12 +107,16 @@ export default function AnalyticsAdminPage() {
   });
 
   const handleReanalyze = () => {
-    const memberCount = dashboardInfo?.member_count || 0;
-    const modeText = includeInactive ? ' (including inactive programs)' : ' (active programs only)';
-    
-    if (confirm(`This will re-analyze all ${memberCount} member dashboards${modeText}. This may take 30-60 seconds. Continue?`)) {
-      reanalyzeMutation.mutate(includeInactive);
-    }
+    setConfirmDialogOpen(true);
+  };
+
+  const handleConfirmReanalyze = () => {
+    setConfirmDialogOpen(false);
+    reanalyzeMutation.mutate(includeInactive);
+  };
+
+  const handleCancelReanalyze = () => {
+    setConfirmDialogOpen(false);
   };
 
   // Format date for display
@@ -381,6 +391,43 @@ export default function AnalyticsAdminPage() {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Confirmation Dialog */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={handleCancelReanalyze}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Confirm Re-Analysis</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will re-analyze all {dashboardInfo?.member_count || 0} member dashboards
+            {includeInactive ? ' (including inactive programs)' : ' (active programs only)'}.
+            This process may take 30-60 seconds.
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 2, fontWeight: 'bold' }}>
+            Do you want to continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleCancelReanalyze}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmReanalyze}
+            color="primary"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+          >
+            Yes, Re-Analyze
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

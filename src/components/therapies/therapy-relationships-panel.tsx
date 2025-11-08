@@ -17,6 +17,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  DialogContentText,
   Chip,
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
@@ -35,6 +36,9 @@ export default function TherapyRelationshipsPanel({
   therapyId,
 }: TherapyRelationshipsPanelProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [relationshipToDelete, setRelationshipToDelete] = useState<{ bodyId: number; pillarId: number } | null>(null);
+  
   const {
     data: relationships = [],
     isLoading,
@@ -43,12 +47,24 @@ export default function TherapyRelationshipsPanel({
   const deleteRelationship = useDeleteTherapyRelationship(therapyId);
 
   const handleDelete = (bodyId: number, pillarId: number) => {
-    if (confirm('Are you sure you want to delete this relationship?')) {
+    setRelationshipToDelete({ bodyId, pillarId });
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (relationshipToDelete) {
       deleteRelationship.mutate({
-        bodyId: String(bodyId),
-        pillarId: String(pillarId),
+        bodyId: String(relationshipToDelete.bodyId),
+        pillarId: String(relationshipToDelete.pillarId),
       });
+      setDeleteConfirmOpen(false);
+      setRelationshipToDelete(null);
     }
+  };
+
+  const handleCancelDelete = () => {
+    setDeleteConfirmOpen(false);
+    setRelationshipToDelete(null);
   };
 
   const handleAddSuccess = () => {
@@ -169,6 +185,39 @@ export default function TherapyRelationshipsPanel({
             sx={{ borderRadius: 0 }}
           >
             Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleCancelDelete}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete Relationship</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete this Body & Pillar relationship? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleCancelDelete}
+            color="primary"
+            sx={{ borderRadius: 0 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            color="error"
+            variant="contained"
+            sx={{ borderRadius: 0 }}
+            disabled={deleteRelationship.isPending}
+          >
+            {deleteRelationship.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
           status: 'in_progress',
           counted_by: user.id,
           notes: notes || null,
+          started_at: new Date().toISOString(), // Track when count session started
           created_by: user.id,
           updated_by: user.id,
         },

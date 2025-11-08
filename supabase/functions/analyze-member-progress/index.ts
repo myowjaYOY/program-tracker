@@ -186,6 +186,9 @@ Deno.serve(async (req) => {
           console.log(`  → Analyzing lead ${leadId}...`);
           const metrics = await calculateMemberMetrics(supabase, leadId, moduleSequenceCache);
 
+          // Calculate individual insights (NEW)
+          const insights = await calculateIndividualInsights(supabase, leadId, metrics);
+
           // Upsert to member_progress_summary
           const { error: upsertError } = await supabase
             .from('member_progress_summary')
@@ -201,10 +204,28 @@ Deno.serve(async (req) => {
           if (upsertError) {
             console.error(`  ✗ Failed to upsert dashboard for lead ${leadId}:`, upsertError);
             return { leadId, success: false, error: upsertError.message };
-          } else {
-            console.log(`  ✓ Successfully analyzed lead ${leadId}`);
-            return { leadId, success: true };
           }
+
+          // Upsert to member_individual_insights (NEW)
+          if (insights) {
+            const { error: insightsError } = await supabase
+              .from('member_individual_insights')
+              .upsert({
+                lead_id: leadId,
+                ...insights,
+                calculated_at: new Date().toISOString()
+              }, {
+                onConflict: 'lead_id'
+              });
+
+            if (insightsError) {
+              console.error(`  ⚠️  Failed to upsert insights for lead ${leadId}:`, insightsError);
+              // Don't fail the whole member analysis - just log the error
+            }
+          }
+
+          console.log(`  ✓ Successfully analyzed lead ${leadId}`);
+          return { leadId, success: true };
         } catch (memberError: any) {
           console.error(`  ✗ Error analyzing lead ${leadId}:`, memberError);
           return { leadId, success: false, error: memberError.message || 'Unknown error' };
@@ -540,6 +561,385 @@ async function calculateMemberMetrics(supabase: any, leadId: number, moduleSeque
     // Cache tracking
     last_analyzed_session_count: currentSurveyCount
   };
+}
+
+/**
+ * Calculate individual insights and comparative analytics
+ * 
+ * @param supabase - Supabase client
+ * @param leadId - Lead ID
+ * @param metrics - Member's calculated metrics (from calculateMemberMetrics)
+ * @returns Individual insights object or null if insufficient data
+ */
+async function calculateIndividualInsights(
+  supabase: any,
+  leadId: number,
+  metrics: any
+) {
+  console.log(`[Lead ${leadId}] 📊 Calculating individual insights...`);
+
+  try {
+    // ============================================================
+    // 1. GET ALL MEMBERS FOR COMPARISON (not just active)
+    // ============================================================
+    const { data: allMembers, error: membersError } = await supabase
+      .from('member_progress_summary')
+      .select(`
+        lead_id,
+        status_score,
+        nutrition_compliance_pct,
+        supplements_compliance_pct,
+        exercise_compliance_pct,
+        meditation_compliance_pct,
+        energy_score,
+        mood_score,
+        motivation_score,
+        wellbeing_score,
+        sleep_score
+      `)
+      .not('status_score', 'is', null);
+
+    if (membersError || !allMembers || allMembers.length === 0) {
+      console.error(`[Lead ${leadId}] ❌ Failed to fetch population data:`, membersError);
+      return null; // Skip insights if no comparison data
+    }
+
+    console.log(`[Lead ${leadId}] Comparing against ${allMembers.length} members`);
+
+    // ============================================================
+    // 2. CALCULATE RANKING (Percentile & Quartile)
+    // ============================================================
+    const memberScore = metrics.status_score;
+    const allScores = allMembers
+      .map(m => m.status_score)
+      .filter(s => s !== null)
+      .sort((a, b) => b - a); // Descending (high = better)
+
+    const rank = allScores.indexOf(memberScore) + 1;
+    const percentile = Math.round(((allScores.length - rank + 1) / allScores.length) * 100);
+    const quartile = Math.ceil((rank / allScores.length) * 4);
+
+    console.log(`[Lead ${leadId}] Rank: ${rank}/${allScores.length}, Percentile: ${percentile}, Quartile: Q${quartile}`);
+
+    // ============================================================
+    // 3. CALCULATE POPULATION AVERAGES
+    // ============================================================
+    const avg = (values: number[]) => {
+      const filtered = values.filter(v => v !== null && v !== undefined);
+      return filtered.length > 0 ? filtered.reduce((sum, v) => sum + v, 0) / filtered.length : null;
+    };
+
+    const popAvg = {
+      status_score: avg(allScores),
+      nutrition: avg(allMembers.map(m => m.nutrition_compliance_pct)),
+      supplements: avg(allMembers.map(m => m.supplements_compliance_pct)),
+      exercise: avg(allMembers.map(m => m.exercise_compliance_pct)),
+      meditation: avg(allMembers.map(m => m.meditation_compliance_pct)),
+      energy: avg(allMembers.map(m => m.energy_score)),
+      mood: avg(allMembers.map(m => m.mood_score)),
+      motivation: avg(allMembers.map(m => m.motivation_score)),
+      wellbeing: avg(allMembers.map(m => m.wellbeing_score)),
+      sleep: avg(allMembers.map(m => m.sleep_score))
+    };
+
+    // ============================================================
+    // 4. BUILD COMPLIANCE COMPARISON
+    // ============================================================
+    const complianceComparison = {
+      overall: {
+        member: memberScore,
+        population_avg: Math.round(popAvg.status_score || 0),
+        diff: memberScore - Math.round(popAvg.status_score || 0)
+      },
+      nutrition: {
+        member: metrics.nutrition_compliance_pct || 0,
+        population_avg: Math.round(popAvg.nutrition || 0),
+        diff: (metrics.nutrition_compliance_pct || 0) - Math.round(popAvg.nutrition || 0)
+      },
+      supplements: {
+        member: metrics.supplements_compliance_pct || 0,
+        population_avg: Math.round(popAvg.supplements || 0),
+        diff: (metrics.supplements_compliance_pct || 0) - Math.round(popAvg.supplements || 0)
+      },
+      exercise: {
+        member: metrics.exercise_compliance_pct || 0,
+        population_avg: Math.round(popAvg.exercise || 0),
+        diff: (metrics.exercise_compliance_pct || 0) - Math.round(popAvg.exercise || 0)
+      },
+      meditation: {
+        member: metrics.meditation_compliance_pct || 0,
+        population_avg: Math.round(popAvg.meditation || 0),
+        diff: (metrics.meditation_compliance_pct || 0) - Math.round(popAvg.meditation || 0)
+      }
+    };
+
+    // ============================================================
+    // 5. BUILD VITALS COMPARISON
+    // ============================================================
+    const vitalsComparison = {
+      energy: {
+        member_score: metrics.energy_score,
+        member_trend: metrics.energy_trend,
+        population_avg: popAvg.energy ? Number(popAvg.energy.toFixed(1)) : null
+      },
+      mood: {
+        member_score: metrics.mood_score,
+        member_trend: metrics.mood_trend,
+        population_avg: popAvg.mood ? Number(popAvg.mood.toFixed(1)) : null
+      },
+      motivation: {
+        member_score: metrics.motivation_score,
+        member_trend: metrics.motivation_trend,
+        population_avg: popAvg.motivation ? Number(popAvg.motivation.toFixed(1)) : null
+      },
+      wellbeing: {
+        member_score: metrics.wellbeing_score,
+        member_trend: metrics.wellbeing_trend,
+        population_avg: popAvg.wellbeing ? Number(popAvg.wellbeing.toFixed(1)) : null
+      },
+      sleep: {
+        member_score: metrics.sleep_score,
+        member_trend: metrics.sleep_trend,
+        population_avg: popAvg.sleep ? Number(popAvg.sleep.toFixed(1)) : null
+      }
+    };
+
+    // ============================================================
+    // 6. DETERMINE RISK FACTORS
+    // ============================================================
+    const riskFactors: string[] = [];
+    
+    // Compliance gaps (>15% below average)
+    if (complianceComparison.nutrition.diff < -15) {
+      riskFactors.push(`Nutrition ${Math.abs(complianceComparison.nutrition.diff)}% below average`);
+    }
+    if (complianceComparison.supplements.diff < -15) {
+      riskFactors.push(`Supplements ${Math.abs(complianceComparison.supplements.diff)}% below average`);
+    }
+    if (complianceComparison.exercise.diff < -15) {
+      riskFactors.push(`Exercise ${Math.abs(complianceComparison.exercise.diff)}% below average`);
+    }
+    if (complianceComparison.meditation.diff < -15) {
+      riskFactors.push(`Meditation ${Math.abs(complianceComparison.meditation.diff)}% below average`);
+    }
+
+    // Curriculum issues
+    const overdueModules = JSON.parse(metrics.overdue_milestones || '[]');
+    if (overdueModules.length >= 2) {
+      riskFactors.push(`${overdueModules.length} modules overdue`);
+    }
+
+    // Declining vitals
+    if (metrics.energy_trend === 'declining' && metrics.energy_score && metrics.energy_score < 5) {
+      riskFactors.push('Energy declining and low');
+    }
+    if (metrics.mood_trend === 'declining' && metrics.mood_score && metrics.mood_score < 5) {
+      riskFactors.push('Mood declining and low');
+    }
+
+    // High challenge burden
+    const concerns = JSON.parse(metrics.latest_concerns || '[]');
+    const wins = JSON.parse(metrics.latest_wins || '[]');
+    if (concerns.length >= 3 && wins.length === 0) {
+      riskFactors.push('High challenge burden with no recent wins');
+    }
+
+    // ============================================================
+    // 7. DETERMINE JOURNEY PATTERN (4 Quadrants)
+    // ============================================================
+    const complianceTier = memberScore >= 70 ? 'high' : (memberScore >= 40 ? 'medium' : 'low');
+    const healthTrajectory = determineHealthTrajectory(metrics);
+    const journeyPattern = mapToJourneyPattern(complianceTier, healthTrajectory);
+
+    // ============================================================
+    // 8. GENERATE AI RECOMMENDATIONS
+    // ============================================================
+    const aiRecommendations = await generateAIRecommendations(
+      leadId,
+      metrics,
+      complianceComparison,
+      vitalsComparison,
+      riskFactors,
+      journeyPattern
+    );
+
+    console.log(`[Lead ${leadId}] ✅ Individual insights calculated: Q${quartile}, ${riskFactors.length} risk factors, ${aiRecommendations.length} recommendations`);
+
+    // ============================================================
+    // 9. RETURN INSIGHTS OBJECT
+    // ============================================================
+    return {
+      compliance_percentile: percentile,
+      quartile: quartile,
+      rank_in_population: rank,
+      total_members_in_population: allScores.length,
+      risk_level: metrics.status_indicator, // 'green', 'yellow', 'red'
+      risk_score: memberScore,
+      risk_factors: riskFactors,
+      journey_pattern: journeyPattern.name,
+      compliance_comparison: complianceComparison,
+      vitals_comparison: vitalsComparison,
+      outcomes_comparison: null, // TODO: Add MSQ/PROMIS comparison if needed
+      ai_recommendations: aiRecommendations
+    };
+
+  } catch (error: any) {
+    console.error(`[Lead ${leadId}] ❌ Error calculating individual insights:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Determine overall health trajectory from vitals trends
+ */
+function determineHealthTrajectory(metrics: any): string {
+  const vitals = ['energy', 'mood', 'motivation', 'wellbeing', 'sleep'];
+  let improving = 0;
+  let declining = 0;
+  
+  for (const vital of vitals) {
+    const trend = metrics[`${vital}_trend`];
+    if (trend === 'improving') improving++;
+    if (trend === 'declining') declining++;
+  }
+  
+  if (improving > declining) return 'improving';
+  if (declining > improving) return 'worsening';
+  return 'stable';
+}
+
+/**
+ * Map compliance tier + health trajectory to journey pattern quadrant
+ */
+function mapToJourneyPattern(complianceTier: string, healthTrajectory: string) {
+  if (complianceTier === 'low' && healthTrajectory === 'worsening') {
+    return { name: 'high_priority', description: 'Low compliance + worsening health' };
+  }
+  if (complianceTier === 'high' && healthTrajectory === 'worsening') {
+    return { name: 'clinical_attention', description: 'High compliance but not improving' };
+  }
+  if (complianceTier === 'low' && (healthTrajectory === 'improving' || healthTrajectory === 'stable')) {
+    return { name: 'motivational_support', description: 'Low compliance but improving' };
+  }
+  return { name: 'success_stories', description: 'High compliance + improving health' };
+}
+
+/**
+ * Generate AI-powered recommendations using GPT-4o-mini
+ */
+async function generateAIRecommendations(
+  leadId: number,
+  metrics: any,
+  complianceComparison: any,
+  vitalsComparison: any,
+  riskFactors: string[],
+  journeyPattern: any
+) {
+  try {
+    // Check for OpenAI API key
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiKey) {
+      console.log(`[Lead ${leadId}] ⚠️  No OpenAI key - skipping AI recommendations`);
+      return [];
+    }
+
+    // Build comprehensive prompt
+    // Build compliance comparison with explicit ABOVE/BELOW indicators
+    const formatComparison = (category: string, data: any) => {
+      const diff = data.diff;
+      const comparison = diff > 0 ? `${diff}% ABOVE average` : diff < 0 ? `${Math.abs(diff)}% BELOW average` : 'AT average';
+      return `- ${category}: ${data.member}% (population avg: ${data.population_avg}%, difference: ${comparison})`;
+    };
+
+    const prompt = `Analyze this member's health program data and provide 3-5 specific, actionable recommendations for their care coordinator.
+
+MEMBER PROFILE:
+- Days in program: ${metrics.days_in_program || 'N/A'}
+- Status score: ${metrics.status_score}/100
+- Journey pattern: ${journeyPattern.description}
+
+COMPLIANCE COMPARISON (member vs. population average):
+${formatComparison('Overall', complianceComparison.overall)}
+${formatComparison('Nutrition', complianceComparison.nutrition)}
+${formatComparison('Supplements', complianceComparison.supplements)}
+${formatComparison('Exercise', complianceComparison.exercise)}
+${formatComparison('Meditation', complianceComparison.meditation)}
+
+HEALTH VITALS:
+${Object.entries(vitalsComparison).map(([vital, data]: [string, any]) => 
+  `- ${vital}: ${data.member_score || 'N/A'} (trend: ${data.member_trend}, population avg: ${data.population_avg || 'N/A'})`
+).join('\n')}
+
+CURRICULUM:
+- Overdue modules: ${JSON.parse(metrics.overdue_milestones || '[]').length}
+
+RISK FACTORS:
+${riskFactors.length > 0 ? riskFactors.map(f => `- ${f}`).join('\n') : '- None identified'}
+
+PROGRAM INSIGHTS (from population data):
+- High compliance (≥70%) members have 70-80% improvement rate
+- Low compliance (<40%) members have 27-46% improvement rate
+- Nutrition compliance is strongest predictor of success
+- Members with ≥2 modules overdue have 40% lower completion rate
+
+CRITICAL INSTRUCTIONS:
+1. PAY ATTENTION: If a member is "X% ABOVE average", they are performing BETTER than average. If "X% BELOW average", they are performing WORSE.
+2. Only recommend actions for areas that are significantly BELOW average (>15% gap) or declining
+3. Prioritize by impact: high = urgent gaps, medium = moderate concerns, low = minor optimizations
+4. Be mathematically accurate - if member is 17% and average is 15%, member is ABOVE average, not below
+5. Reference specific numbers from the data provided
+
+Return JSON array with 3-5 recommendations:
+{
+  "recommendations": [
+    {
+      "priority": "high" | "medium" | "low",
+      "title": "Brief title (< 50 chars)",
+      "current_state": "What's happening now (be accurate with numbers)",
+      "impact": "Why this matters (cite program data)",
+      "action": "Specific next step for coordinator"
+    }
+  ]
+}`;
+
+    // Call OpenAI
+    const openai = new OpenAI({ apiKey: openaiKey });
+    
+    console.log(`[Lead ${leadId}] 🤖 Calling GPT-4o-mini for recommendations...`);
+    
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a health program analyst providing evidence-based recommendations to care coordinators. Be specific, actionable, and cite program data. Return structured JSON only.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 1500,
+      response_format: { type: 'json_object' }
+    });
+
+    const responseContent = completion.choices[0]?.message?.content;
+    if (!responseContent) {
+      console.error(`[Lead ${leadId}] ❌ No AI response`);
+      return [];
+    }
+
+    const aiResponse = JSON.parse(responseContent);
+    const recommendations = aiResponse.recommendations || [];
+    
+    console.log(`[Lead ${leadId}] ✅ AI generated ${recommendations.length} recommendations`);
+    return recommendations;
+
+  } catch (error: any) {
+    console.error(`[Lead ${leadId}] ❌ AI recommendation failed:`, error.message);
+    return [];
+  }
 }
 
 /**
