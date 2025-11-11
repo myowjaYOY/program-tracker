@@ -24,7 +24,6 @@ import {
   GridFooterContainer,
   GridFooter,
   useGridApiRef,
-  gridFilteredSortedRowIdsSelector,
 } from '@mui/x-data-grid-pro';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -46,59 +45,21 @@ function CustomAggregationFooter({
   columns,
   aggregationModel,
   aggregationLabel,
-  apiRef,
 }: {
   data: any[];
   columns: GridColDef[];
   aggregationModel?: AggregationModel;
   aggregationLabel?: string;
-  apiRef?: any;
 }) {
-  const [visibleRows, setVisibleRows] = React.useState(data);
-
-  // Use effect to update visible rows when filters change
-  React.useEffect(() => {
-    if (!apiRef?.current) {
-      setVisibleRows(data);
-      return;
-    }
-
-    const updateVisibleRows = () => {
-      try {
-        const filteredSortedRowIds = gridFilteredSortedRowIdsSelector(apiRef);
-        const filteredRows = filteredSortedRowIds.map((id) => apiRef.current.getRow(id)).filter(Boolean);
-        
-        // Use filtered rows if available, otherwise use all data
-        setVisibleRows(filteredRows.length > 0 ? filteredRows : data);
-      } catch (error) {
-        setVisibleRows(data);
-      }
-    };
-
-    // Small delay to ensure grid is fully initialized
-    const timeoutId = setTimeout(updateVisibleRows, 100);
-
-    // Subscribe to filter changes
-    const unsubscribeFilter = apiRef.current.subscribeEvent('filterModelChange', updateVisibleRows);
-    // Also subscribe to state restore (for initial load with saved filters)
-    const unsubscribeState = apiRef.current.subscribeEvent('stateRestorePostProcessing', updateVisibleRows);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      if (unsubscribeFilter) unsubscribeFilter();
-      if (unsubscribeState) unsubscribeState();
-    };
-  }, [apiRef, data]);
-
   if (!aggregationModel || Object.keys(aggregationModel).length === 0) {
     return <GridFooter />;
   }
 
-  // Calculate aggregations using only visible/filtered rows
+  // Calculate aggregations
   const aggregations: Record<string, number> = {};
   Object.keys(aggregationModel).forEach(field => {
     const aggType = aggregationModel[field];
-    const values = visibleRows.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
+    const values = data.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
     
     if (aggType === 'sum') {
       aggregations[field] = values.reduce((sum, val) => sum + val, 0);
@@ -354,7 +315,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   // NOTE: We load state via initialGridState useMemo (above) - no restoration needed!
   
   useEffect(() => {
-    // Capture values at effect time, not cleanup time
+    // Capture apiRef at effect time, not cleanup time
     const apiRefCurrent = apiRef.current;
     const currentPersistKey = persistStateKey;
     const currentUserId = user?.id;
@@ -437,27 +398,13 @@ export default function BaseDataTable<T extends BaseEntity>({
     [onEdit, onDelete, editButtonText, deleteButtonText]
   );
 
-  // Ensure all columns have default sizing to prevent aggressive auto-sizing
-  // This allows saved dimensions from initialState to work properly
-  const columnsWithDefaults = useMemo(() => {
-    return columns.map(col => {
-      // If column already has width, flex, or minWidth, leave it alone
-      if (col.width !== undefined || col.flex !== undefined || col.minWidth !== undefined) {
-        return col;
-      }
-      // Otherwise, add a sensible default width of 150px
-      // This prevents MUI's auto-sizing from overriding saved dimensions
-      return { ...col, width: 150 };
-    });
-  }, [columns]);
-
   // All columns including actions
   const allColumns = useMemo(() => {
     if (showActionsColumn) {
-      return [...columnsWithDefaults, actionsColumn];
+      return [...columns, actionsColumn];
     }
-    return columnsWithDefaults;
-  }, [columnsWithDefaults, actionsColumn, showActionsColumn]);
+    return columns;
+  }, [columns, actionsColumn, showActionsColumn]);
 
   // Handle edit
   const handleEdit = (row: T) => {
@@ -618,7 +565,7 @@ export default function BaseDataTable<T extends BaseEntity>({
               footer: CustomAggregationFooter as any,
             },
             slotProps: {
-              footer: { data, columns: allColumns, aggregationModel, aggregationLabel, apiRef } as any,
+              footer: { data, columns: allColumns, aggregationModel, aggregationLabel } as any,
             },
           })}
           getRowClassName={params => {

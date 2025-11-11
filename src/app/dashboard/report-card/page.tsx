@@ -19,6 +19,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import PsychologyIcon from '@mui/icons-material/Psychology';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import DownloadIcon from '@mui/icons-material/Download';
 import DashboardMetricsCards from '@/components/report-card/DashboardMetricsCards';
@@ -26,6 +27,7 @@ import { MemberProgressTab } from '@/components/member-progress';
 import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
 import AnalyticsInsightsTab from '@/components/report-card/AnalyticsInsightsTab';
+import AIInsightsTab from '@/components/report-card/AIInsightsTab';
 import { useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
 import ExportReportModal from '@/components/report-card/ExportReportModal';
@@ -270,6 +272,13 @@ export default function ReportCardPage() {
             id="report-card-tab-3"
             aria-controls="report-card-tabpanel-3"
           />
+          <Tab
+            icon={<PsychologyIcon />}
+            iconPosition="start"
+            label="AI INSIGHTS"
+            id="report-card-tab-4"
+            aria-controls="report-card-tabpanel-4"
+          />
         </Tabs>
       </Box>
 
@@ -288,6 +297,18 @@ export default function ReportCardPage() {
       
       <TabPanel value={tabValue} index={3}>
         <AnalyticsInsightsTab leadId={selectedMember?.lead_id || null} />
+      </TabPanel>
+      
+      <TabPanel value={tabValue} index={4}>
+        {selectedMember?.lead_id ? (
+          <AIInsightsTab memberId={selectedMember.lead_id} />
+        ) : (
+          <Box sx={{ p: 3, textAlign: 'center' }}>
+            <Typography variant="h6" color="text.secondary">
+              Please select a member to view AI insights
+            </Typography>
+          </Box>
+        )}
       </TabPanel>
       
       {/* Lead Notes Modal */}

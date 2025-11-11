@@ -12,6 +12,7 @@ import {
   TextField,
   Typography,
   Autocomplete,
+  Tooltip,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -78,6 +79,8 @@ export default function CreatePOModal({
   const [orderNotes, setOrderNotes] = useState('');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
   const autocompleteRef = useRef<HTMLInputElement>(null);
   const quantityInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -88,9 +91,19 @@ export default function CreatePOModal({
   // Fetch inventory items for the dropdown
   useEffect(() => {
     if (open) {
+      setInventoryLoading(true);
+      setInventoryError(null);
       fetch('/api/inventory-items')
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) {
+            throw new Error(`API Error: ${res.status} ${res.statusText}`);
+          }
+          return res.json();
+        })
         .then(data => {
+          if (data.error) {
+            throw new Error(data.error);
+          }
           if (data.data) {
             // Transform the nested data structure to flat structure
             const transformedItems = data.data.map((item: any) => ({
@@ -105,24 +118,38 @@ export default function CreatePOModal({
               a.therapy_name.localeCompare(b.therapy_name)
             );
             setInventoryItems(transformedItems);
+            setInventoryLoading(false);
+          } else {
+            throw new Error('No inventory data returned');
           }
         })
-        .catch(err => console.error('Error fetching inventory items:', err));
+        .catch(err => {
+          console.error('Error fetching inventory items:', err);
+          setInventoryError(err.message || 'Failed to load inventory items');
+          setInventoryLoading(false);
+        });
     }
   }, [open]);
 
   // Initialize items when modal opens - for existing PO (edit mode)
   const loadedPOIdRef = useRef<number | null>(null);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
       // Reset when modal closes
       loadedPOIdRef.current = null;
+      hasInitializedRef.current = false;
       return;
     }
 
-    if (existingPO && loadedPOIdRef.current !== existingPO.po_id) {
-      // Load existing PO data only if we haven't loaded this PO yet
+    // Only run initialization logic once when modal opens
+    if (hasInitializedRef.current) {
+      return;
+    }
+
+    if (existingPO) {
+      // Load existing PO data
       loadedPOIdRef.current = existingPO.po_id;
       
       const poItems: POItem[] = existingPO.purchase_order_items.map((item, index) => ({
@@ -148,8 +175,10 @@ export default function CreatePOModal({
       setShippingCost(existingPO.shipping_cost || 0);
       setExpectedDeliveryDate(existingPO.expected_delivery_date);
       setOrderNotes(existingPO.notes || '');
-    } else if (open && !existingPO && initialItems.length > 0 && items.length === 0) {
-      // Load from inventory forecast selection (only if items not already loaded)
+      
+      hasInitializedRef.current = true;
+    } else if (initialItems.length > 0) {
+      // Load from inventory forecast selection
       const poItems: POItem[] = initialItems.map((item, index) => ({
         ...item,
         id: `${item.therapy_type_name}-${item.therapy_name}-${index}`,
@@ -163,16 +192,20 @@ export default function CreatePOModal({
         initialQuantities[itemId] = item.owed_count || 1;
       });
       setOrderQuantities(initialQuantities);
-    } else if (open && !existingPO && initialItems.length === 0 && items.length > 0) {
-      // Reset for manual creation (only if items are currently loaded)
+      
+      hasInitializedRef.current = true;
+    } else {
+      // Manual creation - start with empty items
       setItems([]);
       setOrderQuantities({});
       setTaxAmount(0);
       setShippingCost(0);
       setExpectedDeliveryDate(null);
       setOrderNotes('');
+      
+      hasInitializedRef.current = true;
     }
-  }, [open, existingPO, initialItems, items.length]);
+  }, [open, existingPO, initialItems]);
 
   // Handle Add Item button
   const handleAddItem = () => {
@@ -180,13 +213,13 @@ export default function CreatePOModal({
     const newItem: POItem = {
       id: newItemId,
       therapy_id: 0, // Will be set when user selects from dropdown
-      therapy_name: '',
+      therapy_name: '', // Empty - will show autocomplete in edit mode
       therapy_type_name: '',
       current_cost: 0,
       quantity_on_hand: 0,
       isManuallyAdded: true,
     };
-
+    
     setItems(prev => [newItem, ...prev]);
     setEditingItemId(newItemId);
     setOrderQuantities(prev => ({ ...prev, [newItemId]: 1 }));
@@ -274,6 +307,14 @@ export default function CreatePOModal({
               fullWidth
               size="small"
               options={inventoryItems}
+              loading={inventoryLoading}
+              noOptionsText={
+                inventoryLoading
+                  ? 'Loading...'
+                  : inventoryError
+                  ? 'Error loading items'
+                  : 'No items available'
+              }
               getOptionLabel={(option) => option.therapy_name}
               getOptionKey={(option) => option.therapy_id}
               onChange={(_, value) => handleItemSelect(params.row.id, value)}
@@ -469,22 +510,57 @@ export default function CreatePOModal({
         }}
       >
         {/* Add Item Button */}
-        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={handleAddItem}
-            sx={{
-              borderRadius: 0,
-              fontWeight: 600,
-            }}
+        <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            {inventoryLoading && (
+              <Typography variant="body2" color="text.secondary">
+                Loading inventory items...
+              </Typography>
+            )}
+            {inventoryError && (
+              <Typography variant="body2" color="error">
+                ⚠️ {inventoryError}
+              </Typography>
+            )}
+            {!inventoryLoading && !inventoryError && inventoryItems.length === 0 && (
+              <Typography variant="body2" color="warning.main">
+                ⚠️ No inventory items found
+              </Typography>
+            )}
+          </Box>
+          <Tooltip 
+            title={
+              inventoryLoading 
+                ? "Loading inventory items..." 
+                : inventoryError 
+                ? "Cannot add items - inventory data failed to load" 
+                : inventoryItems.length === 0
+                ? "No inventory items available"
+                : "Add a new row to select an item from inventory"
+            }
           >
-            Add Item
-          </Button>
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleAddItem}
+                disabled={inventoryLoading || !!inventoryError || inventoryItems.length === 0}
+                sx={{
+                  borderRadius: 0,
+                  fontWeight: 600,
+                }}
+              >
+                Add Item
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
         {/* Order Items Table */}
         <Box sx={{ mb: 3 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Items in order: {tableData.length}
+          </Typography>
           <BaseDataTable
             title=""
             data={tableData}

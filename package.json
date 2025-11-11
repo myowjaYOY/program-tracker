@@ -17,6 +17,7 @@
     "generate-docs": "node ./docbot/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^5.1.1",

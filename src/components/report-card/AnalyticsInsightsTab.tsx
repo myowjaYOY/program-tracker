@@ -3,9 +3,9 @@
 import React from 'react';
 import { Box, Typography, Alert, CircularProgress } from '@mui/material';
 import { useIndividualInsights } from '@/lib/hooks/use-individual-insights';
-import MemberRankingCard from './analytics/MemberRankingCard';
-import ComparativeAnalysisCard from './analytics/ComparativeAnalysisCard';
-import AIRecommendationsCard from './analytics/AIRecommendationsCard';
+import MemberRankingProfile from './analytics/MemberRankingProfile';
+import ComparativeAnalysisGrid from './analytics/ComparativeAnalysisGrid';
+import RecommendationsGrid from './analytics/RecommendationsGrid';
 
 interface AnalyticsInsightsTabProps {
   leadId: number | null;
@@ -15,9 +15,9 @@ interface AnalyticsInsightsTabProps {
  * Analytics & Insights Tab
  * 
  * Displays:
- * 1. Member Ranking & Risk Level
- * 2. Comparative Analysis (vs. population)
- * 3. AI-Powered Recommendations
+ * - Member Ranking Profile (thin card at top with 4 sections)
+ * - Comparative Analysis Grid (5 compliance cards + 5 vitals cards)
+ * - Recommendations Grid (individual cards: high priority full width, medium/low half width)
  */
 export default function AnalyticsInsightsTab({ leadId }: AnalyticsInsightsTabProps) {
   const { data, isLoading, error } = useIndividualInsights(leadId);
@@ -86,14 +86,14 @@ export default function AnalyticsInsightsTab({ leadId }: AnalyticsInsightsTabPro
 
   return (
     <Box>
-      {/* Section 1: Member Ranking & Risk Level */}
-      <MemberRankingCard insights={insights} />
+      {/* Member Ranking Profile - At Top */}
+      <MemberRankingProfile insights={insights} />
 
-      {/* Section 2: Comparative Analysis */}
-      <ComparativeAnalysisCard insights={insights} />
+      {/* Comparative Analysis Grid - Compliance & Vitals */}
+      <ComparativeAnalysisGrid insights={insights} />
 
-      {/* Section 3: AI-Powered Recommendations */}
-      <AIRecommendationsCard recommendations={insights.ai_recommendations || []} />
+      {/* Recommendations Grid */}
+      <RecommendationsGrid recommendations={insights.ai_recommendations || []} />
     </Box>
   );
 }
