@@ -123,19 +123,38 @@ RESPONSE STYLE:
     // Call appropriate AI provider
     if (ai_provider === 'openai') {
       console.log('[AI Chat] Calling OpenAI GPT-4o...');
-      const completion = await openai.chat.completions.create({
-        model: PRICING.openai.model,
-        messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
+      
+      try {
+        const completion = await openai.chat.completions.create({
+          model: PRICING.openai.model,
+          messages: messages.map((m) => ({ role: m.role, content: m.content })),
+          temperature: 0.7,
+          max_tokens: 1000,
+        });
 
-      aiResponse = completion.choices[0]?.message?.content || 'No response generated';
-      tokensUsed = {
-        input: completion.usage?.prompt_tokens || 0,
-        output: completion.usage?.completion_tokens || 0,
-      };
-      model = completion.model;
+        aiResponse = completion.choices[0]?.message?.content || 'No response generated';
+        tokensUsed = {
+          input: completion.usage?.prompt_tokens || 0,
+          output: completion.usage?.completion_tokens || 0,
+        };
+        model = completion.model;
+      } catch (openaiError: any) {
+        console.error('[AI Chat] OpenAI API Error:', {
+          message: openaiError.message,
+          status: openaiError.status,
+          error: openaiError.error,
+        });
+        
+        // Preserve the error type and status code
+        const error: any = new Error(
+          openaiError.message || 
+          openaiError.error?.message || 
+          'OpenAI API Error'
+        );
+        error.status = openaiError.status || 500;
+        error.type = openaiError.error?.type || 'api_error';
+        throw error;
+      }
     } else if (ai_provider === 'anthropic') {
       console.log('[AI Chat] Calling Anthropic Claude...');
       console.log('[AI Chat] Anthropic API key exists:', !!process.env.ANTHROPIC_API_KEY);
@@ -168,7 +187,16 @@ RESPONSE STYLE:
           status: anthropicError.status,
           error: anthropicError.error,
         });
-        throw new Error(`Anthropic API Error: ${anthropicError.message || JSON.stringify(anthropicError.error || anthropicError)}`);
+        
+        // Preserve the error type and status code
+        const error: any = new Error(
+          anthropicError.message || 
+          anthropicError.error?.message || 
+          'Anthropic API Error'
+        );
+        error.status = anthropicError.status || 500;
+        error.type = anthropicError.error?.type || 'api_error';
+        throw error;
       }
     } else {
       return NextResponse.json({ error: 'Invalid AI provider' }, { status: 400 });
@@ -200,9 +228,19 @@ RESPONSE STYLE:
     return NextResponse.json(response);
   } catch (error: any) {
     console.error('[AI Chat] Error:', error);
+    
+    // Determine appropriate status code
+    const statusCode = error.status || 500;
+    
+    // For rate limit errors, provide helpful message
+    let errorMessage = error.message || 'Internal server error';
+    if (statusCode === 429) {
+      errorMessage = 'Rate limit exceeded. Please wait a moment and try again, or upgrade your API plan for higher limits.';
+    }
+    
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
+      { error: errorMessage },
+      { status: statusCode }
     );
   }
 }

@@ -103,11 +103,7 @@ export async function POST(req: NextRequest) {
       // For active programs, calculate margin on locked price
       if (isActive) {
         const lockedPrice = Number(finances.final_total_price || 0);
-        const preTaxLockedPrice = lockedPrice - taxes;
-        const adjustedCost = financeCharges < 0 ? totalCost + Math.abs(financeCharges) : totalCost;
-        correctMargin = preTaxLockedPrice > 0
-          ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-          : 0;
+        correctMargin = calculateProjectedMargin(lockedPrice, totalCost, financeCharges, taxes);
       } else {
         // For Quote programs, calculate margin on projected price
         correctMargin = calculateProjectedMargin(projectedPrice, totalCost, financeCharges, taxes);

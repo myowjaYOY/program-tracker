@@ -508,6 +508,9 @@ export default function ProgramItemsTab({
                   instructions: editingItem.instructions || '',
                   // surfaced for edit modal min guards & helper text
                   used_count: (editingItem as any)?.used_count || 0,
+                  // Pass locked-in prices from member_program_items
+                  item_cost: editingItem.item_cost || 0,
+                  item_charge: editingItem.item_charge || 0,
                 } as any
               }
               mode="edit"

@@ -197,15 +197,12 @@ export async function GET(req: NextRequest) {
       if (finances?.contracted_at_margin) {
         // For contracted programs (any status), margin should be calculated on locked price
         const lockedPrice = Number(finances.final_total_price || 0);
-        const financeCharges = Number(finances.finance_charges || 0);
-        const preTaxLockedPrice = lockedPrice - calculatedTaxes;
-        const adjustedCost = financeCharges < 0 
-          ? calculatedCost + Math.abs(financeCharges)
-          : calculatedCost;
-        
-        expectedMargin = preTaxLockedPrice > 0
-          ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-          : 0;
+        expectedMargin = calculateProjectedMargin(
+          lockedPrice,
+          calculatedCost,
+          Number(finances?.finance_charges || 0),
+          calculatedTaxes
+        );
       } else {
         // For non-contracted programs (Quote, etc.), margin is calculated on current price
         expectedMargin = calculateProjectedMargin(
@@ -333,15 +330,12 @@ export async function GET(req: NextRequest) {
           
           if (isActive && finances.contracted_at_margin) {
             const lockedPrice = Number(finances.final_total_price || 0);
-            const financeCharges = Number(finances.finance_charges || 0);
-            const preTaxLockedPrice = lockedPrice - calculatedTaxes;
-            const adjustedCost = financeCharges < 0 
-              ? calculatedCost + Math.abs(financeCharges)
-              : calculatedCost;
-            
-            expectedMargin = preTaxLockedPrice > 0
-              ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-              : 0;
+            expectedMargin = calculateProjectedMargin(
+              lockedPrice,
+              calculatedCost,
+              Number(finances.finance_charges || 0),
+              calculatedTaxes
+            );
           } else {
             expectedMargin = calculateProjectedMargin(
               calculatedPrice,

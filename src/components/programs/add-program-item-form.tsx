@@ -28,7 +28,10 @@ interface AddProgramItemFormProps {
   therapies: Therapies[];
   onSave: (data: MemberProgramItemFormData) => void;
   onCancel: () => void;
-  initialValues?: Partial<MemberProgramItemFormData>;
+  initialValues?: Partial<MemberProgramItemFormData> & {
+    item_cost?: number;
+    item_charge?: number;
+  };
   mode?: 'create' | 'edit';
   validationError?: string | null;
 }
@@ -130,6 +133,16 @@ export default function AddProgramItemForm({
   const selectedTherapy = therapies.find(
     t => t.therapy_id === selectedTherapyId
   );
+
+  // In edit mode, use locked-in prices from member_program_items
+  // In create mode, use current prices from therapies table
+  const displayCost = mode === 'edit' && initialValues?.item_cost !== undefined
+    ? Number(initialValues.item_cost)
+    : (selectedTherapy?.cost || 0);
+  
+  const displayCharge = mode === 'edit' && initialValues?.item_charge !== undefined
+    ? Number(initialValues.item_charge)
+    : (selectedTherapy?.charge || 0);
 
   // Reset therapy selection when therapy type changes
   const handleTherapyTypeChange = (_therapyTypeId: number) => {
@@ -393,7 +406,7 @@ export default function AddProgramItemForm({
           <Grid container spacing={2}>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
-                U Cost: ${(selectedTherapy?.cost || 0).toFixed(2)}
+                U Cost: ${displayCost.toFixed(2)}
               </Typography>
               <Typography 
                 variant="caption" 
@@ -406,30 +419,27 @@ export default function AddProgramItemForm({
             </Grid>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
-                U Chrg: ${(selectedTherapy?.charge || 0).toFixed(2)}
+                U Chrg: ${displayCharge.toFixed(2)}
               </Typography>
             </Grid>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 T Cost: $
-                {((selectedTherapy?.cost || 0) * quantity).toFixed(2)}
+                {(displayCost * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 T Chrg: $
-                {((selectedTherapy?.charge || 0) * quantity).toFixed(2)}
+                {(displayCharge * quantity).toFixed(2)}
               </Typography>
             </Grid>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">
                 Margin:{' '}
-                {(selectedTherapy?.charge || 0) > 0
+                {displayCharge > 0
                   ? Math.floor(
-                      (((selectedTherapy?.charge || 0) -
-                        (selectedTherapy?.cost || 0)) /
-                        (selectedTherapy?.charge || 0)) *
-                      100
+                      ((displayCharge - displayCost) / displayCharge) * 100
                     )
                   : 0}
                 %

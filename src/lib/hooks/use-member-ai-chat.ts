@@ -23,8 +23,11 @@ export function useMemberAIChat({ memberId, contextDays = 90 }: UseMemberAIChatP
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get AI response');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        const error: any = new Error(errorData.error || 'Failed to get AI response');
+        error.status = response.status;
+        error.provider = requestData.ai_provider;
+        throw error;
       }
 
       return response.json();
@@ -43,9 +46,30 @@ export function useMemberAIChat({ memberId, contextDays = 90 }: UseMemberAIChatP
       ]);
       setSessionMetadata((prev) => [...prev, data.metadata]);
     },
-    onError: (error: Error) => {
-      toast.error(`AI Chat Error: ${error.message}`);
+    onError: (error: any) => {
       console.error('[AI Chat Hook] Error:', error);
+      
+      // Detect rate limit errors (429)
+      if (error.status === 429) {
+        const providerName = error.provider === 'openai' ? 'OpenAI' : 'Anthropic';
+        toast.error(
+          `⚠️ ${providerName} Rate Limit Reached\n\nYou've hit the API usage limit. Please wait 60 seconds and try again, or upgrade your ${providerName} plan for higher limits.`,
+          { duration: 8000 }
+        );
+      } 
+      // Detect authentication errors
+      else if (error.status === 401 || error.status === 403) {
+        toast.error('Authentication Error: Please check your API keys in the environment settings.');
+      }
+      // Detect server errors
+      else if (error.status >= 500) {
+        toast.error('Server Error: The AI service is temporarily unavailable. Please try again in a moment.');
+      }
+      // Generic errors
+      else {
+        toast.error(`AI Error: ${error.message || 'Failed to get AI response'}`);
+      }
+      
       // Remove the last user message if the AI failed to respond
       setMessages((prev) => prev.slice(0, prev.length - 1));
     },

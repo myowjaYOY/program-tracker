@@ -132,11 +132,7 @@ export async function GET(
     if (isActive) {
       // Active: use locked price
       const lockedPrice = Number(finances.final_total_price || 0);
-      const preTaxLockedPrice = lockedPrice - taxes;
-      const adjustedCost = financeCharges < 0 ? totalCost + Math.abs(financeCharges) : totalCost;
-      newMarginFormula = preTaxLockedPrice > 0
-        ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-        : 0;
+      newMarginFormula = calculateProjectedMargin(lockedPrice, totalCost, financeCharges, taxes);
     } else {
       // Quote: use projected price
       newMarginFormula = calculateProjectedMargin(projectedPrice, totalCost, financeCharges, taxes);

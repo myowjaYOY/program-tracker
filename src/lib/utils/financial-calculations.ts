@@ -259,13 +259,14 @@ export async function validateActiveProgramItemAddition(
 
     if (operation === 'update') {
       // Simulate updating the item
+      // CRITICAL: For Active programs, NEVER update item_cost or item_charge - only quantity and other fields
+      // These prices are LOCKED when the program goes Active
       updatedItems = items.map((item: any) => {
         if (item.member_program_item_id === parseInt(itemId)) {
           const updatedItem = {
             ...item,
             quantity: itemData.quantity !== undefined ? itemData.quantity : item.quantity,
-            item_cost: itemData.item_cost !== undefined ? itemData.item_cost : item.item_cost,
-            item_charge: itemData.item_charge !== undefined ? itemData.item_charge : item.item_charge,
+            // item_cost and item_charge are INTENTIONALLY NOT UPDATED - they're locked from member_program_items
           };
           return updatedItem;
         }
@@ -329,16 +330,15 @@ export async function validateActiveProgramItemAddition(
       Number(finances.discounts || 0)
     );
     
-    // Calculate margin on locked price (consistent with validateAndUpdateActiveProgramFinances)
+    // Calculate margin on locked price using centralized function
     const lockedPrice = Number(finances.final_total_price || 0);
     const financeCharges = Number(finances.finance_charges || 0);
-    const preTaxLockedPrice = lockedPrice - taxes;
-    const adjustedCost = financeCharges < 0 
-      ? totalCost + Math.abs(financeCharges)
-      : totalCost;
-    const projectedMargin = preTaxLockedPrice > 0
-      ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-      : 0;
+    const projectedMargin = calculateProjectedMargin(
+      lockedPrice,
+      totalCost,
+      financeCharges,
+      taxes
+    );
 
     // Validate against bounds
     const validation = validateActiveProgramChanges({
@@ -434,16 +434,15 @@ export async function validateAndUpdateActiveProgramFinances(
       Number(finances.discounts || 0)
     );
     
-    // Calculate margin on locked price (consistent with validation in validateActiveProgramItemAddition)
+    // Calculate margin on locked price using centralized function
     const lockedPrice = Number(finances.final_total_price || 0);
     const financeCharges = Number(finances.finance_charges || 0);
-    const preTaxLockedPrice = lockedPrice - taxes;
-    const adjustedCost = financeCharges < 0 
-      ? totalCost + Math.abs(financeCharges)
-      : totalCost;
-    const marginOnLockedPrice = preTaxLockedPrice > 0
-      ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-      : 0;
+    const marginOnLockedPrice = calculateProjectedMargin(
+      lockedPrice,
+      totalCost,
+      financeCharges,
+      taxes
+    );
 
     // Validate against bounds
     const validation = validateActiveProgramChanges({

@@ -96,13 +96,15 @@ export async function GET(req: NextRequest) {
 
       // ASSUME ALL PROGRAMS ARE ACTIVE - Calculate margin on locked price (final_total_price)
       const lockedPrice = Number(finances.final_total_price || 0);
-      const preTaxLockedPrice = lockedPrice - taxes;
-      const adjustedCost = financeCharges < 0 ? totalCost + Math.abs(financeCharges) : totalCost;
-      const correctMarginAsActive = preTaxLockedPrice > 0
-        ? ((preTaxLockedPrice - adjustedCost) / preTaxLockedPrice) * 100
-        : 0;
+      const correctMarginAsActive = calculateProjectedMargin(lockedPrice, totalCost, financeCharges, taxes);
 
       const difference = Math.abs(correctMarginAsActive - currentMargin);
+
+      // For details reporting
+      const preTaxLockedPrice = lockedPrice - taxes;
+      const adjustedCost = financeCharges < 0 
+        ? totalCost + Math.abs(financeCharges)
+        : totalCost - financeCharges;
 
       results.push({
         programId: program.member_program_id,

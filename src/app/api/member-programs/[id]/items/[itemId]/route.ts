@@ -28,13 +28,39 @@ export async function PUT(
     const { id, itemId } = await context.params;
     const body = await req.json();
 
-    // If therapy_id is being updated, get the new cost and charge
     const updateData = { ...body };
 
     // Remove therapy_type_id as it's not a column in member_program_items
     delete updateData.therapy_type_id;
 
-    if (body.therapy_id) {
+    // Get current item and program status to determine if we can update prices
+    const { data: currentItem, error: currentItemError } = await supabase
+      .from('member_program_items')
+      .select('therapy_id, member_program_id')
+      .eq('member_program_item_id', itemId)
+      .single();
+
+    if (currentItemError || !currentItem) {
+      return NextResponse.json(
+        { error: 'Item not found' },
+        { status: 404 }
+      );
+    }
+
+    const { data: program, error: programError } = await supabase
+      .from('member_programs')
+      .select('program_status(status_name)')
+      .eq('member_program_id', currentItem.member_program_id)
+      .single();
+
+    const isActive = (program?.program_status as any)?.status_name?.toLowerCase() === 'active';
+
+    // CRITICAL: For Active programs, NEVER update item_cost or item_charge
+    // These prices are LOCKED when the program goes Active
+    // Only fetch new prices if:
+    // 1. Program is NOT Active AND
+    // 2. therapy_id is actually CHANGING (not just present in body)
+    if (!isActive && body.therapy_id && body.therapy_id !== currentItem.therapy_id) {
       const { data: therapyData, error: therapyError } = await supabase
         .from('therapies')
         .select('cost, charge, taxable')
@@ -50,6 +76,13 @@ export async function PUT(
 
       updateData.item_cost = therapyData.cost;
       updateData.item_charge = therapyData.charge;
+    }
+
+    // For Active programs, explicitly remove item_cost and item_charge from updateData
+    // to ensure locked prices are never modified
+    if (isActive) {
+      delete updateData.item_cost;
+      delete updateData.item_charge;
     }
 
     // Add audit fields
