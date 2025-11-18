@@ -97,6 +97,24 @@ export default function MemberRankingProfile({ insights }: MemberRankingProfileP
           description: 'Low compliance + worsening health',
           color: '#ef4444' // error
         };
+      case 'building_momentum':
+        return { 
+          label: 'Building Momentum', 
+          description: 'Moderate compliance, early in program',
+          color: '#3b82f6' // info
+        };
+      case 'needs_engagement':
+        return { 
+          label: 'Needs Engagement', 
+          description: 'Low compliance, insufficient health data',
+          color: '#f59e0b' // warning
+        };
+      case 'on_track':
+        return { 
+          label: 'On Track', 
+          description: 'High compliance, building health baseline',
+          color: '#10b981' // success
+        };
       default:
         return { 
           label: 'Unknown', 
@@ -487,6 +505,8 @@ function getRiskLevelDescription(riskLevel: string, score: number): string {
       return 'Risk level could not be determined.';
   }
 }
+
+
 
 
 

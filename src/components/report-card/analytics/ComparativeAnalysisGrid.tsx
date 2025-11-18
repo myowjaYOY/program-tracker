@@ -164,13 +164,16 @@ export default function ComparativeAnalysisGrid({ insights }: ComparativeAnalysi
 interface ComplianceCardProps {
   label: string;
   emoji: string;
-  memberScore: number;
+  memberScore: number | null;
   populationAvg: number;
-  diff: number;
+  diff: number | null;
   isOverall?: boolean;
 }
 
 function ComplianceCard({ label, emoji, memberScore, populationAvg, diff, isOverall = false }: ComplianceCardProps) {
+  // Check if data exists
+  const hasData = memberScore !== null && memberScore !== undefined;
+
   // Get comparison display details
   const getComparisonDetails = (diff: number) => {
     if (diff > 0) {
@@ -196,14 +199,15 @@ function ComplianceCard({ label, emoji, memberScore, populationAvg, diff, isOver
     };
   };
 
-  const details = getComparisonDetails(diff);
+  const details = hasData && diff !== null ? getComparisonDetails(diff) : null;
+  const borderColor = hasData && details ? details.borderColor : '#e5e7eb'; // grey.200
 
   return (
     <Card
       sx={{
         height: '100%',
         borderTop: 3,
-        borderTopColor: details.borderColor,
+        borderTopColor: borderColor,
       }}
     >
       <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
@@ -220,24 +224,39 @@ function ComplianceCard({ label, emoji, memberScore, populationAvg, diff, isOver
         </Box>
 
         {/* Member Score + Comparison on Same Row */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-          <Typography variant="h5" fontWeight="bold">
-            {memberScore}%
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Box sx={{ color: details.color, display: 'flex', alignItems: 'center' }}>
-              {details.icon}
+        {hasData ? (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <Typography variant="h5" fontWeight="bold">
+                {memberScore}%
+              </Typography>
+              {details && diff !== null && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ color: details.color, display: 'flex', alignItems: 'center' }}>
+                    {details.icon}
+                  </Box>
+                  <Typography variant="body2" color={details.color} fontWeight={600}>
+                    {details.prefix}{diff}%
+                  </Typography>
+                </Box>
+              )}
             </Box>
-            <Typography variant="body2" color={details.color} fontWeight={600}>
-              {details.prefix}{diff}%
-            </Typography>
-          </Box>
-        </Box>
 
-        {/* Population Average */}
-        <Typography variant="caption" color="textSecondary">
-          vs. avg {populationAvg}%
-        </Typography>
+            {/* Population Average */}
+            <Typography variant="caption" color="textSecondary">
+              vs. avg {populationAvg}%
+            </Typography>
+          </>
+        ) : (
+          <>
+            <Typography variant="h5" fontWeight="bold" sx={{ mb: 0.5 }}>
+              N/A
+            </Typography>
+            <Typography variant="caption" color="textSecondary">
+              No data yet
+            </Typography>
+          </>
+        )}
       </CardContent>
     </Card>
   );

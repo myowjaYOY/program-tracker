@@ -26,10 +26,48 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
   const supplements = complianceByCategory?.supplements || 0;
   const meditation = complianceByCategory?.meditation || 0;
 
-  const highPerformers = complianceDistribution?.high_performers || 0;
-  const moderate = complianceDistribution?.moderate || 0;
-  const atRisk = complianceDistribution?.at_risk || 0;
-  const critical = complianceDistribution?.critical || 0;
+  // Map compliance_distribution array to expected categories
+  // Database returns: [{"count":5,"range":"0-20%"}, {"count":6,"range":"20-40%"}, ...]
+  // We need to map to: critical (<25%), at_risk (25-50%), moderate (50-75%), high_performers (>75%)
+  const mapDistributionToCategories = (distribution: any[]) => {
+    if (!Array.isArray(distribution)) return { critical: 0, atRisk: 0, moderate: 0, highPerformers: 0 };
+    
+    let critical = 0;
+    let atRisk = 0;
+    let moderate = 0;
+    let highPerformers = 0;
+    
+    distribution.forEach(item => {
+      const range = item.range;
+      const count = item.count || 0;
+      
+      // Map ranges to categories:
+      // 0-20% = critical (very low compliance)
+      // 20-40% = at_risk (low compliance)
+      // 40-60% = moderate (medium compliance)
+      // 60-80%, 80-100% = high_performers (high compliance)
+      
+      if (range === '0-20%') {
+        critical += count;
+      } else if (range === '20-40%') {
+        atRisk += count;
+      } else if (range === '40-60%') {
+        moderate += count;
+      } else if (range === '60-80%') {
+        highPerformers += count;
+      } else if (range === '80-100%') {
+        highPerformers += count;
+      }
+    });
+    
+    return { critical, atRisk, moderate, highPerformers };
+  };
+  
+  const mappedDistribution = mapDistributionToCategories(complianceDistribution);
+  const highPerformers = mappedDistribution.highPerformers;
+  const moderate = mappedDistribution.moderate;
+  const atRisk = mappedDistribution.atRisk;
+  const critical = mappedDistribution.critical;
 
   const criticalAreas = [nutrition, exercise, supplements, meditation].filter(rate => rate < 50).length;
 

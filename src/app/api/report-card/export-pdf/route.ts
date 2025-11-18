@@ -234,11 +234,8 @@ function generateMemberProgressHtml(data: any, memberInfo: { firstName: string; 
               <div style="font-size: 36px; font-weight: 700; color: ${getComplianceColor(data.nutrition_compliance_pct)}; line-height: 1; margin-bottom: 8px;">
                 ${safePercent(data.nutrition_compliance_pct)}
               </div>
-              <div style="height: 6px; background-color: #e5e7eb; border-radius: 3px; overflow: hidden; margin-bottom: 8px;">
+              <div style="height: 6px; background-color: #e5e7eb; border-radius: 3px; overflow: hidden;">
                 <div style="height: 100%; background-color: ${getComplianceColor(data.nutrition_compliance_pct)}; width: ${data.nutrition_compliance_pct || 0}%;"></div>
-              </div>
-              <div style="font-size: 11px; color: #f59e0b; font-weight: 600;">
-                ${getUiIcon('streak', { size: 11, color: '#f59e0b' })} ${safeValue(data.nutrition_streak, '0')} day streak
               </div>
             </td>
             <td style="width: 25%; padding: 16px; vertical-align: top;">

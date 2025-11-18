@@ -645,6 +645,13 @@ async function calculateIndividualInsights(
     // ============================================================
     // 4. BUILD COMPLIANCE COMPARISON
     // ============================================================
+    // Helper function to calculate diff only when data exists
+    const calculateComplianceDiff = (memberValue: number | null, popValue: number | null): number | null => {
+      if (memberValue === null || memberValue === undefined) return null;
+      if (popValue === null || popValue === undefined) return null;
+      return memberValue - popValue;
+    };
+
     const complianceComparison = {
       overall: {
         member: memberScore,
@@ -652,24 +659,24 @@ async function calculateIndividualInsights(
         diff: memberScore - Math.round(popAvg.status_score || 0)
       },
       nutrition: {
-        member: metrics.nutrition_compliance_pct || 0,
+        member: metrics.nutrition_compliance_pct,
         population_avg: Math.round(popAvg.nutrition || 0),
-        diff: (metrics.nutrition_compliance_pct || 0) - Math.round(popAvg.nutrition || 0)
+        diff: calculateComplianceDiff(metrics.nutrition_compliance_pct, Math.round(popAvg.nutrition || 0))
       },
       supplements: {
-        member: metrics.supplements_compliance_pct || 0,
+        member: metrics.supplements_compliance_pct,
         population_avg: Math.round(popAvg.supplements || 0),
-        diff: (metrics.supplements_compliance_pct || 0) - Math.round(popAvg.supplements || 0)
+        diff: calculateComplianceDiff(metrics.supplements_compliance_pct, Math.round(popAvg.supplements || 0))
       },
       exercise: {
-        member: metrics.exercise_compliance_pct || 0,
+        member: metrics.exercise_compliance_pct,
         population_avg: Math.round(popAvg.exercise || 0),
-        diff: (metrics.exercise_compliance_pct || 0) - Math.round(popAvg.exercise || 0)
+        diff: calculateComplianceDiff(metrics.exercise_compliance_pct, Math.round(popAvg.exercise || 0))
       },
       meditation: {
-        member: metrics.meditation_compliance_pct || 0,
+        member: metrics.meditation_compliance_pct,
         population_avg: Math.round(popAvg.meditation || 0),
-        diff: (metrics.meditation_compliance_pct || 0) - Math.round(popAvg.meditation || 0)
+        diff: calculateComplianceDiff(metrics.meditation_compliance_pct, Math.round(popAvg.meditation || 0))
       }
     };
 
@@ -709,17 +716,17 @@ async function calculateIndividualInsights(
     // ============================================================
     const riskFactors: string[] = [];
     
-    // Compliance gaps (>15% below average)
-    if (complianceComparison.nutrition.diff < -15) {
+    // Compliance gaps (>15% below average) - ONLY check when data exists
+    if (complianceComparison.nutrition.diff !== null && complianceComparison.nutrition.diff < -15) {
       riskFactors.push(`Nutrition ${Math.abs(complianceComparison.nutrition.diff)}% below average`);
     }
-    if (complianceComparison.supplements.diff < -15) {
+    if (complianceComparison.supplements.diff !== null && complianceComparison.supplements.diff < -15) {
       riskFactors.push(`Supplements ${Math.abs(complianceComparison.supplements.diff)}% below average`);
     }
-    if (complianceComparison.exercise.diff < -15) {
+    if (complianceComparison.exercise.diff !== null && complianceComparison.exercise.diff < -15) {
       riskFactors.push(`Exercise ${Math.abs(complianceComparison.exercise.diff)}% below average`);
     }
-    if (complianceComparison.meditation.diff < -15) {
+    if (complianceComparison.meditation.diff !== null && complianceComparison.meditation.diff < -15) {
       riskFactors.push(`Meditation ${Math.abs(complianceComparison.meditation.diff)}% below average`);
     }
 
@@ -796,12 +803,25 @@ function determineHealthTrajectory(metrics: any): string {
   const vitals = ['energy', 'mood', 'motivation', 'wellbeing', 'sleep'];
   let improving = 0;
   let declining = 0;
+  let hasData = 0;
   
   for (const vital of vitals) {
     const trend = metrics[`${vital}_trend`];
-    if (trend === 'improving') improving++;
-    if (trend === 'declining') declining++;
+    if (trend === 'improving') {
+      improving++;
+      hasData++;
+    }
+    if (trend === 'declining') {
+      declining++;
+      hasData++;
+    }
+    if (trend === 'stable') {
+      hasData++;
+    }
   }
+  
+  // If no health vitals data available, return 'no_data'
+  if (hasData === 0) return 'no_data';
   
   if (improving > declining) return 'improving';
   if (declining > improving) return 'worsening';
@@ -812,6 +832,18 @@ function determineHealthTrajectory(metrics: any): string {
  * Map compliance tier + health trajectory to journey pattern quadrant
  */
 function mapToJourneyPattern(complianceTier: string, healthTrajectory: string) {
+  // Handle no health data cases
+  if (healthTrajectory === 'no_data') {
+    if (complianceTier === 'low') {
+      return { name: 'needs_engagement', description: 'Low compliance, insufficient health data' };
+    }
+    if (complianceTier === 'medium') {
+      return { name: 'building_momentum', description: 'Moderate compliance, early in program' };
+    }
+    return { name: 'on_track', description: 'High compliance, building health baseline' };
+  }
+
+  // Standard quadrants with health data
   if (complianceTier === 'low' && healthTrajectory === 'worsening') {
     return { name: 'high_priority', description: 'Low compliance + worsening health' };
   }
@@ -846,6 +878,10 @@ async function generateAIRecommendations(
     // Build comprehensive prompt
     // Build compliance comparison with explicit ABOVE/BELOW indicators
     const formatComparison = (category: string, data: any) => {
+      // Handle cases where member data doesn't exist yet
+      if (data.member === null || data.member === undefined) {
+        return `- ${category}: No data yet`;
+      }
       const diff = data.diff;
       const comparison = diff > 0 ? `${diff}% ABOVE average` : diff < 0 ? `${Math.abs(diff)}% BELOW average` : 'AT average';
       return `- ${category}: ${data.member}% (population avg: ${data.population_avg}%, difference: ${comparison})`;
@@ -884,10 +920,11 @@ PROGRAM INSIGHTS (from population data):
 
 CRITICAL INSTRUCTIONS:
 1. PAY ATTENTION: If a member is "X% ABOVE average", they are performing BETTER than average. If "X% BELOW average", they are performing WORSE.
-2. Only recommend actions for areas that are significantly BELOW average (>15% gap) or declining
-3. Prioritize by impact: high = urgent gaps, medium = moderate concerns, low = minor optimizations
-4. Be mathematically accurate - if member is 17% and average is 15%, member is ABOVE average, not below
-5. Reference specific numbers from the data provided
+2. IGNORE "No data yet" entries - do NOT make recommendations for areas where data doesn't exist yet. Member is early in program.
+3. Only recommend actions for areas that are significantly BELOW average (>15% gap) or declining
+4. Prioritize by impact: high = urgent gaps, medium = moderate concerns, low = minor optimizations
+5. Be mathematically accurate - if member is 17% and average is 15%, member is ABOVE average, not below
+6. Reference specific numbers from the data provided
 
 Return JSON array with 3-5 recommendations:
 {
@@ -1015,14 +1052,23 @@ function calculateHealthVitals(sessions: any[], responses: any[]) {
 }
 
 /**
- * Calculate compliance metrics
+ * Calculate compliance metrics with weighted scoring
+ * 
+ * Weighted Scoring System:
+ * - Nutrition & Supplements:
+ *   - "Yes" or "I always follow/take" = 1.0 (100% compliance)
+ *   - "I usually follow/take" = 0.5 (50% compliance)
+ *   - All other answers ("sometimes", "rarely", "no") = 0.0 (0%)
+ *   - "Not applicable" (supplements only) = excluded from calculation
+ * 
+ * Formula: compliance_pct = (sum of weighted points / total responses) × 100
  */
 function calculateCompliance(sessions: any[], responses: any[]) {
   const compliance = {
-    nutrition: { yes: 0, total: 0 },
-    supplements: { yes: 0, total: 0 },
-    exercise: { days: [] as number[] },
-    meditation: { yes: 0, total: 0 }
+    nutrition: { points: 0, total: 0 },      // Weighted points system
+    supplements: { points: 0, total: 0 },    // Weighted points system
+    exercise: { days: [] as number[] },      // Unchanged
+    meditation: { yes: 0, total: 0 }         // Unchanged
   };
 
   // Group responses by session
@@ -1042,21 +1088,50 @@ function calculateCompliance(sessions: any[], responses: any[]) {
       const questionText = (response.survey_questions as any)?.question_text?.toLowerCase() || '';
       const answer = response.answer_text?.toLowerCase() || '';
 
-      // Nutrition compliance
+      // Nutrition compliance (weighted scoring)
       if (questionText.includes('following the nutritional plan') || 
           questionText.includes('followed the nutritional plan')) {
+        
+        // Determine weight based on answer
+        let weight = 0;
+        
+        if (answer === 'yes' || answer.includes('always follow')) {
+          weight = 1.0;  // 100% compliance
+        } else if (answer.includes('usually follow')) {
+          weight = 0.5;  // 50% compliance
+        } else {
+          weight = 0.0;  // 0% for "sometimes", "rarely", "no", etc.
+        }
+        
+        compliance.nutrition.points += weight;
         compliance.nutrition.total++;
-        if (answer === 'yes') compliance.nutrition.yes++;
       }
 
-      // Supplements compliance
+      // Supplements compliance (weighted scoring + N/A exclusion)
       if (questionText.includes('taken your supplements') || 
           questionText.includes('taking supplements as prescribed')) {
+        
+        // Skip "not applicable" entirely (don't count in total)
+        if (answer === 'not applicable' || answer === 'n/a') {
+          continue; // Skip this response
+        }
+        
+        // Determine weight based on answer
+        let weight = 0;
+        
+        if (answer === 'yes' || answer.includes('always take')) {
+          weight = 1.0;  // 100% compliance
+        } else if (answer.includes('usually take')) {
+          weight = 0.5;  // 50% compliance
+        } else {
+          weight = 0.0;  // 0% for "sometimes", "rarely", "no", etc.
+        }
+        
+        compliance.supplements.points += weight;
         compliance.supplements.total++;
-        if (answer === 'yes') compliance.supplements.yes++;
       }
 
-      // Exercise days per week
+      // Exercise days per week (unchanged)
       if (questionText.includes('how many days per week do you exercise')) {
         const days = response.answer_numeric;
         if (days !== null && days !== undefined) {
@@ -1064,7 +1139,7 @@ function calculateCompliance(sessions: any[], responses: any[]) {
         }
       }
 
-      // Meditation compliance
+      // Meditation compliance (unchanged)
       if (questionText.includes('abdominal breathing') || 
           questionText.includes('meditation')) {
         compliance.meditation.total++;
@@ -1075,22 +1150,29 @@ function calculateCompliance(sessions: any[], responses: any[]) {
 
   // Calculate percentages
   const exerciseTarget = 5; // Standard target: 5 days per week
-  const latestExerciseDays = compliance.exercise.days.length > 0 
-    ? compliance.exercise.days[compliance.exercise.days.length - 1] 
+  
+  // Exercise: Use average across all time (not just latest)
+  const avgExerciseDays = compliance.exercise.days.length > 0
+    ? compliance.exercise.days.reduce((sum, days) => sum + days, 0) / compliance.exercise.days.length
+    : null;
+  
+  // Round average to 1 decimal place for display
+  const displayExerciseDays = avgExerciseDays !== null
+    ? Math.round(avgExerciseDays * 10) / 10
     : null;
   
   return {
     nutrition_compliance_pct: compliance.nutrition.total > 0 
-      ? Math.round((compliance.nutrition.yes / compliance.nutrition.total) * 100) 
+      ? Math.round((compliance.nutrition.points / compliance.nutrition.total) * 100) 
       : null,
-    nutrition_streak: compliance.nutrition.yes, // Simplified for now
+    nutrition_streak: 0, // Deprecated - no longer tracking streaks
     supplements_compliance_pct: compliance.supplements.total > 0 
-      ? Math.round((compliance.supplements.yes / compliance.supplements.total) * 100) 
+      ? Math.round((compliance.supplements.points / compliance.supplements.total) * 100) 
       : null,
-    exercise_compliance_pct: latestExerciseDays !== null
-      ? Math.round((latestExerciseDays / exerciseTarget) * 100)
+    exercise_compliance_pct: avgExerciseDays !== null
+      ? Math.round((avgExerciseDays / exerciseTarget) * 100)
       : null,
-    exercise_days_per_week: latestExerciseDays,
+    exercise_days_per_week: displayExerciseDays,
     meditation_compliance_pct: compliance.meditation.total > 0 
       ? Math.round((compliance.meditation.yes / compliance.meditation.total) * 100) 
       : null
@@ -1307,13 +1389,77 @@ Return JSON in this exact format:
  * @param sessions - All survey sessions for this member
  * @param moduleSequence - Ordered array of module names from survey_modules table
  */
+/**
+ * Map survey form names to module names
+ * Handles the mismatch between survey form names (e.g., "Module 8 Progress Report")
+ * and module names in the sequence (e.g., "MODULE 8 - END OF MONTH 2")
+ */
+function mapFormNameToModuleName(formName: string, moduleSequence: string[]): string | null {
+  // Direct match first
+  if (moduleSequence.includes(formName)) {
+    return formName;
+  }
+
+  // Extract module number from form name
+  const moduleMatch = formName.match(/Module (\d+)/i);
+  if (moduleMatch) {
+    const moduleNum = parseInt(moduleMatch[1]);
+    // Find the matching module in the sequence by number
+    const matchingModule = moduleSequence.find(m => m.startsWith(`MODULE ${moduleNum} -`));
+    if (matchingModule) {
+      return matchingModule;
+    }
+  }
+
+  // Handle special early modules
+  const formNameLower = formName.toLowerCase();
+  if (formNameLower.includes('initial program') || formNameLower.includes('pre-program')) {
+    return moduleSequence.find(m => m.includes('PRE-PROGRAM')) || null;
+  }
+  if (formNameLower.includes('week 1')) {
+    return moduleSequence.find(m => m.includes('WEEK 1')) || null;
+  }
+  if (formNameLower.includes('week 2')) {
+    return moduleSequence.find(m => m.includes('WEEK 2')) || null;
+  }
+  if (formNameLower.includes('week 3')) {
+    return moduleSequence.find(m => m.includes('WEEK 3')) || null;
+  }
+  if (formNameLower.includes('week 4')) {
+    return moduleSequence.find(m => m.includes('WEEK 4')) || null;
+  }
+  if (formNameLower.includes('start of detox')) {
+    return moduleSequence.find(m => m.includes('START OF DETOX')) || null;
+  }
+  if (formNameLower.includes('mid-detox') || formNameLower.includes('mid detox')) {
+    return moduleSequence.find(m => m.includes('MID-DETOX')) || null;
+  }
+  if (formNameLower.includes('end of detox')) {
+    return moduleSequence.find(m => m.includes('END OF DETOX')) || null;
+  }
+
+  // If we can't map it, return null (skip non-module surveys like MSQ, PROMIS, etc.)
+  return null;
+}
+
 function calculateTimelineProgress(userProgress: any | null, sessions: any[], moduleSequence: string[]) {
   if (!userProgress || !userProgress.last_completed) {
-    // Fallback: use session data
-    const milestones = sessions.map(s => (s.survey_forms as any)?.form_name || 'Unknown');
+    // Fallback: use session data and map form names to module names
+    const milestones: string[] = [];
+    for (const session of sessions) {
+      const formName = (session.survey_forms as any)?.form_name;
+      if (formName) {
+        const moduleName = mapFormNameToModuleName(formName, moduleSequence);
+        if (moduleName && !milestones.includes(moduleName)) {
+          milestones.push(moduleName);
+        }
+      }
+    }
     return {
       completed_milestones: JSON.stringify(milestones),
-      next_milestone: null,
+      next_milestone: milestones.length > 0 && milestones.length < moduleSequence.length 
+        ? moduleSequence[milestones.length] 
+        : null,
       overdue_milestones: JSON.stringify([])
     };
   }
@@ -1325,14 +1471,35 @@ function calculateTimelineProgress(userProgress: any | null, sessions: any[], mo
   const lastCompletedIndex = moduleSequence.indexOf(lastCompleted);
   const workingOnIndex = moduleSequence.indexOf(workingOn);
 
-  // FIX: If last_completed module not in sequence, use session-based fallback
-  // This handles cases like "[BONUS] HORMONE MODULE" which aren't in the standard sequence
+  // FIX: If last_completed module not in sequence (e.g., "[BONUS] HORMONE MODULE"), 
+  // map survey form names to module names instead of using raw form names
   if (lastCompletedIndex === -1) {
-    console.warn(`[TIMELINE] Module "${lastCompleted}" not found in sequence. Using session-based fallback. (Available: ${moduleSequence.join(', ')})`);
-    const milestones = sessions.map(s => (s.survey_forms as any)?.form_name || 'Unknown');
+    console.warn(`[TIMELINE] Module "${lastCompleted}" not found in sequence. Using session-based fallback with name mapping.`);
+    const milestones: string[] = [];
+    for (const session of sessions) {
+      const formName = (session.survey_forms as any)?.form_name;
+      if (formName) {
+        const moduleName = mapFormNameToModuleName(formName, moduleSequence);
+        if (moduleName && !milestones.includes(moduleName)) {
+          milestones.push(moduleName);
+        }
+      }
+    }
+    
+    // Find the last completed standard module
+    const lastStandardModuleIndex = milestones.length > 0 
+      ? moduleSequence.indexOf(milestones[milestones.length - 1])
+      : -1;
+    
+    const nextMilestone = lastStandardModuleIndex >= 0 && lastStandardModuleIndex < moduleSequence.length - 1
+      ? moduleSequence[lastStandardModuleIndex + 1]
+      : lastStandardModuleIndex === moduleSequence.length - 1
+      ? 'Program Complete'
+      : null;
+    
     return {
       completed_milestones: JSON.stringify(milestones),
-      next_milestone: null,
+      next_milestone: nextMilestone,
       overdue_milestones: JSON.stringify([])
     };
   }

@@ -43,11 +43,13 @@ export async function POST(request: Request) {
     //   );
     // }
 
-    // Parse request body for test_mode parameter
+    // Parse request body for test_mode and lead_ids parameters
     const body = await request.json().catch(() => ({}));
     const testMode = body.test_mode === true;
+    const leadIds = body.lead_ids; // Optional: array of specific lead IDs
 
-    console.log(`Triggering dashboard re-analysis for all members (test_mode: ${testMode})...`);
+    const mode = leadIds && Array.isArray(leadIds) && leadIds.length > 0 ? 'specific' : 'all';
+    console.log(`Triggering dashboard re-analysis (mode: ${mode}, test_mode: ${testMode})...`);
 
     // Get Supabase URL and service role key from environment
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -61,10 +63,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Call the analysis edge function with mode='all'
+    // Call the analysis edge function
     const analysisUrl = `${supabaseUrl}/functions/v1/analyze-member-progress`;
     
     console.log(`Calling analysis function: ${analysisUrl}`);
+    
+    const requestBody: any = {
+      mode,
+      test_mode: testMode
+    };
+    
+    if (mode === 'specific' && leadIds) {
+      requestBody.lead_ids = leadIds;
+    }
     
     const response = await fetch(analysisUrl, {
       method: 'POST',
@@ -72,10 +83,7 @@ export async function POST(request: Request) {
         'Authorization': `Bearer ${supabaseServiceKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        mode: 'all',
-        test_mode: testMode
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {

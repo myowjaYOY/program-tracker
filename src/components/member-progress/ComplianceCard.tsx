@@ -200,7 +200,6 @@ export default function ComplianceCard({ data }: ComplianceCardProps) {
           icon={NutritionIcon}
           iconColor="#10b981"
           percentage={data.nutrition_compliance_pct}
-          streak={data.nutrition_streak}
           subtitle="Following prescribed diet"
         />
 

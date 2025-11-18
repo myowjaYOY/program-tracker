@@ -82,37 +82,45 @@ export default function ComparativeAnalysisCard({ insights }: ComparativeAnalysi
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {(['nutrition', 'supplements', 'exercise', 'meditation'] as const).map((category) => {
             const data = insights.compliance_comparison[category];
-            const display = getComparisonDisplay(data.diff);
-            const isAboveAvg = data.diff > 0;
+            const hasData = data.member !== null && data.member !== undefined;
+            const display = hasData ? getComparisonDisplay(data.diff) : null;
+            const isAboveAvg = hasData && data.diff > 0;
+            const isRiskFactor = hasData && data.diff < -15;
             
             return (
               <Grid size={{ xs: 12, sm: 6, md: 3 }} key={category}>
                 <Box 
                   sx={{ 
                     p: 2, 
-                    bgcolor: isAboveAvg ? 'success.lighter' : (data.diff < -15 ? 'error.lighter' : 'grey.50'),
+                    bgcolor: !hasData ? 'grey.50' : (isAboveAvg ? 'success.lighter' : (isRiskFactor ? 'error.lighter' : 'grey.50')),
                     borderRadius: 2,
                     border: 1,
-                    borderColor: isAboveAvg ? 'success.main' : (data.diff < -15 ? 'error.main' : 'grey.300')
+                    borderColor: !hasData ? 'grey.300' : (isAboveAvg ? 'success.main' : (isRiskFactor ? 'error.main' : 'grey.300'))
                   }}
                 >
                   <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">
                     {category}
                   </Typography>
                   <Typography variant="h5" fontWeight="bold" sx={{ my: 0.5 }}>
-                    {data.member}%
+                    {hasData ? `${data.member}%` : 'N/A'}
                   </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ color: display.color, display: 'flex', alignItems: 'center' }}>
-                      {display.icon}
+                  {hasData && display ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ color: display.color, display: 'flex', alignItems: 'center' }}>
+                        {display.icon}
+                      </Box>
+                      <Typography variant="caption" color={display.color} fontWeight={600}>
+                        {display.prefix}{data.diff}%
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        vs. {data.population_avg}%
+                      </Typography>
                     </Box>
-                    <Typography variant="caption" color={display.color} fontWeight={600}>
-                      {display.prefix}{data.diff}%
-                    </Typography>
+                  ) : (
                     <Typography variant="caption" color="text.secondary">
-                      vs. {data.population_avg}%
+                      No data yet
                     </Typography>
-                  </Box>
+                  )}
                 </Box>
               </Grid>
             );
