@@ -24,19 +24,40 @@ import {
   ExpandLess as ExpandLessIcon,
   ArrowUpward as ArrowUpwardIcon,
   Stop as StopIcon,
+  AttachFile as AttachFileIcon,
+  PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
 import { useMemberAIChat } from '@/lib/hooks/use-member-ai-chat';
 import type { AIProvider } from '@/types/ai-chat.types';
+import toast from 'react-hot-toast';
+
+// Extend window to include pdfjsLib from CDN
+declare global {
+  interface Window {
+    pdfjsLib: any;
+  }
+}
 
 interface AIInsightsTabProps {
   memberId: number;
+}
+
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  data: string; // Will hold extracted text from PDF
+  pageCount?: number; // Number of pages extracted
 }
 
 export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
   const [inputMessage, setInputMessage] = useState('');
   const [aiProvider, setAiProvider] = useState<AIProvider>('anthropic');
   const [showMetrics, setShowMetrics] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [isExtractingPdf, setIsExtractingPdf] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     messages,
@@ -58,9 +79,10 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
     }
   }, [messages, isLoading]);
 
-  // Clear conversation when member changes
+  // Clear conversation and file when member changes
   useEffect(() => {
     clearConversation();
+    setUploadedFile(null);
   }, [memberId, clearConversation]);
 
   const handleSend = async () => {
@@ -71,8 +93,14 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
       return;
     }
     if (inputMessage.trim() && !isLoading) {
-      await sendMessage(inputMessage, aiProvider);
+      await sendMessage(
+        inputMessage, 
+        aiProvider,
+        uploadedFile?.data,
+        uploadedFile?.name
+      );
       setInputMessage('');
+      setUploadedFile(null); // Clear file after sending
     }
   };
 
@@ -90,6 +118,167 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  /**
+   * Extract text from PDF file using PDF.js (client-side)
+   * Uses external worker to avoid webpack bundling issues
+   */
+  const extractPdfText = async (file: File): Promise<{ text: string; pageCount: number }> => {
+    try {
+      // Use CDN-hosted PDF.js to avoid webpack issues entirely
+      if (!window.pdfjsLib) {
+        // Load PDF.js from CDN if not already loaded
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+          script.type = 'module';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+        
+        // Wait a bit for the module to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      const pdfjsLib = window.pdfjsLib;
+      
+      if (!pdfjsLib) {
+        throw new Error('Failed to load PDF.js library from CDN');
+      }
+
+      // Configure worker from CDN
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+      // Read file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Load PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pageCount = pdf.numPages;
+
+      // Limit to 100 pages for performance
+      const maxPages = Math.min(pageCount, 100);
+
+      let fullText = '';
+
+      // Extract text from each page
+      for (let i = 1; i <= maxPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+
+        // Combine all text items from the page
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+
+        fullText += pageText + '\n\n';
+
+        // Update progress for large PDFs
+        if (pageCount > 10 && i % 5 === 0) {
+          console.log(`[PDF Extraction] Processed ${i}/${maxPages} pages`);
+        }
+      }
+
+      // Truncate if text is too large (> 100,000 characters)
+      const maxChars = 100000;
+      if (fullText.length > maxChars) {
+        console.warn(`[PDF Extraction] Text truncated from ${fullText.length} to ${maxChars} characters`);
+        fullText = fullText.substring(0, maxChars) + '\n\n[Text truncated due to length...]';
+      }
+
+      return { text: fullText.trim(), pageCount };
+    } catch (error: any) {
+      console.error('[PDF Extraction] Error:', error);
+
+      // Handle specific errors
+      if (error.name === 'PasswordException') {
+        throw new Error('This PDF is password-protected. Please unlock it first.');
+      }
+
+      throw new Error('Unable to extract text from this PDF. The file may be corrupted or contain only images.');
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type - only PDF
+    if (file.type !== 'application/pdf') {
+      toast.error('Only PDF files are supported. Please select a PDF file.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Validate file size - max 5 MB
+    const maxSizeInBytes = 5 * 1024 * 1024; // 5 MB
+    if (file.size > maxSizeInBytes) {
+      toast.error(`File too large. Maximum size is 5 MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)} MB.`);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Start extraction process
+    setIsExtractingPdf(true);
+    const loadingToast = toast.loading(`Extracting text from ${file.name}...`);
+
+    try {
+      // Extract text from PDF
+      const { text, pageCount } = await extractPdfText(file);
+
+      // Check if PDF had any text
+      if (!text || text.trim().length < 50) {
+        toast.dismiss(loadingToast);
+        toast.error('This PDF appears to contain no text or only images. Text extraction may be incomplete.', {
+          duration: 5000,
+        });
+        // Still allow upload with limited text
+      }
+
+      // Store file with extracted text
+      setUploadedFile({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data: text,
+        pageCount: pageCount,
+      });
+
+      toast.dismiss(loadingToast);
+      toast.success(`Extracted ${pageCount} page${pageCount !== 1 ? 's' : ''} from ${file.name}`, {
+        duration: 3000,
+      });
+
+      console.log(`[PDF Upload] Successfully extracted ${text.length} characters from ${pageCount} pages`);
+    } catch (error: any) {
+      console.error('[PDF Upload] Extraction failed:', error);
+      toast.dismiss(loadingToast);
+      toast.error(error.message || 'Failed to extract text from PDF', {
+        duration: 5000,
+      });
+      
+      // Clear file state on error
+      setUploadedFile(null);
+    } finally {
+      setIsExtractingPdf(false);
+      
+      // Clear the input so the same file can be re-uploaded if needed
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null);
+    toast.success('File removed');
   };
 
   const messageCount = messages.filter((m) => m.role !== 'system').length;
@@ -110,7 +299,39 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
         </ToggleButtonGroup>
       </Box>
 
-      {/* Message Input - Moved to Top */}
+      {/* File Upload - Hidden Input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        style={{ display: 'none' }}
+        onChange={handleFileUpload}
+        disabled={isLoading || isExtractingPdf}
+      />
+
+      {/* File Chip Display - Show above input if file uploaded or extracting */}
+      {(uploadedFile || isExtractingPdf) && (
+        <Box sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+          {isExtractingPdf && <CircularProgress size={16} />}
+          <Chip
+            {...(!isExtractingPdf && { icon: <PictureAsPdfIcon /> })}
+            label={
+              isExtractingPdf
+                ? 'Extracting text...'
+                : uploadedFile?.pageCount
+                ? `${uploadedFile.name} (${(uploadedFile.size / 1024).toFixed(0)} KB) • ${uploadedFile.pageCount} page${uploadedFile.pageCount !== 1 ? 's' : ''}`
+                : `${uploadedFile?.name} (${((uploadedFile?.size || 0) / 1024).toFixed(0)} KB)`
+            }
+            {...(!isExtractingPdf && { onDelete: handleRemoveFile })}
+            color="primary"
+            variant="outlined"
+            size="small"
+            sx={{ maxWidth: '100%' }}
+          />
+        </Box>
+      )}
+
+      {/* Message Input with Inline Upload Button */}
       <Box sx={{ mb: 2, display: 'flex', gap: 1, alignItems: 'flex-end' }}>
         <TextField
           fullWidth
@@ -128,6 +349,30 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
             },
           }}
         />
+        <Tooltip title={isExtractingPdf ? "Extracting PDF..." : "Upload PDF"}>
+          <span>
+            <IconButton
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading || !memberId || isExtractingPdf}
+              sx={{
+                width: '48px',
+                height: '48px',
+                color: 'primary.main',
+                border: '1px solid',
+                borderColor: 'primary.main',
+                '&:hover': {
+                  bgcolor: 'primary.50',
+                },
+                '&.Mui-disabled': {
+                  color: 'action.disabled',
+                  borderColor: 'action.disabledBackground',
+                },
+              }}
+            >
+              {isExtractingPdf ? <CircularProgress size={20} /> : <AttachFileIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
         <IconButton
           onClick={handleSend}
           disabled={!isLoading && (!inputMessage.trim() || !memberId)}
@@ -215,8 +460,12 @@ export default function AIInsightsTab({ memberId }: AIInsightsTabProps) {
             <Typography variant="h6" gutterBottom>
               Ask about this member&apos;s health data
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Example: &quot;What patterns can you glean from the entire data set that would not be obvious to me as a provider or to the member?&quot;
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+              <PictureAsPdfIcon fontSize="small" />
+              You can also upload PDF files to analyze specific documents
             </Typography>
           </Box>
         ) : (

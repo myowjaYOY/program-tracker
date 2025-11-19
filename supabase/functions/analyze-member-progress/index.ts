@@ -259,6 +259,33 @@ Deno.serve(async (req) => {
       errors: errors
     };
 
+    // ============================================================
+    // AUTOMATIC ANALYTICS CACHE REFRESH
+    // ============================================================
+    // After updating member_progress_summary, refresh program-level analytics
+    // This ensures Program Analytics dashboard always shows current data
+    // Note: This adds ~5-10 seconds but runs in background
+    // If it fails, we log but don't fail the whole request
+    console.log('Refreshing program-level analytics cache...');
+    const analyticsStartTime = Date.now();
+    
+    try {
+      const { data: analyticsResult, error: analyticsError } = await supabase
+        .rpc('calculate_analytics_metrics');
+      
+      if (analyticsError) {
+        console.error('❌ Failed to refresh analytics cache:', analyticsError.message);
+        // Don't fail the whole request - analytics refresh is non-critical
+      } else {
+        const analyticsDuration = ((Date.now() - analyticsStartTime) / 1000).toFixed(2);
+        console.log(`✅ Analytics cache refreshed successfully in ${analyticsDuration}s`);
+        console.log('Analytics result:', analyticsResult);
+      }
+    } catch (error: any) {
+      console.error('❌ Error refreshing analytics:', error.message);
+      // Don't fail the whole request - log and continue
+    }
+
     return new Response(
       JSON.stringify(result),
       { 

@@ -76,7 +76,7 @@ export function useMemberAIChat({ memberId, contextDays = 90 }: UseMemberAIChatP
   });
 
   const sendMessage = useCallback(
-    async (message: string, aiProvider: AIProvider) => {
+    async (message: string, aiProvider: AIProvider, fileData?: string, fileName?: string) => {
       if (!memberId) {
         toast.error('Please select a member first.');
         return;
@@ -88,6 +88,11 @@ export function useMemberAIChat({ memberId, contextDays = 90 }: UseMemberAIChatP
         conversation_history: messages.filter((msg) => msg.role !== 'system'),
         ai_provider: aiProvider,
         context_days: contextDays,
+        ...(fileData && fileName && {
+          file_data: fileData,
+          file_name: fileName,
+          file_type: 'application/pdf',
+        }),
       };
       await chatMutation.mutateAsync(request);
     },

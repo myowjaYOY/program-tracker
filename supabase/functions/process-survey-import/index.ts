@@ -4,7 +4,7 @@
 // Auto-creates missing programs, modules, forms, questions, and user mappings
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 interface SurveyResponseRow {
   completed_on: string;
@@ -571,13 +571,54 @@ async function processSurveyData(
         leadId = existingMapping.lead_id;
         console.log(`Using existing user mapping for external_user_id ${firstRow.user_id} -> Lead ${leadId}`);
       } else {
-        // No mapping exists, find the lead by name
-        const { data: leadData } = await supabase
+        // No mapping exists, find the lead by name first
+        const { data: nameMatches } = await supabase
           .from('leads')
-          .select('lead_id, first_name, last_name')
+          .select('lead_id, first_name, last_name, email')
           .ilike('first_name', firstRow.first_name)
-          .ilike('last_name', firstRow.last_name)
-          .maybeSingle();
+          .ilike('last_name', firstRow.last_name);
+
+        let matchMethod = 'name_match';
+        let leadData: { lead_id: number; first_name: string; last_name: string; email?: string } | null = null;
+
+        // If exactly 1 name match, use it
+        if (nameMatches && nameMatches.length === 1) {
+          leadData = nameMatches[0];
+          matchMethod = 'name_match';
+        }
+        // If 0 or >1 name matches, try email search (if email provided in CSV)
+        else if (nameMatches && nameMatches.length > 1) {
+          // Multiple name matches - try email disambiguation
+          console.log(`Session ${sessionKey}: Multiple name matches found for "${firstRow.first_name} ${firstRow.last_name}" (${nameMatches.length} matches), checking if email can disambiguate`);
+          
+          // Try to match by email if available
+          // Note: We don't have email in CSV for this import, but check if future CSVs include it
+          // For now, we'll just report the error
+          const duplicateInfo = nameMatches.map(m => `lead_id: ${m.lead_id}`).join(', ');
+          const errorMsg = `DUPLICATE NAME: Multiple leads found with name "${firstRow.first_name} ${firstRow.last_name}" (lead_ids: ${duplicateInfo}). Cannot determine which lead to use. Please add email column to CSV or fix duplicate names in leads table.`;
+          errors.push(`Session ${sessionKey}: ${errorMsg}`);
+          errorDetails.push({
+            row_number: rowNumber,
+            error_type: 'duplicate_name_match',
+            error_message: errorMsg,
+            row_data: firstRow
+          });
+          errorRows += sessionRows.length;
+          continue;
+        }
+        // No name matches - this is expected for new surveys, report and continue
+        else {
+          const errorMsg = `Lead not found in leads table: "${firstRow.first_name} ${firstRow.last_name}". Please add this person to the leads table or create a manual mapping in survey_user_mappings.`;
+          errors.push(`Session ${sessionKey}: ${errorMsg}`);
+          errorDetails.push({
+            row_number: rowNumber,
+            error_type: 'lead_not_found',
+            error_message: errorMsg,
+            row_data: firstRow
+          });
+          errorRows += sessionRows.length;
+          continue;
+        }
 
         if (leadData) {
           leadId = leadData.lead_id;
@@ -591,7 +632,7 @@ async function processSurveyData(
               first_name: firstRow.first_name,
               last_name: firstRow.last_name,
               match_confidence: 'high',
-              match_method: 'name_match'
+              match_method: matchMethod
             })
             .select()
             .single();
@@ -599,20 +640,8 @@ async function processSurveyData(
           if (mappingError) {
             console.error(`Failed to create mapping for external_user_id ${firstRow.user_id}: ${mappingError.message}`);
           } else {
-            console.log(`Created user mapping: external_user_id ${firstRow.user_id} (${firstRow.first_name} ${firstRow.last_name}) -> Lead ${leadId}`);
+            console.log(`Created user mapping: external_user_id ${firstRow.user_id} (${firstRow.first_name} ${firstRow.last_name}) -> Lead ${leadId} via ${matchMethod}`);
           }
-        } else {
-          // Lead not found
-          const errorMsg = `Lead "${firstRow.first_name} ${firstRow.last_name}" not found in leads table`;
-          errors.push(`Session ${sessionKey}: ${errorMsg}`);
-          errorDetails.push({
-            row_number: rowNumber,
-            error_type: 'lead_not_found',
-            error_message: errorMsg,
-            row_data: firstRow
-          });
-          errorRows += sessionRows.length;
-          continue;
         }
       }
 

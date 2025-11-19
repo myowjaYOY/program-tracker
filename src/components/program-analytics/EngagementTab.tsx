@@ -1,7 +1,7 @@
 'use client';
 
 import { Box, Grid, Card, CardContent, Typography, Alert, Chip } from '@mui/material';
-import { BatteryChargingFull, Mood, EmojiEvents, Spa, TrendingUp, TrendingFlat, TrendingDown } from '@mui/icons-material';
+import { BatteryChargingFull, Mood, EmojiEvents, Spa } from '@mui/icons-material';
 
 interface EngagementTabProps {
   metrics: any;
@@ -21,34 +21,65 @@ export default function EngagementTab({ metrics }: EngagementTabProps) {
     ? JSON.parse(metrics.cohort_analysis)
     : metrics.cohort_analysis || [];
 
-  // Extract overall health from high compliance tier
-  const highTier = healthVitals?.high || {};
-  const avgEnergy = highTier?.energy?.median || 0;
-  const avgMood = highTier?.mood?.median || 0;
-  const avgMotivation = highTier?.motivation?.median || 0;
-  const avgWellbeing = highTier?.wellbeing?.median || 0;
+  // Helper function to map score (1-5) to label
+  const getHealthLabel = (score: number): string => {
+    if (score < 2) return 'Poor';
+    if (score < 3) return 'Fair';
+    if (score < 4) return 'Average';
+    if (score < 5) return 'Good';
+    return 'Excellent';
+  };
 
-  // Generate engagement insight
+  // Helper function to get color based on score (1-5 scale)
+  const getHealthColor = (score: number): 'error' | 'warning' | 'success' => {
+    if (score < 3) return 'error';
+    if (score < 4) return 'warning';
+    return 'success';
+  };
+
+  // Calculate overall health across ALL tiers (low, medium, high) - weighted by member count
+  const calculateOverallHealth = (vital: string) => {
+    const tiers = ['low', 'medium', 'high'];
+    let totalScore = 0;
+    let tierCount = 0;
+    
+    tiers.forEach(tier => {
+      const tierData = healthVitals?.[tier];
+      if (tierData && tierData[vital]?.median) {
+        totalScore += tierData[vital].median;
+        tierCount++;
+      }
+    });
+    
+    return tierCount > 0 ? totalScore / tierCount : 0;
+  };
+
+  const avgEnergy = calculateOverallHealth('energy');
+  const avgMood = calculateOverallHealth('mood');
+  const avgMotivation = calculateOverallHealth('motivation');
+  const avgWellbeing = calculateOverallHealth('wellbeing');
+
+  // Generate engagement insight (1-5 scale)
   const avgHealth = (avgEnergy + avgMood + avgMotivation + avgWellbeing) / 4;
   const getEngagementInsight = () => {
-    if (avgHealth >= 7) {
+    if (avgHealth >= 4.0) {
       return {
         severity: 'success' as const,
         title: 'Excellent Member Health Indicators',
-        message: `Average health score is ${avgHealth.toFixed(1)}/10. Members are reporting strong energy, mood, motivation, and wellbeing. This suggests the program is delivering positive outcomes.`
+        message: `Average health score is ${avgHealth.toFixed(1)} out of 5. Members are reporting strong energy, mood, motivation, and wellbeing. This suggests the program is delivering positive outcomes.`
       };
     }
-    if (avgHealth >= 5) {
+    if (avgHealth >= 3.0) {
       return {
         severity: 'warning' as const,
         title: 'Moderate Member Health',
-        message: `Average health score is ${avgHealth.toFixed(1)}/10. Some members may be struggling. Consider: (1) Check-in calls, (2) Adjust program intensity, (3) Identify specific pain points.`
+        message: `Average health score is ${avgHealth.toFixed(1)} out of 5. Some members may be struggling. Consider: (1) Check-in calls, (2) Adjust program intensity, (3) Identify specific pain points.`
       };
     }
     return {
       severity: 'error' as const,
       title: 'Low Member Health Indicators',
-      message: `Average health score is ${avgHealth.toFixed(1)}/10. Members are reporting low energy, mood, motivation, or wellbeing. Immediate intervention recommended to prevent dropouts.`
+      message: `Average health score is ${avgHealth.toFixed(1)} out of 5. Members are reporting low energy, mood, motivation, or wellbeing. Immediate intervention recommended to prevent dropouts.`
     };
   };
 
@@ -73,96 +104,72 @@ export default function EngagementTab({ metrics }: EngagementTabProps) {
       
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={3}>
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.warning.main}`, height: '100%' }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette[getHealthColor(avgEnergy)].main}`, height: '100%' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <BatteryChargingFull sx={{ fontSize: 40, color: 'warning.main', mr: 2 }} />
+              <Box display="flex" alignItems="center">
+                <BatteryChargingFull sx={{ fontSize: 40, color: `${getHealthColor(avgEnergy)}.main`, mr: 2 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Energy Level
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="warning.main">
-                    {avgEnergy.toFixed(1)}<Typography component="span" variant="h6" color="text.secondary">/10</Typography>
+                  <Typography variant="h3" fontWeight="bold" color={`${getHealthColor(avgEnergy)}.main`}>
+                    {avgEnergy.toFixed(1)} <Typography component="span" variant="h6" color={`${getHealthColor(avgEnergy)}.main`}>({getHealthLabel(avgEnergy)})</Typography>
                   </Typography>
                 </Box>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <TrendingFlat sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  Stable
-                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid size={3}>
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.secondary.main}`, height: '100%' }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette[getHealthColor(avgMood)].main}`, height: '100%' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <Mood sx={{ fontSize: 40, color: 'secondary.main', mr: 2 }} />
+              <Box display="flex" alignItems="center">
+                <Mood sx={{ fontSize: 40, color: `${getHealthColor(avgMood)}.main`, mr: 2 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Mood Score
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="secondary.main">
-                    {avgMood.toFixed(1)}<Typography component="span" variant="h6" color="text.secondary">/10</Typography>
+                  <Typography variant="h3" fontWeight="bold" color={`${getHealthColor(avgMood)}.main`}>
+                    {avgMood.toFixed(1)} <Typography component="span" variant="h6" color={`${getHealthColor(avgMood)}.main`}>({getHealthLabel(avgMood)})</Typography>
                   </Typography>
                 </Box>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <TrendingFlat sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  Stable
-                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid size={3}>
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.primary.main}`, height: '100%' }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette[getHealthColor(avgMotivation)].main}`, height: '100%' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <EmojiEvents sx={{ fontSize: 40, color: 'primary.main', mr: 2 }} />
+              <Box display="flex" alignItems="center">
+                <EmojiEvents sx={{ fontSize: 40, color: `${getHealthColor(avgMotivation)}.main`, mr: 2 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Motivation
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="primary.main">
-                    {avgMotivation.toFixed(1)}<Typography component="span" variant="h6" color="text.secondary">/10</Typography>
+                  <Typography variant="h3" fontWeight="bold" color={`${getHealthColor(avgMotivation)}.main`}>
+                    {avgMotivation.toFixed(1)} <Typography component="span" variant="h6" color={`${getHealthColor(avgMotivation)}.main`}>({getHealthLabel(avgMotivation)})</Typography>
                   </Typography>
                 </Box>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <TrendingFlat sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  Stable
-                </Typography>
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
         <Grid size={3}>
-          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.success.main}`, height: '100%' }}>
+          <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette[getHealthColor(avgWellbeing)].main}`, height: '100%' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" mb={2}>
-                <Spa sx={{ fontSize: 40, color: 'success.main', mr: 2 }} />
+              <Box display="flex" alignItems="center">
+                <Spa sx={{ fontSize: 40, color: `${getHealthColor(avgWellbeing)}.main`, mr: 2 }} />
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block">
                     Wellbeing
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="success.main">
-                    {avgWellbeing.toFixed(1)}<Typography component="span" variant="h6" color="text.secondary">/10</Typography>
+                  <Typography variant="h3" fontWeight="bold" color={`${getHealthColor(avgWellbeing)}.main`}>
+                    {avgWellbeing.toFixed(1)} <Typography component="span" variant="h6" color={`${getHealthColor(avgWellbeing)}.main`}>({getHealthLabel(avgWellbeing)})</Typography>
                   </Typography>
                 </Box>
-              </Box>
-              <Box display="flex" alignItems="center" gap={1}>
-                <TrendingFlat sx={{ fontSize: 16, color: 'text.secondary' }} />
-                <Typography variant="caption" color="text.secondary">
-                  Stable
-                </Typography>
               </Box>
             </CardContent>
           </Card>
@@ -187,9 +194,9 @@ export default function EngagementTab({ metrics }: EngagementTabProps) {
                     label={`${cohort.avg_compliance?.toFixed(0) || 0}%`}
                     size="small"
                     color={
-                      cohort.avg_compliance >= 70
+                      cohort.avg_compliance >= 75
                         ? 'success'
-                        : cohort.avg_compliance >= 40
+                        : cohort.avg_compliance >= 50
                         ? 'warning'
                         : 'error'
                     }

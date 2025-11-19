@@ -35,17 +35,14 @@ interface CampaignPerformanceData {
   campaign_name: string;
   campaign_date: string;
   vendor_name: string;
-  total_leads: number;
-  active_leads: number;
-  won_leads: number;
-  lost_leads: number;
-  no_pme_leads: number;
-  conversion_rate: number;
   campaign_status: 'Active' | 'Closed' | 'Mixed';
-  ad_spend: number | null;
-  food_cost: number | null;
-  cost_per_lead: number;
-  roi_percentage: number;
+  total_leads: number; // MAX(confirmed_count, actual lead count)
+  no_shows: number; // No Show status after Confirmed
+  no_pmes: number; // Never scheduled PME
+  pme_scheduled: number; // Ever had PME Scheduled status
+  conversion_rate: number; // (PME Scheduled / Total Leads) × 100
+  total_cost: number; // ad_spend + food_cost
+  cost_per_lead: number; // total_cost / total_leads
 }
 
 // Reports table component
@@ -121,33 +118,22 @@ export default function ReportsTable() {
       type: 'number',
     },
     {
-      field: 'active_leads',
-      headerName: 'Active',
+      field: 'no_shows',
+      headerName: 'No Shows',
       width: 100,
       type: 'number',
     },
     {
-      field: 'won_leads',
-      headerName: 'Won',
+      field: 'no_pmes',
+      headerName: 'No PMEs',
       width: 100,
       type: 'number',
-      renderCell: params => (
-        <Box sx={{ color: 'success.main', fontWeight: 'bold' }}>
-          {params.value}
-        </Box>
-      ),
     },
     {
-      field: 'lost_leads',
-      headerName: 'Lost',
-      width: 100,
+      field: 'pme_scheduled',
+      headerName: 'PME Scheduled',
+      width: 130,
       type: 'number',
-      renderCell: params => {
-        const lostLeads = params.row.lost_leads || 0;
-        const noPmeLeads = params.row.no_pme_leads || 0;
-        const totalLost = lostLeads + noPmeLeads;
-        return totalLost;
-      },
     },
     {
       field: 'conversion_rate',
@@ -164,25 +150,18 @@ export default function ReportsTable() {
       },
     },
     {
-      field: 'cost_per_lead',
-      headerName: 'Cost/Lead',
+      field: 'total_cost',
+      headerName: 'Cost',
       width: 120,
       type: 'number',
       renderCell: renderCurrency,
     },
     {
-      field: 'roi_percentage',
-      headerName: 'ROI %',
-      width: 100,
+      field: 'cost_per_lead',
+      headerName: 'Cost/Lead',
+      width: 120,
       type: 'number',
-      renderCell: params => {
-        const value = params.value;
-        if (value === 0) return '0.0%';
-        if (value != null && value !== undefined && !isNaN(value)) {
-          return `${Number(value).toFixed(1)}%`;
-        }
-        return '-';
-      },
+      renderCell: renderCurrency,
     },
   ];
 
@@ -203,7 +182,7 @@ export default function ReportsTable() {
       campaignPerformance.reduce((sum, c) => sum + c.conversion_rate, 0) /
       totalCampaigns;
     const totalCampaignSpend = campaignPerformance.reduce(
-      (sum, c) => sum + (c.ad_spend || 0) + (c.food_cost || 0),
+      (sum, c) => sum + (c.total_cost || 0),
       0
     );
 

@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse request body
     const body = (await request.json()) as ChatRequest;
-    const { member_id, message, conversation_history, ai_provider, context_days } = body;
+    const { member_id, message, conversation_history, ai_provider, context_days, file_data, file_name, file_type } = body;
 
     // Validate required fields
     if (!member_id || !message || !ai_provider) {
@@ -72,13 +72,31 @@ export async function POST(request: NextRequest) {
     const memberContext = await fetchMemberContext(member_id, context_days);
     console.log(`[AI Chat] Context fetched: ${memberContext.data_summary.data_size_kb} KB`);
 
+    // Build file context section if file was uploaded
+    const fileContextSection = file_data && file_name ? `
+
+========================================
+📎 UPLOADED FILE: ${file_name}
+========================================
+
+CRITICAL: The user has uploaded a file and wants you to analyze it. This file content takes PRIORITY over the member's historical survey data for this specific question.
+
+FILE CONTENT:
+${file_data}
+
+========================================
+END OF UPLOADED FILE
+========================================
+
+` : '';
+
     // Build system prompt with member context
     const systemPrompt = `You are a health data analyst assistant specializing in member wellness programs.
 
 CONTEXT:
 You have access to comprehensive, anonymized health data for one member over the past ${context_days} days.
 Member identifier: [REDACTED] (Do NOT refer to the member by name or any specific ID)
-
+${fileContextSection}
 IMPORTANT: All data below is sorted in CHRONOLOGICAL ORDER (oldest to newest). When analyzing trends, the FIRST entries are the EARLIEST data, and the LAST entries are the MOST RECENT data.
 
 DATA PROVIDED:
@@ -89,7 +107,7 @@ Provider Observations (${memberContext.data_summary.note_count} notes, sorted ol
 ${JSON.stringify(memberContext.provider_notes, null, 2)}
 
 YOUR ROLE:
-1. Answer questions about THIS member's health data ONLY.
+1. ${file_data ? 'PRIORITIZE the uploaded file content for the current question. Use member data for additional context only.' : 'Answer questions about THIS member\'s health data ONLY.'}
 2. Base all answers strictly on the provided data.
 3. Cite specific dates, survey names, questions, answers, or note types when possible.
 4. Identify trends, patterns, and correlations within the data.

@@ -167,33 +167,22 @@ export default function ReportsPage() {
       type: 'number',
     },
     {
-      field: 'active_leads',
-      headerName: 'Active',
+      field: 'no_shows',
+      headerName: 'No Shows',
       width: 100,
       type: 'number',
     },
     {
-      field: 'won_leads',
-      headerName: 'Won',
+      field: 'no_pmes',
+      headerName: 'No PMEs',
       width: 100,
       type: 'number',
-      renderCell: params => (
-        <Box sx={{ color: 'success.main', fontWeight: 'bold' }}>
-          {params.value}
-        </Box>
-      ),
     },
     {
-      field: 'lost_leads',
-      headerName: 'Lost',
-      width: 100,
+      field: 'pme_scheduled',
+      headerName: 'PME Scheduled',
+      width: 130,
       type: 'number',
-      renderCell: params => {
-        const lostLeads = params.row.lost_leads || 0;
-        const noPmeLeads = params.row.no_pme_leads || 0;
-        const totalLost = lostLeads + noPmeLeads;
-        return totalLost;
-      },
     },
     {
       field: 'conversion_rate',
@@ -210,25 +199,18 @@ export default function ReportsPage() {
       },
     },
     {
-      field: 'cost_per_lead',
-      headerName: 'Cost/Lead',
+      field: 'total_cost',
+      headerName: 'Cost',
       width: 120,
       type: 'number',
       renderCell: renderCurrency,
     },
     {
-      field: 'roi_percentage',
-      headerName: 'ROI %',
-      width: 100,
+      field: 'cost_per_lead',
+      headerName: 'Cost/Lead',
+      width: 120,
       type: 'number',
-      renderCell: params => {
-        const value = params.value;
-        if (value === 0) return '0.0%';
-        if (value != null && value !== undefined && !isNaN(value)) {
-          return `${Number(value).toFixed(1)}%`;
-        }
-        return '-';
-      },
+      renderCell: renderCurrency,
     },
   ];
 

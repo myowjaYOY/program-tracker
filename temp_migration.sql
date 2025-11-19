@@ -1,4 +1,4 @@
--- =====================================================
+﻿-- =====================================================
 -- ANALYTICS DASHBOARD - CALCULATION FUNCTION
 -- =====================================================
 -- This function calculates all analytics metrics and
@@ -10,20 +10,6 @@
 -- Performance: ~5-10 seconds for 100 members
 -- 
 -- Created: 2025-11-07
--- Updated: 2025-11-19 - Fixed active member count and added avg_member_health_score
--- 
--- CHANGES 2025-11-19:
--- 1. ACTIVE MEMBER COUNT FIX: Removed member_progress_summary requirement
---    - Previously: Counted 41 (excluded new members not yet analyzed)
---    - Now: Counts 45 (all members with Active status programs)
---    - Impact: More accurate "Active Members" count on Overview tab
---
--- 2. AVG MEMBER HEALTH SCORE: Added to completion_statistics JSONB
---    - Replaces "Avg Completion Rate" metric on Overview tab
---    - Calculated from status_score (0-100 scale) in member_progress_summary
---    - Combines: Compliance (35pts) + Curriculum (35pts) + Wins (5pts) + 
---      Challenges (5pts) + Health Vitals (20pts)
---    - NO SCHEMA CHANGES: Stored in existing completion_statistics field
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION calculate_analytics_metrics()
@@ -44,6 +30,7 @@ DECLARE
   v_member_count INTEGER;
   v_active_count INTEGER;
   v_completed_count INTEGER;
+  v_avg_member_health_score DECIMAL(5,2); -- Average status_score across all members
   v_compliance_msq_corr DECIMAL(5,3); -- DEPRECATED: Keeping for backwards compatibility
   v_compliance_promis_corr DECIMAL(5,3); -- DEPRECATED: Keeping for backwards compatibility
   v_new_cache_id INTEGER;
@@ -83,10 +70,7 @@ BEGIN
   SELECT COUNT(DISTINCT lead_id) INTO v_member_count
   FROM member_progress_summary;
   
-  -- Count active members directly from member_programs
-  -- FIXED 2025-11-19: Previously required member_progress_summary join, which excluded
-  -- 4 new active members who hadn't been analyzed yet (was counting 41 instead of 45).
-  -- Now counts all active members directly from member_programs table.
+  -- Count active members directly (don't require member_progress_summary)
   SELECT COUNT(DISTINCT mp.lead_id) INTO v_active_count
   FROM member_programs mp
   INNER JOIN program_status ps ON ps.program_status_id = mp.program_status_id
@@ -100,8 +84,13 @@ BEGIN
   WHERE ps.status_name = 'Completed'
     AND mp.active_flag = true;
   
-  RAISE NOTICE 'Member counts - Total: %, Active: %, Completed: %', 
-    v_member_count, v_active_count, v_completed_count;
+  -- Calculate average member health score
+  SELECT ROUND(AVG(status_score)::numeric, 2) INTO v_avg_member_health_score
+  FROM member_progress_summary
+  WHERE status_score IS NOT NULL;
+  
+  RAISE NOTICE 'Member counts - Total: %, Active: %, Completed: %, Avg Health: %', 
+    v_member_count, v_active_count, v_completed_count, v_avg_member_health_score;
   
   -- ============================================================
   -- TAB 1: COMPLIANCE PATTERNS
@@ -588,8 +577,8 @@ BEGIN
   RAISE NOTICE 'Calculating Tab 3: Intervention Targeting...';
   
   -- 6. At-Risk Member Segmentation (Quadrant Analysis)
-  -- X-axis: Compliance (low → high)
-  -- Y-axis: Health Outcome Improvement (worsening → improving)
+  -- X-axis: Compliance (low â†’ high)
+  -- Y-axis: Health Outcome Improvement (worsening â†’ improving)
   WITH member_outcomes AS (
     SELECT 
       mps.lead_id,
@@ -734,11 +723,6 @@ BEGIN
   RAISE NOTICE 'Cohort analysis calculated';
   
   -- 10. Program Completion Statistics
-  -- UPDATED 2025-11-19: Added avg_member_health_score to replace "Avg Completion Rate" 
-  -- metric on Overview tab. This is stored in the existing completion_statistics JSONB
-  -- field (no schema changes). The health score is calculated from status_score in
-  -- member_progress_summary, which combines compliance + vitals + curriculum progress
-  -- into a single 0-100 score calculated by the analyze-member-progress edge function.
   WITH completion_stats AS (
     SELECT 
       COUNT(DISTINCT CASE WHEN ps.status_name = 'Completed' THEN mp.lead_id END) AS completed,
@@ -755,10 +739,6 @@ BEGIN
     'dropout_rate', ROUND((dropped::numeric / NULLIF(total, 0) * 100), 1),
     'active_rate', ROUND((active::numeric / NULLIF(total, 0) * 100), 1),
     'avg_days_to_complete', ROUND(avg_days_completed::numeric, 0),
-    -- NEW 2025-11-19: Average member health score (0-100 scale)
-    -- Calculated from status_score which combines: Protocol Compliance (35pts) +
-    -- Curriculum Progress (35pts) + Wins (5pts) + Challenges (5pts) + Health Vitals (20pts)
-    'avg_member_health_score', ROUND((SELECT AVG(status_score) FROM member_progress_summary WHERE status_score IS NOT NULL)::numeric, 1),
     'total_members', total,
     'completed_count', completed,
     'active_count', active,
@@ -782,6 +762,7 @@ BEGIN
     member_count,
     active_member_count,
     completed_member_count,
+    avg_member_health_score,
     calculation_duration_ms,
     
     -- Tab 1: Compliance Patterns
@@ -814,6 +795,7 @@ BEGIN
     v_member_count,
     v_active_count,
     v_completed_count,
+    v_avg_member_health_score,
     v_duration_ms,
     
     -- Tab 1
@@ -889,4 +871,5 @@ $$;
 
 COMMENT ON FUNCTION get_latest_analytics_cache() IS 
   'Returns the most recent analytics cache entry. Used by API endpoints.';
+
 

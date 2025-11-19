@@ -2,12 +2,16 @@
 
 import { Box, Grid, Card, CardContent, Typography, LinearProgress, Alert } from '@mui/material';
 import { Warning, Restaurant, FitnessCenter, LocalPharmacy, SelfImprovement } from '@mui/icons-material';
+import { useComplianceTrends } from '@/lib/hooks/use-compliance-trends';
+import ComplianceTrendChart from './ComplianceTrendChart';
 
 interface ComplianceTabProps {
   metrics: any;
 }
 
 export default function ComplianceTab({ metrics }: ComplianceTabProps) {
+  // Fetch compliance trends data
+  const { data: trendsData, isLoading: trendsLoading, error: trendsError } = useComplianceTrends();
   if (!metrics) {
     return <Alert severity="info">No analytics data available</Alert>;
   }
@@ -72,13 +76,13 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
   const criticalAreas = [nutrition, exercise, supplements, meditation].filter(rate => rate < 50).length;
 
   const getColor = (value: number) => {
-    if (value >= 70) return 'success.main';
+    if (value >= 75) return 'success.main';
     if (value >= 50) return 'warning.main';
     return 'error.main';
   };
 
   const getBorderColor = (value: number): 'success' | 'warning' | 'error' => {
-    if (value >= 70) return 'success';
+    if (value >= 75) return 'success';
     if (value >= 50) return 'warning';
     return 'error';
   };
@@ -143,7 +147,7 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
                   borderRadius: 4,
                   backgroundColor: '#e0e0e0',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: nutrition < 50 ? '#f44336' : nutrition < 70 ? '#ff9800' : '#4caf50',
+                    backgroundColor: nutrition < 50 ? '#f44336' : nutrition < 75 ? '#ff9800' : '#4caf50',
                   },
                 }}
               />
@@ -176,7 +180,7 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
                   borderRadius: 4,
                   backgroundColor: '#e0e0e0',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: exercise < 50 ? '#f44336' : exercise < 70 ? '#ff9800' : '#4caf50',
+                    backgroundColor: exercise < 50 ? '#f44336' : exercise < 75 ? '#ff9800' : '#4caf50',
                   },
                 }}
               />
@@ -209,7 +213,7 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
                   borderRadius: 4,
                   backgroundColor: '#e0e0e0',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: supplements < 50 ? '#f44336' : supplements < 70 ? '#ff9800' : '#4caf50',
+                    backgroundColor: supplements < 50 ? '#f44336' : supplements < 75 ? '#ff9800' : '#4caf50',
                   },
                 }}
               />
@@ -242,7 +246,7 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
                   borderRadius: 4,
                   backgroundColor: '#e0e0e0',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: meditation < 50 ? '#f44336' : meditation < 70 ? '#ff9800' : '#4caf50',
+                    backgroundColor: meditation < 50 ? '#f44336' : meditation < 75 ? '#ff9800' : '#4caf50',
                   },
                 }}
               />
@@ -255,7 +259,16 @@ export default function ComplianceTab({ metrics }: ComplianceTabProps) {
           </Card>
         </Grid>
 
-        {/* Row 2: Full-Width Distribution Card */}
+        {/* Row 2: Compliance Trends Chart */}
+        <Grid size={12}>
+          <ComplianceTrendChart 
+            data={trendsData} 
+            isLoading={trendsLoading} 
+            error={trendsError} 
+          />
+        </Grid>
+
+        {/* Row 3: Compliance Distribution Card */}
         <Grid size={12}>
           <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.info.main}` }}>
             <CardContent>

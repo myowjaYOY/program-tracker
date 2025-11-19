@@ -4,8 +4,8 @@
 // Updates existing records based on date_of_last_completed
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from '@supabase/supabase-js'
-import * as XLSX from 'https://cdn.sheetjs.com/xlsx-latest/package/xlsx.mjs'
+import { createClient } from 'npm:@supabase/supabase-js@2'
+import * as XLSX from 'npm:xlsx@0.18.5'
 
 interface ProgressRow {
   name: string;
@@ -195,10 +195,16 @@ async function processProgressData(
 
   console.log('Preloading lookup data...');
 
-  // Preload user mappings for performance
+  // Preload user mappings with emails from leads table for performance
   const { data: userMappings, error: userError } = await supabase
     .from('survey_user_mappings')
-    .select('mapping_id, lead_id, first_name, last_name');
+    .select(`
+      mapping_id, 
+      lead_id, 
+      first_name, 
+      last_name,
+      leads!survey_user_mappings_lead_id_fkey(email)
+    `);
 
   if (userError) {
     console.error('Error loading user mappings:', userError);
@@ -215,11 +221,35 @@ async function processProgressData(
     throw new Error('Failed to load programs');
   }
 
-  // Create lookup maps
-  const userMap = new Map<string, { mapping_id: number; lead_id: number }>();
+  // Create lookup maps - store arrays to detect duplicates
+  const userMap = new Map<string, Array<{ mapping_id: number; lead_id: number }>>();
+  const emailMap = new Map<string, Array<{ mapping_id: number; lead_id: number; first_name: string; last_name: string }>>();
+  
   for (const user of userMappings || []) {
-    const key = `${user.first_name.toLowerCase()}_${user.last_name.toLowerCase()}`;
-    userMap.set(key, { mapping_id: user.mapping_id, lead_id: user.lead_id });
+    const nameKey = `${user.first_name.toLowerCase()}_${user.last_name.toLowerCase()}`;
+    
+    // Add to name map (allow duplicates)
+    if (!userMap.has(nameKey)) {
+      userMap.set(nameKey, []);
+    }
+    userMap.get(nameKey)!.push({ mapping_id: user.mapping_id, lead_id: user.lead_id });
+    
+    // Also create email lookup if email exists
+    const email = (user.leads as any)?.email;
+    if (email) {
+      const emailKey = email.toLowerCase().trim();
+      
+      // Add to email map (should be unique, but we'll detect duplicates)
+      if (!emailMap.has(emailKey)) {
+        emailMap.set(emailKey, []);
+      }
+      emailMap.get(emailKey)!.push({ 
+        mapping_id: user.mapping_id, 
+        lead_id: user.lead_id,
+        first_name: user.first_name,
+        last_name: user.last_name
+      });
+    }
   }
 
   const programMap = new Map<string, number>();
@@ -227,7 +257,17 @@ async function processProgressData(
     programMap.set(program.program_name.trim(), program.program_id);
   }
 
-  console.log(`Loaded ${userMap.size} users and ${programMap.size} programs`);
+  // Count total user records and detect duplicates
+  const totalUsersByName = Array.from(userMap.values()).reduce((sum, arr) => sum + arr.length, 0);
+  const totalUsersByEmail = Array.from(emailMap.values()).reduce((sum, arr) => sum + arr.length, 0);
+  const duplicateNames = Array.from(userMap.entries()).filter(([_, arr]) => arr.length > 1).length;
+  const duplicateEmails = Array.from(emailMap.entries()).filter(([_, arr]) => arr.length > 1).length;
+  
+  console.log(`Loaded ${userMap.size} unique names (${totalUsersByName} total records, ${duplicateNames} duplicates), ${emailMap.size} unique emails (${totalUsersByEmail} total records, ${duplicateEmails} duplicates), and ${programMap.size} programs`);
+  
+  if (duplicateEmails > 0) {
+    console.warn(`WARNING: ${duplicateEmails} duplicate email(s) detected in survey_user_mappings - these will cause import failures`);
+  }
 
   // Preload existing progress records for date comparison
   const { data: existingProgress, error: progressError } = await supabase
@@ -294,12 +334,53 @@ async function processProgressData(
         const lastName = nameParts.slice(1).join(' ');
 
         // Match user in survey_user_mappings
+        // Try name match first
         const userKey = `${firstName.toLowerCase()}_${lastName.toLowerCase()}`;
-        const userMatch = userMap.get(userKey);
+        const nameMatches = userMap.get(userKey) || [];
+        let userMatch: { mapping_id: number; lead_id: number } | null = null;
+        let matchMethod = 'name';
+
+        // If exactly 1 name match, use it
+        if (nameMatches.length === 1) {
+          userMatch = nameMatches[0];
+          matchMethod = 'name';
+        } 
+        // If 0 or >1 name matches, try email match
+        else {
+          if (nameMatches.length > 1) {
+            console.log(`Row ${rowNumber}: Multiple name matches found for "${firstName} ${lastName}" (${nameMatches.length} matches), falling back to email search`);
+          }
+          
+          if (row.email) {
+            const emailKey = row.email.toLowerCase().trim();
+            const emailMatches = emailMap.get(emailKey) || [];
+            
+            if (emailMatches.length === 1) {
+              userMatch = { mapping_id: emailMatches[0].mapping_id, lead_id: emailMatches[0].lead_id };
+              matchMethod = 'email';
+              console.log(`Row ${rowNumber}: Matched "${firstName} ${lastName}" by email (${row.email}) - mapped to ${emailMatches[0].first_name} ${emailMatches[0].last_name}`);
+            } else if (emailMatches.length > 1) {
+              // Multiple email matches - this is a data quality issue
+              const duplicateInfo = emailMatches.map(m => `lead_id: ${m.lead_id}, name: "${m.first_name} ${m.last_name}"`).join('; ');
+              await logError(supabase, jobId, rowNumber, 'duplicate_email_match', 
+                `DUPLICATE EMAIL: Multiple users found with email "${row.email}". Please fix duplicate email addresses in the leads table. Matches: ${duplicateInfo}`);
+              failedRows++;
+              continue;
+            }
+          }
+        }
 
         if (!userMatch) {
-          await logError(supabase, jobId, rowNumber, 'user_not_found', 
-            `User not found in cross-reference table: ${firstName} ${lastName}`);
+          if (nameMatches.length > 1) {
+            // Multiple name matches, no email to disambiguate
+            const duplicateInfo = nameMatches.map(m => `lead_id: ${m.lead_id}`).join(', ');
+            await logError(supabase, jobId, rowNumber, 'duplicate_name_match', 
+              `DUPLICATE NAME: Multiple users found with name "${firstName} ${lastName}" (lead_ids: ${duplicateInfo}). Please provide email address to disambiguate, or fix duplicate names in the cross-reference table.`);
+          } else {
+            // No match found at all
+            await logError(supabase, jobId, rowNumber, 'user_not_found', 
+              `User not found in cross-reference table: "${firstName} ${lastName}"${row.email ? ` with email "${row.email}"` : ' (no email provided)'}. Please add this user to survey_user_mappings table.`);
+          }
           failedRows++;
           continue;
         }

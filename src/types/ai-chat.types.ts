@@ -42,6 +42,11 @@ export interface ChatRequest {
   conversation_history: ChatMessage[];
   ai_provider: AIProvider;
   context_days: number;
+  
+  // Optional file upload data
+  file_data?: string; // Extracted text from PDF
+  file_type?: string; // MIME type (e.g., 'application/pdf')
+  file_name?: string; // Original filename for display
 }
 
 export interface ResponseMetadata {
