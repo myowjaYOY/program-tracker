@@ -618,25 +618,29 @@ BEGIN
   ),
   quadrants AS (
     SELECT 
-      lead_id,
-      member_name,
-      compliance,
-      msq_change,
+      mo.lead_id,
+      mo.member_name,
+      mo.compliance,
+      mo.msq_change,
+      ps.status_name AS program_status,
       CASE 
-        WHEN compliance < 40 AND msq_change < 0 THEN 'high_priority'  -- Low compliance, worsening
-        WHEN compliance >= 40 AND msq_change < 0 THEN 'clinical_attention'  -- High compliance, worsening
-        WHEN compliance < 40 AND msq_change >= 0 THEN 'motivational_support'  -- Low compliance, improving
+        WHEN mo.compliance < 40 AND mo.msq_change < 0 THEN 'high_priority'  -- Low compliance, worsening
+        WHEN mo.compliance >= 40 AND mo.msq_change < 0 THEN 'clinical_attention'  -- High compliance, worsening
+        WHEN mo.compliance < 40 AND mo.msq_change >= 0 THEN 'motivational_support'  -- Low compliance, improving
         ELSE 'success_stories'  -- High compliance, improving
       END AS quadrant
-    FROM member_outcomes
-    WHERE msq_change IS NOT NULL
+    FROM member_outcomes mo
+    LEFT JOIN member_programs mp ON mp.lead_id = mo.lead_id AND mp.active_flag = true
+    LEFT JOIN program_status ps ON ps.program_status_id = mp.program_status_id
+    WHERE mo.msq_change IS NOT NULL
   )
   SELECT jsonb_agg(jsonb_build_object(
     'lead_id', lead_id,
     'member_name', member_name,
     'compliance', ROUND(compliance::numeric, 1),
     'outcome_change', ROUND(msq_change::numeric, 1),
-    'segment', quadrant
+    'segment', quadrant,
+    'program_status', program_status
   )) INTO v_at_risk_members
   FROM quadrants;  -- Include ALL members for full segmentation analysis
   
@@ -707,6 +711,9 @@ BEGIN
   RAISE NOTICE 'Calculating Tab 5: Temporal Trends...';
   
   -- 9. Cohort Analysis (by program start month)
+  -- UPDATED 2025-11-20: Filter for Active/Completed/Paused only (exclude Cancelled/Lost)
+  -- and limit to last 12 months only
+  -- FIXED 2025-11-20: Moved LIMIT inside CTE to correctly limit to 12 cohorts
   WITH program_cohorts AS (
     SELECT 
       TO_CHAR(mp.start_date, 'YYYY-MM') AS cohort,
@@ -718,8 +725,12 @@ BEGIN
     LEFT JOIN member_progress_summary mps ON mps.lead_id = mp.lead_id
     WHERE mp.start_date IS NOT NULL
       AND mp.active_flag = true
+      AND ps.status_name IN ('Active', 'Completed', 'Paused')
+      AND mp.start_date >= (CURRENT_DATE - INTERVAL '12 months')
     GROUP BY TO_CHAR(mp.start_date, 'YYYY-MM')
     HAVING COUNT(DISTINCT mp.lead_id) > 0
+    ORDER BY cohort DESC
+    LIMIT 12
   )
   SELECT jsonb_agg(jsonb_build_object(
     'cohort', cohort,
@@ -728,8 +739,7 @@ BEGIN
     'completed_count', completed_count,
     'completion_rate', ROUND((completed_count::numeric / member_count * 100), 1)
   ) ORDER BY cohort DESC) INTO v_cohort_analysis
-  FROM program_cohorts
-  LIMIT 12;  -- Last 12 months
+  FROM program_cohorts;
   
   RAISE NOTICE 'Cohort analysis calculated';
   

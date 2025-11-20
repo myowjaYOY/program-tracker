@@ -70,17 +70,15 @@ interface CampaignPerformanceData {
   campaign_name: string;
   campaign_date: string;
   vendor_name: string;
-  total_leads: number;
-  active_leads: number;
-  won_leads: number;
-  lost_leads: number;
-  no_pme_leads: number;
-  conversion_rate: number;
   campaign_status: 'Active' | 'Closed' | 'Mixed';
-  ad_spend: number | null;
-  food_cost: number | null;
+  total_leads: number;
+  no_shows: number;
+  no_pmes: number;
+  show_rate: number;
+  pme_scheduled: number;
+  conversion_rate: number;
+  total_cost: number;
   cost_per_lead: number;
-  roi_percentage: number;
 }
 
 export default function ReportsPage() {
@@ -113,7 +111,7 @@ export default function ReportsPage() {
       campaignPerformance.reduce((sum: number, c: any) => sum + c.conversion_rate, 0) /
       totalCampaigns;
     const totalCampaignSpend = campaignPerformance.reduce(
-      (sum: number, c: any) => sum + (c.ad_spend || 0) + (c.food_cost || 0),
+      (sum: number, c: any) => sum + (c.total_cost || 0),
       0
     );
 
@@ -177,6 +175,20 @@ export default function ReportsPage() {
       headerName: 'No PMEs',
       width: 100,
       type: 'number',
+    },
+    {
+      field: 'show_rate',
+      headerName: 'Show Rate',
+      width: 110,
+      type: 'number',
+      renderCell: params => {
+        const value = params.value;
+        if (value === 0) return '0.0%';
+        if (value != null && value !== undefined && !isNaN(value)) {
+          return `${Number(value).toFixed(1)}%`;
+        }
+        return '-';
+      },
     },
     {
       field: 'pme_scheduled',
@@ -655,6 +667,7 @@ export default function ReportsPage() {
                 onEdit={() => {}}
                 showCreateButton={false}
                 showActionsColumn={false}
+                persistStateKey="campaignPerformanceGrid"
               />
             </CardContent>
           </Card>

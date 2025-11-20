@@ -166,8 +166,14 @@ export async function GET(_req: NextRequest) {
         }
       }
 
-      // Conversion Rate: (PME Scheduled / Total Leads) × 100
-      const conversionRate = totalLeads > 0 ? (pmeScheduled / totalLeads) * 100 : 0;
+      // Show Rate: ((Total Leads - No Shows) / Total Leads) × 100
+      // Measures percentage of leads who actually showed up
+      const showedUp = totalLeads - noShows;
+      const showRate = totalLeads > 0 ? (showedUp / totalLeads) * 100 : 0;
+
+      // Conversion Rate: (PME Scheduled / (Total Leads - No Shows)) × 100
+      // Measures conversion of leads who actually showed up
+      const conversionRate = showedUp > 0 ? (pmeScheduled / showedUp) * 100 : 0;
 
       // Total Cost: ad_spend + food_cost (handle nulls)
       const totalCost = (campaign.ad_spend || 0) + (campaign.food_cost || 0);
@@ -200,6 +206,7 @@ export async function GET(_req: NextRequest) {
         total_leads: totalLeads,
         no_shows: noShows,
         no_pmes: noPmes,
+        show_rate: showRate,
         pme_scheduled: pmeScheduled,
         conversion_rate: conversionRate,
         total_cost: totalCost,

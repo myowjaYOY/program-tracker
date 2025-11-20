@@ -1,21 +1,20 @@
 'use client';
 
-import { Box, Grid, Card, CardContent, Typography, Alert, Chip, Button, CircularProgress } from '@mui/material';
-import { TrendingUp, TrendingDown, Warning, CheckCircle, Info, Refresh, ArrowForward, TrendingFlat } from '@mui/icons-material';
-import { useState, useMemo } from 'react';
+import { Box, Grid, Card, CardContent, Typography, Alert, Chip, Button, CircularProgress, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { TrendingUp, TrendingDown, Warning, CheckCircle, Info, Refresh, ArrowForward, TrendingFlat, People, Person } from '@mui/icons-material';
 import { 
-  BarChart, 
-  Bar, 
+  BarChart,
+  Bar,
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
   Legend, 
   ResponsiveContainer,
-  Cell,
   ReferenceLine,
-  LabelList
+  Cell
 } from 'recharts';
+import { useState, useMemo } from 'react';
 
 interface InsightsTabProps {
   metrics: any;
@@ -24,6 +23,7 @@ interface InsightsTabProps {
 export default function InsightsTab({ metrics }: InsightsTabProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [showActiveOnly, setShowActiveOnly] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -80,9 +80,15 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
     ? JSON.parse(metrics.promis_odds_ratio)
     : metrics.promis_odds_ratio || {};
   
-  const atRiskMembers = typeof metrics.at_risk_members === 'string'
+  const atRiskMembersAll = typeof metrics.at_risk_members === 'string'
     ? JSON.parse(metrics.at_risk_members)
     : metrics.at_risk_members || [];
+
+  // Filter at-risk members based on toggle
+  const atRiskMembers = useMemo(() => {
+    if (!showActiveOnly) return atRiskMembersAll;
+    return atRiskMembersAll.filter((m: any) => m.program_status === 'Active');
+  }, [atRiskMembersAll, showActiveOnly]);
 
   const complianceByCategory = typeof metrics.avg_compliance_by_category === 'string'
     ? JSON.parse(metrics.avg_compliance_by_category)
@@ -207,9 +213,18 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
                     domain={[0, 100]}
                   />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px' }}
+                    contentStyle={{ 
+                      backgroundColor: '#fff', 
+                      border: '1px solid #ddd', 
+                      borderRadius: '6px', 
+                      padding: '8px 10px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      fontSize: '12px'
+                    }}
+                    labelStyle={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
+                    itemStyle={{ fontSize: '12px', padding: '2px 0' }}
                     formatter={(value: any, name: string, props: any) => {
-                      const count = name === 'MSQ' ? props.payload.msqCount : props.payload.promisCount;
+                      const count = name === 'MSQ (Symptoms)' ? props.payload.msqCount : props.payload.promisCount;
                       return [`${value.toFixed(1)}% (${count})`, name];
                     }}
                   />
@@ -217,30 +232,20 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
                     wrapperStyle={{ paddingTop: '20px' }}
                     iconType="rect"
                   />
-                  <Bar dataKey="msq" fill="#8e24ff" name="MSQ (Symptoms)" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="msq" position="top" formatter={(value: any) => `${Number(value).toFixed(0)}%`} />
-                  </Bar>
-                  <Bar dataKey="promis" fill="#f50057" name="PROMIS-29 (Quality of Life)" radius={[4, 4, 0, 0]}>
-                    <LabelList dataKey="promis" position="top" formatter={(value: any) => `${Number(value).toFixed(0)}%`} />
-                  </Bar>
+                  <Bar 
+                    dataKey="msq" 
+                    fill="#8e24ff" 
+                    name="MSQ (Symptoms)" 
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar 
+                    dataKey="promis" 
+                    fill="#f50057" 
+                    name="PROMIS-29 (Quality of Life)" 
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
-
-              {/* Legend explanation */}
-              <Box sx={{ mt: 2, display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 12, height: 12, bgcolor: '#f44336', borderRadius: '2px' }} />
-                  <Typography variant="caption" color="text.secondary">Low (0-40%)</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 12, height: 12, bgcolor: '#ff9800', borderRadius: '2px' }} />
-                  <Typography variant="caption" color="text.secondary">Medium (40-70%)</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Box sx={{ width: 12, height: 12, bgcolor: '#4caf50', borderRadius: '2px' }} />
-                  <Typography variant="caption" color="text.secondary">High (≥70%)</Typography>
-                </Box>
-              </Box>
             </CardContent>
           </Card>
         </Grid>
@@ -435,9 +440,29 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
       </Grid>
 
       {/* At-Risk Member Segmentation */}
-      <Typography variant="h6" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-        At-Risk Member Segmentation
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={600}>
+          At-Risk Member Segmentation
+        </Typography>
+        <ToggleButtonGroup
+          value={showActiveOnly ? 'active' : 'all'}
+          exclusive
+          onChange={(e, newValue) => {
+            if (newValue !== null) setShowActiveOnly(newValue === 'active');
+          }}
+          size="small"
+          color="primary"
+        >
+          <ToggleButton value="all">
+            <People sx={{ mr: 0.5, fontSize: 18 }} />
+            All Members
+          </ToggleButton>
+          <ToggleButton value="active">
+            <Person sx={{ mr: 0.5, fontSize: 18 }} />
+            Active Only
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={12}>

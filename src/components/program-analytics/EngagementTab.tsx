@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Grid, Card, CardContent, Typography, Alert, Chip } from '@mui/material';
-import { BatteryChargingFull, Mood, EmojiEvents, Spa } from '@mui/icons-material';
+import { Box, Grid, Card, CardContent, Typography, Alert, Chip, Tooltip, IconButton } from '@mui/material';
+import { BatteryChargingFull, Mood, EmojiEvents, Spa, InfoOutlined } from '@mui/icons-material';
 
 interface EngagementTabProps {
   metrics: any;
@@ -177,57 +177,113 @@ export default function EngagementTab({ metrics }: EngagementTabProps) {
       </Grid>
 
       {/* Engagement by Cohort */}
-      <Typography variant="h6" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
-        Engagement by Time in Program
-      </Typography>
+      <Box display="flex" alignItems="center" gap={1} sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={600}>
+          Engagement by Time in Program
+        </Typography>
+        <Tooltip 
+          title={
+            <Box sx={{ p: 0.5 }}>
+              <Typography variant="caption" display="block" fontWeight={600} sx={{ mb: 0.5 }}>
+                Cohort Metrics:
+              </Typography>
+              <Typography variant="caption" display="block">
+                • <strong>Month:</strong> Program start month
+              </Typography>
+              <Typography variant="caption" display="block">
+                • <strong>Avg Compliance:</strong> Overall program adherence
+              </Typography>
+              <Typography variant="caption" display="block">
+                • <strong>Members:</strong> Total enrolled in this cohort
+              </Typography>
+              <Typography variant="caption" display="block">
+                • <strong>Completed:</strong> Number who finished the program
+              </Typography>
+            </Box>
+          }
+          arrow
+          placement="right"
+          componentsProps={{
+            tooltip: {
+              sx: {
+                bgcolor: 'white',
+                color: 'text.primary',
+                boxShadow: 2,
+                border: '1px solid',
+                borderColor: 'divider',
+                '& .MuiTooltip-arrow': {
+                  color: 'white',
+                  '&::before': {
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }
+                }
+              }
+            }
+          }}
+        >
+          <IconButton size="small" sx={{ color: 'text.secondary' }}>
+            <InfoOutlined fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
 
       <Grid container spacing={3}>
         {cohortAnalysis.map((cohort: any) => (
           <Grid size={3} key={cohort.cohort}>
             <Card sx={{ borderTop: (theme) => `4px solid ${theme.palette.info.main}`, height: '100%' }}>
-              <CardContent>
-                <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    {cohort.cohort}
-                  </Typography>
-                  <Chip
-                    label={`${cohort.avg_compliance?.toFixed(0) || 0}%`}
-                    size="small"
-                    color={
-                      cohort.avg_compliance >= 75
-                        ? 'success'
-                        : cohort.avg_compliance >= 50
-                        ? 'warning'
-                        : 'error'
-                    }
-                  />
+              <CardContent sx={{ pb: 2, '&:last-child': { pb: 2 } }}>
+                {/* Row 1: Month */}
+                <Typography variant="h6" fontWeight={600} sx={{ mb: 1 }}>
+                  {cohort.cohort}
+                </Typography>
+
+                {/* Row 2: Compliance Progress Bar */}
+                <Box sx={{ mb: 1.5 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                    <Typography variant="caption" color="text.secondary">
+                      Avg Compliance
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {cohort.avg_compliance?.toFixed(0) || 0}%
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      width: '100%',
+                      height: 8,
+                      bgcolor: 'grey.200',
+                      borderRadius: 1,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: `${Math.min(cohort.avg_compliance || 0, 100)}%`,
+                        height: '100%',
+                        bgcolor:
+                          cohort.avg_compliance >= 75
+                            ? 'success.main'
+                            : cohort.avg_compliance >= 50
+                            ? 'warning.main'
+                            : 'error.main',
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </Box>
                 </Box>
 
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Members
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {cohort.member_count}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Completed
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600} color="success.main">
-                      {cohort.completed_count || 0}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Completion Rate
-                    </Typography>
-                    <Typography variant="h5" fontWeight={600} color="primary">
-                      {cohort.completion_rate?.toFixed(0) || 0}%
-                    </Typography>
-                  </Box>
+                {/* Row 3: Member Count + Completed Count (inline) */}
+                <Box display="flex" alignItems="center" gap={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    {cohort.member_count} Members
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    •
+                  </Typography>
+                  <Typography variant="body2" color="success.main" fontWeight={600}>
+                    {cohort.completed_count || 0} Completed
+                  </Typography>
                 </Box>
               </CardContent>
             </Card>
