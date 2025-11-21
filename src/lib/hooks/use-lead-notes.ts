@@ -6,7 +6,7 @@ import { BaseEntity } from '@/types/common';
 export interface LeadNote extends BaseEntity {
   note_id: number;
   lead_id: number;
-  note_type: 'PME' | 'Other' | 'Win' | 'Challenge';
+  note_type: 'Challenge' | 'Follow-Up' | 'Other' | 'PME' | 'Win';
   note: string;
   created_by: string | null;
   created_by_email: string | null;
@@ -69,6 +69,12 @@ export function useCreateLeadNote() {
       // Invalidate and refetch lead notes for this lead
       queryClient.invalidateQueries({
         queryKey: leadNoteKeys.list(variables.lead_id),
+      });
+      
+      // Invalidate leads list to refresh last_followup_note in the grid
+      // This ensures the tooltip shows the latest Follow-Up note
+      queryClient.invalidateQueries({
+        queryKey: ['leads', 'list'],
       });
       
       toast.success('Note added successfully');

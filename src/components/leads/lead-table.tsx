@@ -23,6 +23,7 @@ interface LeadEntity extends Omit<Leads, 'created_at' | 'updated_at'> {
   status_name?: string; // Add status name for display
   campaign_name?: string; // Add campaign name for display
   note_count?: number; // Add note count for display
+  last_followup_note?: string | null; // Add last Follow-Up note for tooltip
 }
 
 // Lead-specific columns
@@ -126,6 +127,49 @@ const leadColumns: GridColDef[] = [
     headerName: 'Status',
     width: 120,
     flex: 1,
+    renderCell: (params) => {
+      const row = params.row as LeadEntity;
+      const statusName = row.status_name || '-';
+      const isFollowUp = statusName.toLowerCase() === 'follow up';
+      const hasNote = row.last_followup_note && row.last_followup_note.trim() !== '';
+
+      // Show tooltip only for Follow Up status with a note
+      if (isFollowUp && hasNote) {
+        return (
+          <Tooltip
+            title={row.last_followup_note}
+            placement="top"
+            arrow
+            componentsProps={{
+              tooltip: {
+                sx: {
+                  bgcolor: 'white',
+                  color: 'text.primary',
+                  boxShadow: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  maxWidth: 400,
+                  '& .MuiTooltip-arrow': {
+                    color: 'white',
+                    '&::before': {
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    },
+                  },
+                },
+              },
+            }}
+          >
+            <Typography variant="body2" sx={{ cursor: 'help' }}>
+              {statusName}
+            </Typography>
+          </Tooltip>
+        );
+      }
+
+      // No tooltip for other statuses
+      return <Typography variant="body2">{statusName}</Typography>;
+    },
   },
   {
     field: 'campaign_name',

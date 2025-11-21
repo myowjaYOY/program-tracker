@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { LeadNotesModal } from '@/components/notes';
-import ScheduleStatusChip from '@/components/ui/schedule-status-chip';
+import TaskStatusToggle from '@/components/ui/task-status-toggle';
 import { toast } from 'sonner';
 
 interface CoordinatorToDoTabProps {
@@ -254,16 +254,18 @@ export default function CoordinatorToDoTab({
     { field: 'description', headerName: 'Description' },
     {
       field: 'completed_flag',
-      headerName: 'Redeemed',
+      headerName: 'Status',
+      width: 140,
       renderCell: params => {
         const row: any = params.row;
         const readOnly =
           (row.program_status_name || '').toLowerCase() !== 'active';
         return (
-          <ScheduleStatusChip
+          <TaskStatusToggle
             completed_flag={row.completed_flag}
             onStatusChange={(newValue) => handleStatusChange(row, newValue)}
             readOnly={readOnly}
+            showLabel={true}
           />
         );
       },

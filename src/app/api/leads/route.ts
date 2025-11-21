@@ -24,6 +24,8 @@ export async function GET(_req: NextRequest) {
   // Get note counts for each lead
   const leadIds = (data || []).map((lead: any) => lead.lead_id).filter(Boolean);
   let noteCounts: Record<number, number> = {};
+  let lastFollowUpNotes: Record<number, string> = {};
+  
   if (leadIds.length > 0) {
     const { data: notesData, error: notesError } = await supabase
       .from('lead_notes')
@@ -38,6 +40,25 @@ export async function GET(_req: NextRequest) {
     (notesData || []).forEach((note: any) => {
       noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
     });
+
+    // Get last Follow-Up note for each lead
+    const { data: followUpNotes, error: followUpError } = await supabase
+      .from('lead_notes')
+      .select('lead_id, note, created_at')
+      .in('lead_id', leadIds)
+      .eq('note_type', 'Follow-Up')
+      .order('created_at', { ascending: false });
+    
+    if (followUpError) {
+      console.error('Error fetching follow-up notes:', followUpError);
+    }
+    
+    // Get the most recent Follow-Up note per lead
+    (followUpNotes || []).forEach((note: any) => {
+      if (!lastFollowUpNotes[note.lead_id]) {
+        lastFollowUpNotes[note.lead_id] = note.note;
+      }
+    });
   }
 
   const mapped = (data || []).map(lead => ({
@@ -49,6 +70,7 @@ export async function GET(_req: NextRequest) {
     campaign_name: lead.campaign?.campaign_name || null,
     status_name: lead.status?.status_name || null,
     note_count: noteCounts[lead.lead_id] || 0,
+    last_followup_note: lastFollowUpNotes[lead.lead_id] || null,
   }));
   return NextResponse.json({ data: mapped }, { status: 200 });
 }

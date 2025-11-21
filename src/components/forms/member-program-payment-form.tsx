@@ -101,6 +101,7 @@ export default function MemberProgramPaymentForm({
     setError,
     clearErrors,
     watch,
+    setValue,
   } = useForm<MemberProgramPaymentsFormData>({
     resolver: zodResolver(memberProgramPaymentsFormSchema),
     defaultValues: {
@@ -154,6 +155,14 @@ export default function MemberProgramPaymentForm({
       .toLowerCase();
     return name === 'paid';
   }, [watchedStatusId, statusOptions]);
+
+  // Clear payment_date and payment_method when status changes from Paid to non-Paid
+  React.useEffect(() => {
+    if (!isPaidSelected) {
+      setValue('payment_date', undefined as any);
+      setValue('payment_method_id', 0);
+    }
+  }, [isPaidSelected, setValue]);
 
   // Auto-adjustment logic and preview
   const autoAdjustmentPreview = React.useMemo(() => {
@@ -385,8 +394,9 @@ export default function MemberProgramPaymentForm({
             InputLabelProps={{ shrink: true }}
             {...register('payment_date')}
             error={!!errors.payment_date}
-            helperText={errors.payment_date?.toString()}
+            helperText={errors.payment_date?.toString() || (!isPaidSelected ? 'Paid date can only be set when status is Paid' : '')}
             required={isPaidSelected}
+            disabled={!isPaidSelected}
           />
           <Controller
             name="payment_status_id"
@@ -442,8 +452,9 @@ export default function MemberProgramPaymentForm({
                   label="Method"
                   fullWidth
                   required={isPaidSelected}
+                  disabled={!isPaidSelected}
                   error={!!errors.payment_method_id}
-                  helperText={errors.payment_method_id?.message || errors.payment_method_id?.toString()}
+                  helperText={errors.payment_method_id?.message || errors.payment_method_id?.toString() || (!isPaidSelected ? 'Payment method can only be set when status is Paid' : '')}
                   value={field.value || 0}
                   onChange={e => {
                     const value = e.target.value;

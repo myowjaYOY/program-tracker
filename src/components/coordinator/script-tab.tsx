@@ -12,6 +12,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { LeadNotesModal } from '@/components/notes';
 import ScheduleStatusChip from '@/components/ui/schedule-status-chip';
+import ScheduleAdjustmentModal from '@/components/modals/schedule-adjustment-modal';
 import { toast } from 'sonner';
 
 interface CoordinatorScriptTabProps {
@@ -79,6 +80,25 @@ export default function CoordinatorScriptTab({
     name: string;
   } | null>(null);
 
+  // Schedule adjustment modal state
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [adjustmentPromptData, setAdjustmentPromptData] = useState<{
+    scheduledDate?: string;
+    redemptionDate?: string;
+    futureInstanceCount: number;
+    itemDetails?: {
+      therapyName?: string;
+      instanceNumber?: number;
+      daysBetween?: number;
+    };
+  } | null>(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{
+    row: Row;
+    newValue: boolean | null;
+    redemptionDate?: string;
+  } | null>(null);
+  const [isProcessingAdjustment, setIsProcessingAdjustment] = useState(false);
+
   async function handleStatusChange(row: Row, newValue: boolean | null): Promise<void> {
     // Generate query key exactly the same way as the hook
     const sp = new URLSearchParams();
@@ -138,13 +158,41 @@ export default function CoordinatorScriptTab({
     });
 
     try {
+      const redemptionDate = new Date().toISOString().split('T')[0];
       const url = `/api/member-programs/${row.member_program_id}/schedule/${row.member_program_item_schedule_id}`;
       const res = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ completed_flag: newValue }),
+        body: JSON.stringify({ 
+          completed_flag: newValue,
+          redemption_date: redemptionDate,
+        }),
       });
+      
+      // Check for 409 Conflict (prompt required for schedule adjustment)
+      if (res.status === 409) {
+        const data = await res.json();
+        if (data.prompt_required && data.needsPrompt) {
+          // Revert optimistic update
+          qc.invalidateQueries({ queryKey });
+          
+          // Show modal
+          setAdjustmentPromptData({
+            scheduledDate: data.scheduledDate,
+            redemptionDate: data.redemptionDate,
+            futureInstanceCount: data.futureInstanceCount,
+            itemDetails: data.itemDetails,
+          });
+          const pendingChange: { row: Row; newValue: boolean | null; redemptionDate?: string } = { row, newValue };
+          if (redemptionDate) {
+            pendingChange.redemptionDate = redemptionDate;
+          }
+          setPendingStatusChange(pendingChange);
+          setIsAdjustmentModalOpen(true);
+          return;
+        }
+      }
       
       if (!res.ok) {
         // Revert optimistic update on error
@@ -171,6 +219,73 @@ export default function CoordinatorScriptTab({
       // Revert optimistic update on error
       qc.invalidateQueries({ queryKey });
       toast.error('Failed to update status');
+    }
+  }
+
+  // Handle schedule adjustment confirmation from modal
+  async function handleAdjustmentConfirm(adjust: boolean) {
+    if (!pendingStatusChange) return;
+
+    setIsProcessingAdjustment(true);
+
+    const { row, newValue, redemptionDate } = pendingStatusChange;
+    const sp = new URLSearchParams();
+    if (memberId) sp.set('memberId', String(memberId));
+    if (range && range !== 'all') sp.set('range', range);
+    if (start) sp.set('start', start);
+    if (end) sp.set('end', end);
+    if (showCompleted) sp.set('showCompleted', 'true');
+    if (hideMissed) sp.set('hideMissed', 'true');
+    const qs = sp.toString();
+    const queryKey = coordinatorKeys.script(qs);
+
+    try {
+      const url = `/api/member-programs/${row.member_program_id}/schedule/${row.member_program_item_schedule_id}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          completed_flag: newValue,
+          confirm_cascade: true,
+          adjust_schedule: adjust,
+          redemption_date: redemptionDate,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(errorData.error || 'Failed to update schedule');
+        setIsProcessingAdjustment(false);
+        return;
+      }
+
+      const result = await res.json();
+
+      // Show success message with cascade info
+      if (adjust && result.cascade) {
+        const { updated_instances, updated_tasks } = result.cascade;
+        toast.success(
+          `Schedule adjusted! Updated ${updated_instances} future instance${updated_instances !== 1 ? 's' : ''} ` +
+          `and ${updated_tasks} task${updated_tasks !== 1 ? 's' : ''}.`
+        );
+      } else {
+        toast.success('Status updated successfully');
+      }
+
+      // Invalidate queries to refresh data
+      await qc.invalidateQueries({ queryKey, refetchType: 'active' });
+      await qc.invalidateQueries({ queryKey: coordinatorKeys.metrics(), refetchType: 'active' });
+
+      // Close modal and reset state
+      setIsAdjustmentModalOpen(false);
+      setAdjustmentPromptData(null);
+      setPendingStatusChange(null);
+      setIsProcessingAdjustment(false);
+    } catch (error) {
+      console.error('Error confirming schedule adjustment:', error);
+      toast.error('Failed to update schedule');
+      setIsProcessingAdjustment(false);
     }
   }
 
@@ -347,6 +462,19 @@ export default function CoordinatorScriptTab({
         autoHeight={true}
         enableExport={true}
         sortModel={[{ field: 'scheduled_date', sort: 'asc' }]}
+      />
+
+      {/* Schedule Adjustment Modal */}
+      <ScheduleAdjustmentModal
+        open={isAdjustmentModalOpen}
+        onClose={() => {
+          setIsAdjustmentModalOpen(false);
+          setAdjustmentPromptData(null);
+          setPendingStatusChange(null);
+        }}
+        promptData={adjustmentPromptData}
+        onConfirm={handleAdjustmentConfirm}
+        loading={isProcessingAdjustment}
       />
 
       {/* Lead Notes Modal */}

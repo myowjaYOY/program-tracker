@@ -433,7 +433,7 @@ export default function CoordinatorPage() {
                     disabled={tab === 2}
                   />
                 }
-                label="Show Redeemed"
+                label="Show Redeemed / Complete"
               />
               <FormControlLabel
                 control={

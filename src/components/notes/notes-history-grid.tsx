@@ -29,6 +29,8 @@ const getNoteTypeColor = (noteType: string) => {
       return 'success';
     case 'Challenge':
       return 'error';
+    case 'Follow-Up':
+      return 'info';
     case 'Other':
     default:
       return 'default';
