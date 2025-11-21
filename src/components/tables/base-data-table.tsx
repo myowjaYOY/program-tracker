@@ -312,37 +312,20 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
   // STATE PERSISTENCE - Save state on exit (unmount or browser close)
-  // Force restore column widths after grid is initialized (fixes column width persistence)
-  // Also re-apply after data changes (when filters change)
-  const savedDimensionsRef = useRef(initialGridState?.columns?.dimensions);
-  
-  useEffect(() => {
-    savedDimensionsRef.current = initialGridState?.columns?.dimensions;
-  }, [initialGridState]);
-  
-  useEffect(() => {
-    if (!savedDimensionsRef.current || !apiRef.current) return;
+  // Inject saved widths directly into columns to prevent flash
+  const columnsWithSavedWidths = useMemo(() => {
+    if (!initialGridState?.columns?.dimensions) return columns;
     
-    // Wait for grid to fully render, then force apply saved column widths
-    const timer = setTimeout(() => {
-      if (!apiRef.current || !savedDimensionsRef.current) return;
-      
-      const dimensions = savedDimensionsRef.current;
-      
-      // Apply each column width individually via the API
-      Object.entries(dimensions).forEach(([field, dimension]: [string, any]) => {
-        if (dimension.width && apiRef.current) {
-          try {
-            apiRef.current.setColumnWidth(field, dimension.width);
-          } catch (error) {
-            // Silently fail if column doesn't exist (might have been removed)
-          }
-        }
-      });
-    }, 300);
+    const savedDimensions = initialGridState.columns.dimensions;
     
-    return () => clearTimeout(timer);
-  }, [apiRef, persistStateKey, data]); // Re-apply when data changes (filters)
+    return columns.map(col => {
+      const savedDim = savedDimensions[col.field];
+      if (savedDim?.width) {
+        return { ...col, width: savedDim.width };
+      }
+      return col;
+    });
+  }, [columns, initialGridState]);
   
   useEffect(() => {
     // Capture apiRef at effect time, not cleanup time
@@ -465,13 +448,13 @@ export default function BaseDataTable<T extends BaseEntity>({
     [onEdit, onDelete, editButtonText, deleteButtonText]
   );
 
-  // All columns including actions
+  // All columns including actions (with saved widths injected to prevent flash)
   const allColumns = useMemo(() => {
     if (showActionsColumn) {
-      return [...columns, actionsColumn];
+      return [...columnsWithSavedWidths, actionsColumn];
     }
-    return columns;
-  }, [columns, actionsColumn, showActionsColumn]);
+    return columnsWithSavedWidths;
+  }, [columnsWithSavedWidths, actionsColumn, showActionsColumn]);
 
   // Handle edit
   const handleEdit = (row: T) => {
