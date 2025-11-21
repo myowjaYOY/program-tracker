@@ -27,46 +27,14 @@ export async function GET(_req: NextRequest) {
     const programIds = await ProgramStatusService.getValidProgramIds(supabase);
     // Note: Do NOT early-return; still compute programChangesThisWeek even if no active programs
 
-    // Item ids for active programs
-    let itemIds: number[] = [];
-    if (programIds.length > 0) {
-      const { data: items, error: itemErr } = await supabase
-        .from('member_program_items')
-        .select('member_program_item_id')
-        .in('member_program_id', programIds);
-      if (itemErr)
-        return NextResponse.json(
-          { error: 'Failed to load items' },
-          { status: 500 }
-        );
-      itemIds = (items || []).map((r: any) => r.member_program_item_id);
-    }
-
-    // Schedule ids for those items
-    let scheduleIds: number[] = [];
-    if (itemIds.length > 0) {
-      const { data: sched, error: schedErr } = await supabase
-        .from('member_program_item_schedule')
-        .select('member_program_item_schedule_id')
-        .in('member_program_item_id', itemIds);
-      if (schedErr)
-        return NextResponse.json(
-          { error: 'Failed to load item schedules' },
-          { status: 500 }
-        );
-      scheduleIds = (sched || []).map(
-        (r: any) => r.member_program_item_schedule_id
-      );
-    }
-
-    // Counts
+    // Use optimized views - filter by program_id (44 IDs) instead of schedule_id (2000+ IDs)
     // Late tasks
     let lateTasks = 0;
-    if (scheduleIds.length > 0) {
+    if (programIds.length > 0) {
       const { count } = await supabase
-        .from('member_program_items_task_schedule')
+        .from('vw_coordinator_task_schedule')
         .select('*', { count: 'exact', head: true })
-        .in('member_program_item_schedule_id', scheduleIds)
+        .in('member_program_id', programIds)
         .lt('due_date', todayStr)
         .or('completed_flag.is.null,completed_flag.eq.false');
       lateTasks = count || 0;
@@ -74,11 +42,11 @@ export async function GET(_req: NextRequest) {
 
     // Tasks due today
     let tasksDueToday = 0;
-    if (scheduleIds.length > 0) {
+    if (programIds.length > 0) {
       const { count } = await supabase
-        .from('member_program_items_task_schedule')
+        .from('vw_coordinator_task_schedule')
         .select('*', { count: 'exact', head: true })
-        .in('member_program_item_schedule_id', scheduleIds)
+        .in('member_program_id', programIds)
         .eq('due_date', todayStr)
         .or('completed_flag.is.null,completed_flag.eq.false');
       tasksDueToday = count || 0;
@@ -86,11 +54,11 @@ export async function GET(_req: NextRequest) {
 
     // Appointments due today
     let apptsDueToday = 0;
-    if (itemIds.length > 0) {
+    if (programIds.length > 0) {
       const { count } = await supabase
-        .from('member_program_item_schedule')
+        .from('vw_coordinator_item_schedule')
         .select('*', { count: 'exact', head: true })
-        .in('member_program_item_id', itemIds)
+        .in('member_program_id', programIds)
         .eq('scheduled_date', todayStr)
         .or('completed_flag.is.null,completed_flag.eq.false');
       apptsDueToday = count || 0;

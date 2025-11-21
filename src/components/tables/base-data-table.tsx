@@ -312,7 +312,37 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
   // STATE PERSISTENCE - Save state on exit (unmount or browser close)
-  // NOTE: We load state via initialGridState useMemo (above) - no restoration needed!
+  // Force restore column widths after grid is initialized (fixes column width persistence)
+  // Also re-apply after data changes (when filters change)
+  const savedDimensionsRef = useRef(initialGridState?.columns?.dimensions);
+  
+  useEffect(() => {
+    savedDimensionsRef.current = initialGridState?.columns?.dimensions;
+  }, [initialGridState]);
+  
+  useEffect(() => {
+    if (!savedDimensionsRef.current || !apiRef.current) return;
+    
+    // Wait for grid to fully render, then force apply saved column widths
+    const timer = setTimeout(() => {
+      if (!apiRef.current || !savedDimensionsRef.current) return;
+      
+      const dimensions = savedDimensionsRef.current;
+      
+      // Apply each column width individually via the API
+      Object.entries(dimensions).forEach(([field, dimension]: [string, any]) => {
+        if (dimension.width && apiRef.current) {
+          try {
+            apiRef.current.setColumnWidth(field, dimension.width);
+          } catch (error) {
+            // Silently fail if column doesn't exist (might have been removed)
+          }
+        }
+      });
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [apiRef, persistStateKey, data]); // Re-apply when data changes (filters)
   
   useEffect(() => {
     // Capture apiRef at effect time, not cleanup time
@@ -326,8 +356,27 @@ export default function BaseDataTable<T extends BaseEntity>({
       
       const storageKey = `${currentPersistKey}_${currentUserId}`;
       try {
-        const state = apiRefCurrent.exportState();
-        localStorage.setItem(storageKey, JSON.stringify(state));
+        const newState = apiRefCurrent.exportState();
+        
+        // Merge with existing saved dimensions to preserve manually resized columns
+        const existingSaved = localStorage.getItem(storageKey);
+        if (existingSaved) {
+          try {
+            const existingState = JSON.parse(existingSaved);
+            if (existingState.columns?.dimensions) {
+              // Merge existing dimensions with new ones (new ones take precedence)
+              newState.columns = newState.columns || {};
+              newState.columns.dimensions = {
+                ...existingState.columns.dimensions,
+                ...newState.columns.dimensions,
+              };
+            }
+          } catch (e) {
+            // Silently ignore merge errors
+          }
+        }
+        
+        localStorage.setItem(storageKey, JSON.stringify(newState));
       } catch (error) {
         console.error(`Failed to save grid state for ${currentPersistKey}:`, error);
       }
@@ -344,8 +393,26 @@ export default function BaseDataTable<T extends BaseEntity>({
     const handleBeforeUnload = () => {
       if (apiRefCurrent) {
         try {
-          const state = apiRefCurrent.exportState();
-          localStorage.setItem(storageKey, JSON.stringify(state));
+          const newState = apiRefCurrent.exportState();
+          
+          // Merge with existing saved dimensions
+          const existingSaved = localStorage.getItem(storageKey);
+          if (existingSaved) {
+            try {
+              const existingState = JSON.parse(existingSaved);
+              if (existingState.columns?.dimensions) {
+                newState.columns = newState.columns || {};
+                newState.columns.dimensions = {
+                  ...existingState.columns.dimensions,
+                  ...newState.columns.dimensions,
+                };
+              }
+            } catch (e) {
+              // Silently ignore merge errors
+            }
+          }
+          
+          localStorage.setItem(storageKey, JSON.stringify(newState));
         } catch (error) {
           console.error(`Failed to save grid state for ${persistStateKey}:`, error);
         }

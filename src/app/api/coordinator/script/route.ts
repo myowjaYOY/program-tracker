@@ -30,42 +30,12 @@ export async function GET(req: NextRequest) {
     );
     if (programIds.length === 0) return NextResponse.json({ data: [] });
 
-    // Fetch program details for enrichment
-    const { data: programs, error: progErr } = await supabase
-      .from('member_programs')
-      .select(`
-        member_program_id,
-        lead_id,
-        program_status_id,
-        lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
-      `)
-      .in('member_program_id', programIds);
-    if (progErr)
-      return NextResponse.json(
-        { error: 'Failed to load programs' },
-        { status: 500 }
-      );
-    const validPrograms = programs || [];
-
-    const { data: items, error: itemErr } = await supabase
-      .from('member_program_items')
-      .select(
-        'member_program_item_id, member_program_id, therapies(therapy_name, therapytype(therapy_type_name))'
-      )
-      .in('member_program_id', programIds);
-    if (itemErr)
-      return NextResponse.json(
-        { error: 'Failed to load items' },
-        { status: 500 }
-      );
-    const itemIds = (items || []).map((r: any) => r.member_program_item_id);
-
+    // Use the optimized view that pre-joins all tables
+    // This allows us to filter by program_id (44 IDs) instead of item_id (1378 IDs)
     let schedQuery = supabase
-      .from('member_program_item_schedule')
-      .select(
-        'member_program_item_schedule_id, member_program_item_id, instance_number, scheduled_date, completed_flag, created_at, created_by, updated_at, updated_by, program_role_id, program_role:program_roles(program_role_id, role_name, display_color)'
-      )
-      .in('member_program_item_id', itemIds)
+      .from('vw_coordinator_item_schedule')
+      .select('*')
+      .in('member_program_id', programIds)
       .order('scheduled_date', { ascending: true });
 
     // Filter by completed_flag
@@ -130,49 +100,27 @@ export async function GET(req: NextRequest) {
         { status: 500 }
       );
 
-    const idToTherapy: Record<
-      string,
-      {
-        therapy_name?: string | null;
-        therapy_type_name?: string | null;
-        member_program_id?: number | null;
-      }
-    > = {};
-    (items || []).forEach((it: any) => {
-      idToTherapy[String(it.member_program_item_id)] = {
-        therapy_name: it.therapies?.therapy_name ?? null,
-        therapy_type_name: it.therapies?.therapytype?.therapy_type_name ?? null,
-        member_program_id: it.member_program_id ?? null,
-      };
-    });
-
-    // Get status names for enrichment
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    const statusIdToName = new Map<number, string>(
-      (statuses || []).map((s: any) => [
-        s.program_status_id as number,
-        (s.status_name || '').toLowerCase(),
-      ])
+    // Enrich with audit emails and note counts
+    // View already includes: therapy_name, therapy_type_name, program_status_name, 
+    // member_name, role_name, role_display_color, member_program_id, lead_id
+    const userIds = Array.from(
+      new Set([
+        ...(scheduleRows || []).map((r: any) => r.created_by).filter(Boolean),
+        ...(scheduleRows || []).map((r: any) => r.updated_by).filter(Boolean),
+      ] as any)
     );
-    const programIdToStatusName = new Map<number, string>(
-      (validPrograms || []).map((p: any) => [
-        p.member_program_id as number,
-        statusIdToName.get(p.program_status_id) || '',
-      ])
-    );
-    const programIdToMemberName = new Map<number, string>(
-      (validPrograms || []).map((p: any) => {
-        const fn = p.lead?.first_name || '';
-        const ln = p.lead?.last_name || '';
-        const name = `${fn} ${ln}`.trim();
-        return [p.member_program_id as number, name || `Lead #${p.lead_id}`];
-      })
-    );
+    let users: any[] = [];
+    if (userIds.length > 0) {
+      const { data: usersData } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .in('id', userIds as any);
+      users = usersData || [];
+    }
+    const userMap = new Map(users.map(u => [u.id, u]));
 
     // Get note counts for each lead
-    const leadIds = Array.from(new Set(validPrograms.map((p: any) => p.lead_id).filter(Boolean)));
+    const leadIds = Array.from(new Set((scheduleRows || []).map((r: any) => r.lead_id).filter(Boolean)));
     let noteCounts: Record<number, number> = {};
     if (leadIds.length > 0) {
       const { data: notesData, error: notesError } = await supabase
@@ -190,52 +138,10 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Enrich rows with therapy labels and audit email lookup
-    const userIds = Array.from(
-      new Set([
-        ...(scheduleRows || []).map((r: any) => r.created_by).filter(Boolean),
-        ...(scheduleRows || []).map((r: any) => r.updated_by).filter(Boolean),
-      ] as any)
-    );
-    let users: any[] = [];
-    if (userIds.length > 0) {
-      const { data: usersData } = await supabase
-        .from('users')
-        .select('id, email, full_name')
-        .in('id', userIds as any);
-      users = usersData || [];
-    }
-    const userMap = new Map(users.map(u => [u.id, u]));
-
-    // Create lead ID to program mapping for note counts
-    const programIdToLeadId = new Map<number, number>(
-      validPrograms.map((p: any) => [p.member_program_id as number, p.lead_id as number])
-    );
-
     const enriched = (scheduleRows || []).map((r: any) => {
-      const programId = idToTherapy[String(r.member_program_item_id)]?.member_program_id;
-      const leadId = programId ? programIdToLeadId.get(programId) : null;
-      
       return {
         ...r,
-        therapy_name:
-          idToTherapy[String(r.member_program_item_id)]?.therapy_name || null,
-        therapy_type_name:
-          idToTherapy[String(r.member_program_item_id)]?.therapy_type_name ||
-          null,
-        member_program_id:
-          idToTherapy[String(r.member_program_item_id)]?.member_program_id ||
-          null,
-        lead_id: leadId,
-        note_count: leadId ? (noteCounts[leadId] || 0) : 0,
-        program_status_name: programId
-          ? programIdToStatusName.get(programId) || null
-          : null,
-        member_name: programId
-          ? programIdToMemberName.get(programId) || null
-          : null,
-        role_name: r.program_role?.role_name || null,
-        role_display_color: r.program_role?.display_color || null,
+        note_count: r.lead_id ? (noteCounts[r.lead_id] || 0) : 0,
         created_by_email: r.created_by
           ? userMap.get(r.created_by)?.email || null
           : null,

@@ -30,77 +30,11 @@ export async function GET(req: NextRequest) {
     );
     if (programIds.length === 0) return NextResponse.json({ data: [] });
 
-    // Fetch program details for enrichment
-    const { data: programs, error: progErr } = await supabase
-      .from('member_programs')
-      .select(`
-        member_program_id,
-        lead_id,
-        program_status_id,
-        lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
-      `)
-      .in('member_program_id', programIds);
-    if (progErr)
-      return NextResponse.json(
-        { error: 'Failed to load programs' },
-        { status: 500 }
-      );
-    const validPrograms = programs || [];
-
-    // Items and schedules
-    const { data: items, error: itemErr } = await supabase
-      .from('member_program_items')
-      .select('member_program_item_id, member_program_id')
-      .in('member_program_id', programIds);
-    if (itemErr)
-      return NextResponse.json(
-        { error: 'Failed to load items' },
-        { status: 500 }
-      );
-    const itemIds = (items || []).map((r: any) => r.member_program_item_id);
-
-    const schedQuery = supabase
-      .from('member_program_item_schedule')
-      .select('member_program_item_schedule_id, member_program_item_id')
-      .in('member_program_item_id', itemIds);
-    const { data: schedules, error: schedErr } = await schedQuery;
-    if (schedErr)
-      return NextResponse.json(
-        { error: 'Failed to load item schedules' },
-        { status: 500 }
-      );
-    const scheduleIds = (schedules || []).map(
-      (r: any) => r.member_program_item_schedule_id
-    );
-    if (scheduleIds.length === 0) return NextResponse.json({ data: [] });
-
-    // To Do query
+    // Query optimized view - filters by program_id (44 IDs) instead of schedule_id (2000+ IDs)
     let todoQuery = supabase
-      .from('member_program_items_task_schedule')
-      .select(
-        `
-        member_program_item_task_schedule_id,
-        member_program_item_schedule_id,
-        member_program_item_task_id,
-        due_date,
-        completed_flag,
-        created_at,
-        created_by,
-        updated_at,
-        updated_by,
-        program_role_id,
-        program_role:program_roles(program_role_id, role_name, display_color),
-        member_program_item_tasks:member_program_item_task_id(
-          task_name,
-          description,
-          task_delay,
-          therapy_tasks:therapy_tasks!inner(
-            therapies!inner(therapy_name, therapytype(therapy_type_name))
-          )
-        )
-      `
-      )
-      .in('member_program_item_schedule_id', scheduleIds);
+      .from('vw_coordinator_task_schedule')
+      .select('*')
+      .in('member_program_id', programIds);
 
     // Filter by completed_flag
     if (showCompleted && hideMissed) {
@@ -164,7 +98,7 @@ export async function GET(req: NextRequest) {
         { status: 500 }
       );
 
-    // Enrich with audit emails
+    // Enrich with audit emails and note counts
     const userIds = Array.from(
       new Set([
         ...(data || []).map((r: any) => r.created_by).filter(Boolean),
@@ -181,8 +115,8 @@ export async function GET(req: NextRequest) {
     }
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    // Get note counts for each lead
-    const leadIds = Array.from(new Set(validPrograms.map((p: any) => p.lead_id).filter(Boolean)));
+    // Get note counts for each lead (from view data)
+    const leadIds = Array.from(new Set((data || []).map((r: any) => r.lead_id).filter(Boolean)));
     let noteCounts: Record<number, number> = {};
     if (leadIds.length > 0) {
       const { data: notesData, error: notesError } = await supabase
@@ -200,68 +134,50 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Get status names for enrichment
-    const { data: statuses } = await supabase
-      .from('program_status')
-      .select('program_status_id, status_name');
-    const statusIdToName = new Map<number, string>(
-      (statuses || []).map((s: any) => [
-        s.program_status_id as number,
-        (s.status_name || '').toLowerCase(),
-      ])
-    );
-    const programIdToStatusName = new Map<number, string>(
-      (validPrograms || []).map((p: any) => [
-        p.member_program_id as number,
-        statusIdToName.get(p.program_status_id) || '',
-      ])
-    );
-    const programIdToMemberName = new Map<number, string>(
-      (validPrograms || []).map((p: any) => {
-        const fn = p.lead?.first_name || '';
-        const ln = p.lead?.last_name || '';
-        const name = `${fn} ${ln}`.trim();
-        return [p.member_program_id as number, name || `Lead #${p.lead_id}`];
-      })
-    );
-    const itemIdToProgramId = new Map<number, number>(
-      (items || []).map((it: any) => [
-        it.member_program_item_id as number,
-        it.member_program_id as number,
-      ])
-    );
-    const schedIdToProgramId = new Map<number, number>(
-      (schedules || []).map((s: any) => [
-        s.member_program_item_schedule_id as number,
-        itemIdToProgramId.get(s.member_program_item_id) as number,
-      ])
-    );
-
-    // Create lead ID to program mapping for note counts
-    const programIdToLeadId = new Map<number, number>(
-      validPrograms.map((p: any) => [p.member_program_id as number, p.lead_id as number])
-    );
-
+    // Transform flat view data into nested structure expected by frontend
     const enriched = (data || []).map((r: any) => {
-      const programId =
-        schedIdToProgramId.get(r.member_program_item_schedule_id as number) ||
-        null;
-      const programStatusName = programId
-        ? programIdToStatusName.get(programId) || null
-        : null;
-      const leadId = programId ? programIdToLeadId.get(programId) : null;
-      
       return {
-        ...r,
-        member_program_id: programId,
-        lead_id: leadId,
-        note_count: leadId ? (noteCounts[leadId] || 0) : 0,
-        program_status_name: programStatusName,
-        member_name: programId
-          ? programIdToMemberName.get(programId) || null
-          : null,
-        role_name: r.program_role?.role_name || null,
-        role_display_color: r.program_role?.display_color || null,
+        // Base fields from view
+        member_program_item_task_schedule_id: r.member_program_item_task_schedule_id,
+        member_program_item_schedule_id: r.member_program_item_schedule_id,
+        member_program_item_task_id: r.member_program_item_task_id,
+        due_date: r.due_date,
+        completed_flag: r.completed_flag,
+        created_at: r.created_at,
+        created_by: r.created_by,
+        updated_at: r.updated_at,
+        updated_by: r.updated_by,
+        program_role_id: r.program_role_id,
+        
+        // Transform flat columns into nested structure for frontend
+        member_program_item_tasks: {
+          task_name: r.task_name,
+          description: r.task_description,
+          task_delay: r.task_delay,
+          therapy_tasks: {
+            therapies: {
+              therapy_name: r.therapy_name,
+              therapytype: {
+                therapy_type_name: r.therapy_type_name
+              }
+            }
+          }
+        },
+        
+        // Transform role into nested structure
+        program_role: {
+          role_name: r.role_name,
+          display_color: r.role_display_color
+        },
+        
+        // Enrichment fields from view
+        member_program_id: r.member_program_id,
+        lead_id: r.lead_id,
+        program_status_name: r.program_status_name,
+        member_name: r.member_name,
+        note_count: r.lead_id ? (noteCounts[r.lead_id] || 0) : 0,
+        
+        // Audit enrichment
         created_by_email: r.created_by
           ? userMap.get(r.created_by)?.email || null
           : null,
@@ -277,12 +193,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const response = NextResponse.json({ data: enriched });
-    // Bust cache to ensure fresh data after role fixes
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    return response;
+            return NextResponse.json({ data: enriched });
   } catch (e: any) {
     return NextResponse.json(
       { error: e?.message || 'Internal server error' },
