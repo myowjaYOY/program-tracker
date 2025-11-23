@@ -31,6 +31,7 @@ interface QuoteData {
     amount: number;
     dueDate: string;
     paymentDate?: string;
+    notes?: string;
   }[];
   generatedDate: string;
 }
@@ -151,6 +152,7 @@ async function downloadDocumentFromTemplate(
       amount: payment.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
       dueDate: payment.dueDate,
       paymentDate: payment.paymentDate,
+      notes: payment.notes || '',
     }));
     
     const finalDocxBuffer = await createReport({

@@ -435,7 +435,7 @@ export default function BaseDataTable<T extends BaseEntity>({
                 key="delete"
                 icon={
                   <Tooltip title={deleteButtonText}>
-                    <DeleteIcon />
+                    <DeleteIcon color="error" />
                   </Tooltip>
                 }
                 label={deleteButtonText}

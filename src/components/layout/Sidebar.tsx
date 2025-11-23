@@ -85,7 +85,7 @@ const marketingNav = [
 
 const salesNav = [
   { label: 'Programs', icon: <ProgramsIcon />, path: '/dashboard/programs' },
-  { label: 'Documents', icon: <DocumentsIcon />, path: '/documents' },
+  { label: 'Reports', icon: <ReportsIcon />, path: '/dashboard/sales/reports' },
 ];
 
 const operationsNav = [

@@ -9,9 +9,9 @@ import {
   Grid,
   Card,
   CardContent,
-  CardHeader,
   IconButton,
   Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import {
   BarChart as BarChartIcon,
@@ -326,10 +326,8 @@ export default function ReportsPage() {
             </Typography>
           </Box>
         ) : isLoading ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="h6" color="text.secondary">
-              Loading campaign data...
-            </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+            <CircularProgress size={48} />
           </Box>
         ) : !campaignPerformance.length ? (
           <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -653,24 +651,16 @@ export default function ReportsPage() {
           </Grid>
 
           {/* Campaign Performance Table */}
-          <Card sx={{ mt: 3 }}>
-            <CardHeader
-              title="Campaign Performance Details"
-              subheader="Detailed analysis of each campaign's performance metrics"
-            />
-            <CardContent>
-              <BaseDataTable<CampaignPerformanceData>
-                title=""
-                data={campaignPerformance}
-                columns={campaignColumns}
-                loading={isLoading}
-                onEdit={() => {}}
-                showCreateButton={false}
-                showActionsColumn={false}
-                persistStateKey="campaignPerformanceGrid"
-              />
-            </CardContent>
-          </Card>
+          <BaseDataTable<CampaignPerformanceData>
+            title=""
+            data={campaignPerformance}
+            columns={campaignColumns}
+            loading={isLoading}
+            onEdit={() => {}}
+            showCreateButton={false}
+            showActionsColumn={false}
+            persistStateKey="campaignPerformanceGrid"
+          />
           </>
         )}
       </TabPanel>

@@ -20,7 +20,7 @@ export async function loadTemplate(templatePath: string): Promise<ArrayBuffer> {
 export const TEMPLATE_PATHS = {
   QUOTE: '/templates/quote-template.docx',
   CONTRACT: '/templates/contract-template.docx',
-  NEW_CONTRACT: '/templates/New-Contract-Template.docx',
+  CONTRACT_OPTIONS: '/templates/contract-options-template.docx',
   PLAN_SUMMARY: '/templates/Plan-Summary-Template.docx',
 } as const;
 
