@@ -215,12 +215,12 @@ export default function MonthlySalesChart({ data, isLoading, error }: MonthlySal
               connectNulls
             />
             
-            {/* Conversion Rate Area (Right Axis) */}
+            {/* Event → PME Rate Area (Right Axis) */}
             <Area
               yAxisId="percentage"
               type="monotone"
               dataKey="conversionRate"
-              name="Conversion %"
+              name="Event → PME %"
               stroke={colors.conversionRate}
               strokeWidth={2.5}
               fill="url(#colorConversion)"

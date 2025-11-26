@@ -127,7 +127,7 @@ export default function CoordinatorPage() {
                     variant="body2"
                     sx={{ fontWeight: 500 }}
                   >
-                    Late Tasks
+                    Late To Do's
                   </Typography>
                   <Typography
                     variant="h3"
@@ -155,7 +155,7 @@ export default function CoordinatorPage() {
                 color="text.secondary"
                 sx={{ fontSize: '0.875rem' }}
               >
-                Overdue tasks requiring attention
+                Overdue to do's requiring attention
               </Typography>
             </CardContent>
           </Card>
@@ -189,7 +189,7 @@ export default function CoordinatorPage() {
                     variant="body2"
                     sx={{ fontWeight: 500 }}
                   >
-                    Tasks Due Today
+                    To Do's Due Today
                   </Typography>
                   <Typography
                     variant="h3"
@@ -217,7 +217,7 @@ export default function CoordinatorPage() {
                 color="text.secondary"
                 sx={{ fontSize: '0.875rem' }}
               >
-                Tasks scheduled for today
+                To do's scheduled for today
               </Typography>
             </CardContent>
           </Card>
@@ -251,7 +251,7 @@ export default function CoordinatorPage() {
                     variant="body2"
                     sx={{ fontWeight: 500 }}
                   >
-                    Appointments Today
+                    Script Items Due Today
                   </Typography>
                   <Typography
                     variant="h3"
@@ -279,7 +279,7 @@ export default function CoordinatorPage() {
                 color="text.secondary"
                 sx={{ fontSize: '0.875rem' }}
               >
-                Appointments scheduled for today
+                Script items scheduled for today
               </Typography>
             </CardContent>
           </Card>

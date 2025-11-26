@@ -383,45 +383,29 @@ export async function GET(req: NextRequest) {
     }
 
     // Calculate overall PME count and conversion
-    // Count ALL PMEs across all campaigns that were scheduled in the date range
+    // PMEs: Count leads with pmedate in the date range (PMEs conducted in that timeframe)
+    // Programs Won: Count programs with start_date in the date range (independently)
     const allLeads = (campaignsData || []).flatMap(c => c.leads || []);
     const uniqueLeads = new Map(allLeads.map(lead => [lead.lead_id, lead]));
 
-    // Count PMEs scheduled in the date range
-    for (const [leadId, lead] of uniqueLeads.entries()) {
-      const leadHistory = auditMap.get(leadId) || [];
-      
-      // Find when PME was scheduled from audit history
-      let pmeScheduledDate: string | null = null;
-      
-      for (const change of leadHistory) {
-        if (change.new_status === pmeScheduledStatusId && change.event_at) {
-          pmeScheduledDate = change.event_at.split('T')[0] || null; // Get date part only
-          break; // Use first transition to PME Scheduled
-        }
-      }
-      
-      // If no audit event, try pmedate field
-      if (!pmeScheduledDate && lead.pmedate) {
-        pmeScheduledDate = lead.pmedate.split('T')[0];
-      }
-      
-      // Only count if PME was scheduled within the date range
-      if (pmeScheduledDate) {
-        if (dateFilter.start && pmeScheduledDate < dateFilter.start) continue;
-        if (dateFilter.end && pmeScheduledDate > dateFilter.end) continue;
+    // Count PMEs by pmedate in the date range
+    for (const [, lead] of uniqueLeads.entries()) {
+      // Use pmedate field directly (the actual PME appointment date)
+      if (lead.pmedate) {
+        const pmeDate = lead.pmedate.split('T')[0];
+        
+        // Only count if PME date is within the date range
+        if (dateFilter.start && pmeDate < dateFilter.start) continue;
+        if (dateFilter.end && pmeDate > dateFilter.end) continue;
         summaryTotalPmeScheduled++;
       }
-
-      // Check if this lead has won programs in the date range
-      const programs = leadToProgramsMap.get(leadId) || [];
-      const hasWonProgram = programs.some(p => 
-        p.program_status_id === activeStatusId || p.program_status_id === completedStatusId
-      );
-      if (hasWonProgram) {
-        summaryTotalProgramsWon++;
-      }
     }
+
+    // Count Programs Won: Programs with start_date in the date range (Active + Completed)
+    // This is independent of PME date - a September PME can result in an October program
+    summaryTotalProgramsWon = filteredPrograms.filter(p => 
+      p.program_status_id === activeStatusId || p.program_status_id === completedStatusId
+    ).length;
 
     const avgProgramValue = summaryProgramsWon > 0 ? summaryTotalRevenue / summaryProgramsWon : 0;
     const avgMargin = summaryTotalRevenue > 0 ? (summaryTotalMarginWeighted / summaryTotalRevenue) : 0;

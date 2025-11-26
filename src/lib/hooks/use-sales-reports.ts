@@ -51,6 +51,11 @@ export interface MonthlySalesData {
   totalRevenue: number;
 }
 
+export interface MonthlySalesSummary {
+  totalPMEsScheduled: number;
+  totalProgramsWon: number;
+}
+
 export function useExecutiveDashboard(filters: DateRangeFilter) {
   return useQuery<{ data: ExecutiveDashboardData }, Error>({
     queryKey: salesReportKeys.executiveDashboard(filters),
@@ -72,7 +77,7 @@ export function useExecutiveDashboard(filters: DateRangeFilter) {
 }
 
 export function useMonthlySales(filters: DateRangeFilter) {
-  return useQuery<{ data: MonthlySalesData[] }, Error>({
+  return useQuery<{ data: MonthlySalesData[]; summary: MonthlySalesSummary }, Error>({
     queryKey: salesReportKeys.monthlySales(filters),
     queryFn: async () => {
       const params = new URLSearchParams({ range: filters.range });

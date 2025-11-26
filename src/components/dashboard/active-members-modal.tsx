@@ -129,7 +129,30 @@ export default function ActiveMembersModal({ open, onClose }: ActiveMembersModal
       field: 'end_date',
       headerName: 'End Date',
       width: 140,
-      valueFormatter: (value: any) => formatDate(value),
+      renderCell: (params: any) => {
+        const endDate = params.value;
+        if (!endDate) return <Typography variant="body2">N/A</Typography>;
+        
+        const end = new Date(endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+        
+        const isPastDue = end < today;
+        
+        return (
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              color: isPastDue ? 'error.main' : 'inherit',
+              fontWeight: isPastDue ? 600 : 400,
+            }}
+          >
+            {formatDate(endDate)}
+          </Typography>
+        );
+      },
+      valueFormatter: (value: any) => formatDate(value), // For CSV export
     },
     {
       field: 'has_coach',

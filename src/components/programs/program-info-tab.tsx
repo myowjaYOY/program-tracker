@@ -496,18 +496,11 @@ export default function ProgramInfoTab({
   };
 
   const handleGenerateContractDoc = async () => {
-    // For now, this does the same thing as Contract Options
-    // In the future, this can be modified to generate a different document
+    // Generate final contract document for Active programs
+    // No discount restrictions - this is the signed contract after customer has chosen their option
     try {
       setIsGeneratingContractDoc(true);
       if (!finances) throw new Error('Program financial information not found.');
-
-      // Check if there are existing discounts - if so, block generation
-      const existingDiscounts = Number(finances?.discounts || 0);
-      if (existingDiscounts !== 0) {
-        toast.error('Cannot generate contract when existing discounts are applied. Please remove discounts first.');
-        return;
-      }
 
       const contractData = {
         member: {
@@ -524,14 +517,10 @@ export default function ProgramInfoTab({
         },
         financials: {
           financeCharges: Math.max(0, finances?.finance_charges || 0), // Pass 0 if negative (affects margin only)
-          taxes: derivedTaxes, // Use calculated taxes from shared function
+          taxes: finances?.taxes || 0,
           discounts: finances?.discounts || 0,
-          finalTotalPrice: derivedProgramPrice, // Use calculated program price from shared function
+          finalTotalPrice: finances?.final_total_price || 0,
           margin: finances?.margin || 0,
-          totalTaxableCharge: totalTaxableCharge, // Use calculated taxable charge from program items
-          // Raw data for contract options calculation
-          totalCharge: Number(program.total_charge || 0),
-          totalCost: Number(program.total_cost || 0),
         },
         payments: (payments || []).map(payment => ({
           paymentId: payment.member_program_payment_id,
@@ -542,7 +531,6 @@ export default function ProgramInfoTab({
         })),
         generatedDate: new Date().toLocaleDateString(),
       } as const;
-
 
       const templateBuffer = await loadTemplate(TEMPLATE_PATHS.CONTRACT);
       await downloadContractFromTemplate(contractData as any, templateBuffer);

@@ -21,6 +21,8 @@ import {
   CompareArrows as ConversionIcon,
   TableChart as TableIcon,
   Timeline as TimelineIcon,
+  EventAvailable as PMEIcon,
+  Handshake as SalesIcon,
 } from '@mui/icons-material';
 import { GridColDef } from '@mui/x-data-grid';
 import BaseDataTable from '@/components/tables/base-data-table';
@@ -545,7 +547,7 @@ export default function SalesReportsPage() {
                 iconPosition="start"
               />
               <Tab
-                label="Monthly Sales"
+                label="Monthly Stats"
                 icon={<TimelineIcon />}
                 iconPosition="start"
               />
@@ -566,13 +568,101 @@ export default function SalesReportsPage() {
             />
           </TabPanel>
 
-          {/* Tab 2: Monthly Sales Chart */}
+          {/* Tab 2: Monthly Stats */}
           <TabPanel value={tabValue} index={1}>
-            <MonthlySalesChart
-              data={monthlySalesData?.data}
-              isLoading={monthlySalesLoading}
-              error={monthlySalesError}
-            />
+            <Grid container spacing={3}>
+              {/* Left Column: Summary Cards */}
+              <Grid size={{ xs: 12, md: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {/* PME Count Card */}
+                  <Card
+                    sx={{
+                      height: '100%',
+                      borderTop: theme => `4px solid ${theme.palette.primary.main}`,
+                      transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: theme => theme.shadows[4],
+                      },
+                    }}
+                  >
+                    <CardContent sx={{ p: 2 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Box>
+                          <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                            PMEs Scheduled
+                          </Typography>
+                          <Typography
+                            variant="h3"
+                            component="div"
+                            sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}
+                          >
+                            {monthlySalesLoading ? '-' : (monthlySalesData?.summary.totalPMEsScheduled || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ color: 'primary.main', opacity: 0.8 }}>
+                          <PMEIcon sx={{ fontSize: 36 }} />
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+
+                  {/* Sales Count Card */}
+                  <Card
+                    sx={{
+                      height: '100%',
+                      borderTop: theme => `4px solid ${theme.palette.success.main}`,
+                      transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: theme => theme.shadows[4],
+                      },
+                    }}
+                  >
+                    <CardContent sx={{ p: 2 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Box>
+                          <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                            Programs Won
+                          </Typography>
+                          <Typography
+                            variant="h3"
+                            component="div"
+                            sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}
+                          >
+                            {monthlySalesLoading ? '-' : (monthlySalesData?.summary.totalProgramsWon || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ color: 'success.main', opacity: 0.8 }}>
+                          <SalesIcon sx={{ fontSize: 36 }} />
+                        </Box>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Box>
+              </Grid>
+
+              {/* Right Column: Chart */}
+              <Grid size={{ xs: 12, md: 10 }}>
+                <MonthlySalesChart
+                  data={monthlySalesData?.data}
+                  isLoading={monthlySalesLoading}
+                  error={monthlySalesError}
+                />
+              </Grid>
+            </Grid>
           </TabPanel>
         </>
       )}
