@@ -492,18 +492,25 @@ export default function PaymentsPage() {
               setEditingPayment(row);
               setEditDialogOpen(true);
             }}
-            renderForm={({ onClose, initialValues, mode }) => (
-              <MemberProgramPaymentForm
-                programId={(initialValues as any)?.member_program_id}
-                initialValues={initialValues as any}
-                onSuccess={() => {
-                  onClose();
-                  refetch();
-                }}
-                mode={mode}
-                programStatus=""
-              />
-            )}
+            renderForm={({ onClose, initialValues, mode }) => {
+              // Look up program status from allPrograms
+              const programId = (initialValues as any)?.member_program_id;
+              const program = allPrograms.find((p: any) => p.member_program_id === programId);
+              const programStatusName = (program?.status_name || '').toLowerCase();
+              
+              return (
+                <MemberProgramPaymentForm
+                  programId={programId}
+                  initialValues={initialValues as any}
+                  onSuccess={() => {
+                    onClose();
+                    refetch();
+                  }}
+                  mode={mode}
+                  programStatus={programStatusName}
+                />
+              );
+            }}
             showCreateButton={false}
             getRowId={row => row.id}
           />
