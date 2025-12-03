@@ -9,6 +9,7 @@ export interface ActiveMember {
   start_date: string;
   duration: number;
   has_coach: boolean;
+  is_membership: boolean;
 }
 
 /**

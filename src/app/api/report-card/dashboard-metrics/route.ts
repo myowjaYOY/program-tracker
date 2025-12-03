@@ -16,25 +16,30 @@ export interface DashboardMetrics {
   membersWithProgress: number;
   progressPercentage: number;
 
-  // Card 2: Upcoming Program Endings
+  // Card 2: Average Support Rating (NEW)
+  avgSupportRating: number | null; // average overall support rating (1-5)
+  lowSupportRatingCount: number; // members with any dimension ≤ 2
+  lowSupportRatingList: MemberListItem[]; // top 5 members needing attention
+
+  // Card 3: Upcoming Program Endings
   programsEndingSoon: number;
   endingSoonList: MemberListItem[]; // name + projected_end_date
 
-  // Card 3: Worst MSQ Scores
+  // Card 4: Worst MSQ Scores
   worstMsqCount: number;
   worstMsqList: MemberListItem[]; // name + msq_score
   worstMsqAverage: number; // average of top 6 worst MSQ scores
 
-  // Card 4: Most Behind on Schedule
+  // Card 5: Most Behind on Schedule (hidden but data still available)
   behindScheduleCount: number;
   behindScheduleList: MemberListItem[]; // name + late_count
 
-  // Card 5: Worst Compliance Scores
+  // Card 6: Worst Compliance Scores
   worstComplianceCount: number;
   worstComplianceList: MemberListItem[]; // name + compliance_percentage
   worstComplianceAverage: number; // average of top 6 worst compliance scores
 
-  // Card 6: Best Progress Scores
+  // Card 7: Best Progress Scores
   bestProgressCount: number;
   bestProgressList: MemberListItem[]; // name + progress_percentage
   bestProgressAverage: number; // average of top 6 best progress scores
@@ -76,6 +81,9 @@ export async function GET(request: NextRequest) {
           totalActiveMembers: 0,
           membersWithProgress: 0,
           progressPercentage: 0,
+          avgSupportRating: null,
+          lowSupportRatingCount: 0,
+          lowSupportRatingList: [],
           programsEndingSoon: 0,
           endingSoonList: [],
           worstMsqCount: 0,
@@ -152,7 +160,142 @@ export async function GET(request: NextRequest) {
       : 0;
 
     // ====================================
-    // CARD 2: Programs Ending in 14 Days
+    // CARD 2: Average Support Rating (NEW)
+    // ====================================
+    // Rating question IDs for support ratings
+    const RATING_QUESTION_IDS = [207, 208, 209, 250, 251, 252, 417, 418];
+    const SUPPORT_RATING_MAP: Record<string, number> = {
+      'exceeding expectations': 5,
+      'very supportive': 4,
+      'adequately supportive': 3,
+      'mildly supportive': 2,
+      'not applicable': 1,
+    };
+
+    // Get all survey sessions for active members
+    const { data: memberSessions } = await supabase
+      .from('survey_response_sessions')
+      .select('session_id, lead_id')
+      .in('lead_id', uniqueLeadIds);
+
+    let avgSupportRating: number | null = null;
+    let lowSupportRatingCount = 0;
+    let lowSupportRatingList: MemberListItem[] = [];
+
+    if (memberSessions && memberSessions.length > 0) {
+      const sessionIds = memberSessions.map(s => s.session_id);
+
+      // Get all rating responses
+      const { data: ratingResponses } = await supabase
+        .from('survey_responses')
+        .select('session_id, question_id, answer_text')
+        .in('session_id', sessionIds)
+        .in('question_id', RATING_QUESTION_IDS);
+
+      if (ratingResponses && ratingResponses.length > 0) {
+        // Create session -> lead_id map
+        const sessionToLeadMap = new Map(
+          memberSessions.map(s => [s.session_id, s.lead_id])
+        );
+
+        // Question ID to dimension mapping
+        const PROVIDER_IDS = [207, 250, 417];
+        const STAFF_IDS = [208, 251, 418];
+        const CURRICULUM_IDS = [209, 252];
+
+        // Track ratings per member per dimension
+        interface MemberRatings {
+          provider: number[];
+          staff: number[];
+          curriculum: number[];
+        }
+        const memberRatings = new Map<number, MemberRatings>();
+
+        ratingResponses.forEach(response => {
+          const leadId = sessionToLeadMap.get(response.session_id);
+          if (!leadId || !response.answer_text) return;
+
+          const score = SUPPORT_RATING_MAP[response.answer_text.toLowerCase().trim()];
+          if (!score) return;
+
+          if (!memberRatings.has(leadId)) {
+            memberRatings.set(leadId, { provider: [], staff: [], curriculum: [] });
+          }
+
+          const ratings = memberRatings.get(leadId)!;
+          if (PROVIDER_IDS.includes(response.question_id)) {
+            ratings.provider.push(score);
+          } else if (STAFF_IDS.includes(response.question_id)) {
+            ratings.staff.push(score);
+          } else if (CURRICULUM_IDS.includes(response.question_id)) {
+            ratings.curriculum.push(score);
+          }
+        });
+
+        // Calculate overall scores per member and find low scores
+        const memberOverallScores: { leadId: number; overall: number; lowestDimension: string; lowestScore: number }[] = [];
+
+        memberRatings.forEach((ratings, leadId) => {
+          const providerAvg = ratings.provider.length > 0
+            ? ratings.provider.reduce((a, b) => a + b, 0) / ratings.provider.length
+            : null;
+          const staffAvg = ratings.staff.length > 0
+            ? ratings.staff.reduce((a, b) => a + b, 0) / ratings.staff.length
+            : null;
+          const curriculumAvg = ratings.curriculum.length > 0
+            ? ratings.curriculum.reduce((a, b) => a + b, 0) / ratings.curriculum.length
+            : null;
+
+          const scores = [providerAvg, staffAvg, curriculumAvg].filter(s => s !== null) as number[];
+          if (scores.length === 0) return;
+
+          const overall = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+          // Find lowest dimension for members needing attention
+          let lowestScore = 5;
+          let lowestDimension = '';
+          if (providerAvg !== null && providerAvg < lowestScore) {
+            lowestScore = providerAvg;
+            lowestDimension = 'Provider';
+          }
+          if (staffAvg !== null && staffAvg < lowestScore) {
+            lowestScore = staffAvg;
+            lowestDimension = 'Staff';
+          }
+          if (curriculumAvg !== null && curriculumAvg < lowestScore) {
+            lowestScore = curriculumAvg;
+            lowestDimension = 'Curriculum';
+          }
+
+          memberOverallScores.push({ leadId, overall, lowestDimension, lowestScore });
+        });
+
+        // Calculate average across all members
+        if (memberOverallScores.length > 0) {
+          const totalOverall = memberOverallScores.reduce((sum, m) => sum + m.overall, 0);
+          avgSupportRating = Math.round((totalOverall / memberOverallScores.length) * 10) / 10;
+        }
+
+        // Find members with any dimension ≤ 2
+        const lowRatingMembers = memberOverallScores
+          .filter(m => m.lowestScore <= 2)
+          .sort((a, b) => a.lowestScore - b.lowestScore); // Lowest first
+
+        lowSupportRatingCount = lowRatingMembers.length;
+
+        // Get top 5 for the list
+        lowSupportRatingList = lowRatingMembers.slice(0, 5).map(m => {
+          const lead = leadsMap.get(m.leadId);
+          return {
+            name: lead ? `${lead.first_name} ${lead.last_name}`.trim() : 'Unknown',
+            value: `${m.lowestDimension}: ${m.lowestScore.toFixed(1)}/5`,
+          };
+        });
+      }
+    }
+
+    // ====================================
+    // CARD 3: Programs Ending in 14 Days
     // ====================================
     const fourteenDaysFromNow = new Date();
     fourteenDaysFromNow.setDate(fourteenDaysFromNow.getDate() + 14);
@@ -495,6 +638,9 @@ export async function GET(request: NextRequest) {
       totalActiveMembers,
       membersWithProgress,
       progressPercentage,
+      avgSupportRating,
+      lowSupportRatingCount,
+      lowSupportRatingList,
       programsEndingSoon: programsEndingSoon.length,
       endingSoonList,
       worstMsqCount,

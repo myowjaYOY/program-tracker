@@ -20,6 +20,7 @@ import HealthAndSafetyIcon from '@mui/icons-material/HealthAndSafety';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PsychologyIcon from '@mui/icons-material/Psychology';
+import RateReviewIcon from '@mui/icons-material/RateReview';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import DownloadIcon from '@mui/icons-material/Download';
 import DashboardMetricsCards from '@/components/report-card/DashboardMetricsCards';
@@ -28,6 +29,7 @@ import MsqAssessmentTab from '@/components/report-card/MsqAssessmentTab';
 import PromisAssessmentTab from '@/components/report-card/PromisAssessmentTab';
 import AnalyticsInsightsTab from '@/components/report-card/AnalyticsInsightsTab';
 import AIInsightsTab from '@/components/report-card/AIInsightsTab';
+import MemberFeedbackTab from '@/components/report-card/MemberFeedbackTab';
 import { useReportCardParticipants } from '@/lib/hooks/use-report-card';
 import { LeadNotesModal } from '@/components/notes';
 import ExportReportModal from '@/components/report-card/ExportReportModal';
@@ -273,11 +275,18 @@ export default function ReportCardPage() {
             aria-controls="report-card-tabpanel-3"
           />
           <Tab
+            icon={<RateReviewIcon />}
+            iconPosition="start"
+            label="MEMBER FEEDBACK"
+            id="report-card-tab-4"
+            aria-controls="report-card-tabpanel-4"
+          />
+          <Tab
             icon={<PsychologyIcon />}
             iconPosition="start"
             label="AI INSIGHTS"
-            id="report-card-tab-4"
-            aria-controls="report-card-tabpanel-4"
+            id="report-card-tab-5"
+            aria-controls="report-card-tabpanel-5"
           />
         </Tabs>
       </Box>
@@ -300,6 +309,10 @@ export default function ReportCardPage() {
       </TabPanel>
       
       <TabPanel value={tabValue} index={4}>
+        <MemberFeedbackTab leadId={selectedMember?.lead_id || null} />
+      </TabPanel>
+      
+      <TabPanel value={tabValue} index={5}>
         {selectedMember?.lead_id ? (
           <AIInsightsTab memberId={selectedMember.lead_id} />
         ) : (

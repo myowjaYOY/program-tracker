@@ -29,6 +29,7 @@ export async function GET() {
         start_date,
         duration,
         member_program_id,
+        program_type,
         leads!inner(
           first_name,
           last_name,
@@ -100,11 +101,18 @@ export async function GET() {
           start_date: member.start_date,
           duration: member.duration,
           has_coach: hasCoach,
+          is_membership: member.program_type === 'membership',
         });
-      } else if (memberMap.has(member.lead_id) && hasCoach) {
-        // Member already exists, but this program has coach - update to true
+      } else if (memberMap.has(member.lead_id)) {
+        // Member already exists - update coach status and membership status if applicable
         const existingMember = memberMap.get(member.lead_id);
-        existingMember.has_coach = true;
+        if (hasCoach) {
+          existingMember.has_coach = true;
+        }
+        // If any of their programs is a membership, mark them as membership
+        if (member.program_type === 'membership') {
+          existingMember.is_membership = true;
+        }
       }
     });
 

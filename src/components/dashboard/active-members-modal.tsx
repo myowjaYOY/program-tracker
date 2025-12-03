@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import StarIcon from '@mui/icons-material/Star';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 import CheckIcon from '@mui/icons-material/Check';
 import BaseDataTable from '@/components/tables/base-data-table';
 import { useActiveMembers, ActiveMember } from '@/lib/hooks/use-active-members';
@@ -28,6 +29,7 @@ interface ActiveMemberRow extends ActiveMember {
   end_date: string | null;
   days_since_start: number;
   is_new: boolean;
+  is_membership: boolean;
 }
 
 /**
@@ -100,13 +102,19 @@ export default function ActiveMembersModal({ open, onClose }: ActiveMembersModal
       width: 250,
       renderCell: (params: any) => {
         const isNew = params.row.is_new;
+        const isMembership = params.row.is_membership;
         const daysAgo = params.row.days_since_start;
         
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {isNew && (
               <Tooltip title={`Started ${daysAgo} ${daysAgo === 1 ? 'day' : 'days'} ago`} arrow>
                 <StarIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+              </Tooltip>
+            )}
+            {isMembership && (
+              <Tooltip title="Membership Program" arrow>
+                <AutorenewIcon sx={{ color: 'info.main', fontSize: 18 }} />
               </Tooltip>
             )}
             <Typography variant="body2">{params.value}</Typography>

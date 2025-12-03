@@ -3,9 +3,9 @@
 import React from 'react';
 import { Grid, Skeleton } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
+import StarIcon from '@mui/icons-material/Star';
 import EventAvailableIcon from '@mui/icons-material/EventAvailable';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import MetricCardWithTooltip from './MetricCardWithTooltip';
@@ -49,7 +49,25 @@ export default function DashboardMetricsCards() {
         />
       </Grid>
 
-      {/* Card 2: Programs Ending in 14 Days */}
+      {/* Card 2: Average Support Rating */}
+      <Grid size={{ xs: 12, sm: 4, md: 2 }}>
+        <MetricCardWithTooltip
+          title="Avg Member Feedback"
+          value={metrics.avgSupportRating !== null ? `${metrics.avgSupportRating}` : 'N/A'}
+          subtitle="Members with low satisfaction score"
+          icon={StarIcon}
+          color={
+            metrics.avgSupportRating === null ? '#9ca3af' : // grey for no data
+            metrics.avgSupportRating >= 4 ? '#10b981' : // green for 4-5
+            metrics.avgSupportRating >= 3 ? '#f59e0b' : // yellow for 3
+            '#ef4444' // red for 2 and below
+          }
+          tooltipData={metrics.lowSupportRatingList}
+          tooltipTitle="Members needing attention (score ≤ 2):"
+        />
+      </Grid>
+
+      {/* Card 3: Programs Ending in 14 Days */}
       <Grid size={{ xs: 12, sm: 4, md: 2 }}>
         <MetricCardWithTooltip
           title="Programs Ending Soon"
@@ -62,7 +80,7 @@ export default function DashboardMetricsCards() {
         />
       </Grid>
 
-      {/* Card 3: Worst MSQ Scores */}
+      {/* Card 4: Worst MSQ Scores */}
       <Grid size={{ xs: 12, sm: 4, md: 2 }}>
         <MetricCardWithTooltip
           title="Highest MSQ Scores"
@@ -72,19 +90,6 @@ export default function DashboardMetricsCards() {
           color="#ef4444" // Error red
           tooltipData={metrics.worstMsqList}
           tooltipTitle="Members needing clinical attention:"
-        />
-      </Grid>
-
-      {/* Card 4: Most Behind on Schedule */}
-      <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-        <MetricCardWithTooltip
-          title="Behind on Schedule"
-          value={`${metrics.behindScheduleCount} members`}
-          subtitle="Late or missed items"
-          icon={NotificationsActiveIcon}
-          color="#dc2626" // Dark red
-          tooltipData={metrics.behindScheduleList}
-          tooltipTitle="Members behind schedule:"
         />
       </Grid>
 
@@ -113,6 +118,21 @@ export default function DashboardMetricsCards() {
           tooltipTitle="Top performers:"
         />
       </Grid>
+
+      {/* 
+        HIDDEN: Behind on Schedule card (data still available in API)
+        <Grid size={{ xs: 12, sm: 4, md: 2 }}>
+          <MetricCardWithTooltip
+            title="Behind on Schedule"
+            value={`${metrics.behindScheduleCount} members`}
+            subtitle="Late or missed items"
+            icon={NotificationsActiveIcon}
+            color="#dc2626"
+            tooltipData={metrics.behindScheduleList}
+            tooltipTitle="Members behind schedule:"
+          />
+        </Grid>
+      */}
     </Grid>
   );
 }

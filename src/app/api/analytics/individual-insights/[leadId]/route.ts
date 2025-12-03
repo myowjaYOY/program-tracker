@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/server';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { leadId: string } }
+  context: { params: Promise<{ leadId: string }> }
 ) {
   try {
     const supabase = await createClient();
@@ -27,7 +27,8 @@ export async function GET(
       );
     }
 
-    const leadId = parseInt(params.leadId);
+    const { leadId: leadIdParam } = await context.params;
+    const leadId = parseInt(leadIdParam);
 
     if (isNaN(leadId)) {
       return NextResponse.json(
