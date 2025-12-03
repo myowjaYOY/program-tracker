@@ -48,6 +48,7 @@ import {
   Assessment as InventoryForecastIcon,
   List as ListIcon,
   Badge as ProgramRolesIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -137,6 +138,11 @@ const adminNav = [
     label: 'Program Templates',
     icon: <DocumentsIcon />,
     path: '/dashboard/admin/program-templates',
+  },
+  {
+    label: 'System Jobs',
+    icon: <ScheduleIcon />,
+    path: '/dashboard/admin/system-jobs',
   },
   { label: 'Therapies', icon: <TherapiesIcon />, path: '/dashboard/therapies' },
   {

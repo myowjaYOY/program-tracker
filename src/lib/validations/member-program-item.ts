@@ -5,7 +5,7 @@ export const memberProgramItemSchema = z.object({
   therapy_id: z.number().min(1, 'Therapy is required'),
   quantity: z.number()
     .min(1, 'Quantity must be at least 1')
-    .max(100000, 'Quantity cannot exceed 100,000'),
+    .max(9999, 'Quantity cannot exceed 9,999'),
   days_from_start: z.number()
     .min(0, 'Days from start cannot be negative')
     .max(3650, 'Days from start cannot exceed 3,650 (10 years)'),

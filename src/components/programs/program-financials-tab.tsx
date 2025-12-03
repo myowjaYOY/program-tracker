@@ -46,6 +46,8 @@ import useFinancialsLock from '@/lib/hooks/use-financials-lock';
 import { useFinancialsDerived } from '@/lib/hooks/use-financials-derived';
 import { shouldRegeneratePayments } from '@/lib/utils/payments-rules';
 import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
+import { useMembershipFinances } from '@/lib/hooks/use-membership-finances';
+import { calculateMonthlyPayment } from '@/lib/validations/member-program-membership-finances';
 
 interface ProgramFinancialsTabProps {
   program: MemberPrograms;
@@ -356,28 +358,30 @@ export default function ProgramFinancialsTab({
           },
         });
       }
-      // Unified payments update logic
-      const paymentsExist = (payments?.length || 0) > 0;
-      const shouldRegenerate = shouldRegeneratePayments({
-        paymentsExist,
-        originalFinancingTypeId: originalFinancingTypeIdRef.current ?? null,
-        nextFinancingTypeId: (data.financing_type_id ?? null) as number | null,
-        originalFinanceCharges: originalFinanceChargesRef.current,
-        nextFinanceCharges: Number(data.finance_charges || 0),
-        originalDiscounts: originalDiscountsRef.current,
-        nextDiscounts: Number(data.discounts || 0),
-      });
-      if (shouldRegenerate) {
-        try {
-          await regeneratePayments.mutateAsync({
-            programId: program.member_program_id,
-          });
-        } catch (e: any) {
-          setInline({
-            ok: false,
-            message: e?.message || 'Failed to update payments',
-          });
-          return;
+      // Unified payments update logic - skip for memberships (payments are generated monthly, not regenerated)
+      if (!isMembership) {
+        const paymentsExist = (payments?.length || 0) > 0;
+        const shouldRegenerate = shouldRegeneratePayments({
+          paymentsExist,
+          originalFinancingTypeId: originalFinancingTypeIdRef.current ?? null,
+          nextFinancingTypeId: (data.financing_type_id ?? null) as number | null,
+          originalFinanceCharges: originalFinanceChargesRef.current,
+          nextFinanceCharges: Number(data.finance_charges || 0),
+          originalDiscounts: originalDiscountsRef.current,
+          nextDiscounts: Number(data.discounts || 0),
+        });
+        if (shouldRegenerate) {
+          try {
+            await regeneratePayments.mutateAsync({
+              programId: program.member_program_id,
+            });
+          } catch (e: any) {
+            setInline({
+              ok: false,
+              message: e?.message || 'Failed to update payments',
+            });
+            return;
+          }
         }
       } else {
         // no-op
@@ -485,6 +489,34 @@ export default function ProgramFinancialsTab({
     return !isLocked && fc !== 0 && currDisc !== origDisc;
   }, [watchedValues.finance_charges, watchedValues.discounts, isLocked]);
 
+  // Determine if this is a membership program
+  const isMembership = program.program_type === 'membership';
+
+  // Fetch membership finances for membership programs
+  const { data: membershipFinances, isLoading: isLoadingMembershipFinances } = 
+    useMembershipFinances(program.member_program_id, isMembership);
+
+  // Calculate monthly payment from membership finances
+  const monthlyPayment = React.useMemo(() => {
+    if (!membershipFinances) return 0;
+    return calculateMonthlyPayment({
+      monthly_rate: membershipFinances.monthly_rate || 0,
+      monthly_discount: membershipFinances.monthly_discount || 0,
+      monthly_tax: membershipFinances.monthly_tax || 0,
+    });
+  }, [membershipFinances]);
+
+  // Format Member Since date for membership banner
+  const memberSinceFormatted = React.useMemo(() => {
+    if (!program.start_date) return { display: 'Not set', months: 0 };
+    const startDate = new Date(program.start_date);
+    const now = new Date();
+    const monthsDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + 
+                       (now.getMonth() - startDate.getMonth());
+    const display = startDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return { display, months: Math.max(0, monthsDiff) };
+  }, [program.start_date]);
+
   if (financesError) {
     return (
       <Alert severity="error" sx={{ mb: 2 }}>
@@ -506,10 +538,49 @@ export default function ProgramFinancialsTab({
           tab.
         </Alert>
       )}
+
+      {/* Membership Summary Row - Only shown for membership programs */}
+      {isMembership && (
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              label="Monthly Payment"
+              fullWidth
+              disabled
+              value={isLoadingMembershipFinances ? 'Loading...' : formatCurrency(monthlyPayment)}
+              InputProps={{ readOnly: true }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              label="Monthly Discount"
+              fullWidth
+              disabled
+              value={isLoadingMembershipFinances ? 'Loading...' : formatCurrency(membershipFinances?.monthly_discount || 0)}
+              InputProps={{ readOnly: true }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              label="Member Since"
+              fullWidth
+              disabled
+              value={`${memberSinceFormatted.display} (${memberSinceFormatted.months} months)`}
+              InputProps={{ readOnly: true }}
+            />
+          </Grid>
+        </Grid>
+      )}
+
       <Card>
         <CardContent>
           <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
-          {/* Items/Program Price banner removed per simplified rules */}
+          {/* Section title for memberships */}
+          {isMembership && (
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, fontWeight: 600 }}>
+              PROGRAM TOTALS (CUMULATIVE)
+            </Typography>
+          )}
           <Grid container spacing={3}>
             {/* Row 1: Items Cost, Items Charge, Margin */}
             <Grid size={{ xs: 12, md: 4 }}>
@@ -534,11 +605,10 @@ export default function ProgramFinancialsTab({
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
-                {...register('margin', { valueAsNumber: true })}
                 label="Margin (%)"
                 fullWidth
                 disabled
-                value={`${Number(watchedValues.margin || 0).toFixed(1)}%`}
+                value={`${Number(watchedValues.margin || 0).toFixed(2)}%`}
                 InputProps={{ readOnly: true }}
                 helperText="Calculated on pre-tax revenue"
                 sx={{
@@ -551,122 +621,128 @@ export default function ProgramFinancialsTab({
               />
             </Grid>
 
-            {/* Row 2: Financing Type, Discount, Finance Charges */}
-            <Grid size={{ xs: 12, md: 4 }}>
-              <FormControl fullWidth error={!!errors.financing_type_id}>
-                <InputLabel>Financing Type</InputLabel>
+            {/* Row 2: Financing Type (one-time only), Discount, Finance Charges (one-time only) */}
+            {/* Financing Type - Hidden for memberships (always Full Pay) */}
+            {!isMembership && (
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControl fullWidth error={!!errors.financing_type_id}>
+                  <InputLabel>Financing Type</InputLabel>
+                  <Controller
+                    name="financing_type_id"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        {...field}
+                        label="Financing Type"
+                        value={field.value || ''}
+                        disabled={isLoadingFinancingTypes || isLocked}
+                      >
+                        <MenuItem value="">
+                          <em>None</em>
+                        </MenuItem>
+                        {financingTypes.map(type => (
+                          <MenuItem
+                            key={type.financing_type_id}
+                            value={type.financing_type_id}
+                          >
+                            {type.financing_type_name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    )}
+                  />
+                  {errors.financing_type_id && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, ml: 1.75 }}
+                    >
+                      {errors.financing_type_id.message}
+                    </Typography>
+                  )}
+                </FormControl>
+              </Grid>
+            )}
+            {/* Finance Charges - Hidden for memberships */}
+            {!isMembership && (
+              <Grid size={{ xs: 12, md: 4 }}>
                 <Controller
-                  name="financing_type_id"
+                  name="finance_charges"
                   control={control}
                   render={({ field }) => (
-                    <Select
-                      {...field}
-                      label="Financing Type"
-                      value={field.value || ''}
-                      disabled={isLoadingFinancingTypes || isLocked}
+                    <Box
+                      sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}
                     >
-                      <MenuItem value="">
-                        <em>None</em>
-                      </MenuItem>
-                      {financingTypes.map(type => (
-                        <MenuItem
-                          key={type.financing_type_id}
-                          value={type.financing_type_id}
-                        >
-                          {type.financing_type_name}
-                        </MenuItem>
-                      ))}
-                    </Select>
+                      <TextField
+                        label="Finance Charges"
+                        fullWidth
+                        error={!!errors.finance_charges}
+                        helperText={
+                          errors.finance_charges?.message ||
+                          (Number(watchedValues.finance_charges || 0) > 0
+                            ? 'Positive: Increases Program Price; already counted in revenue'
+                            : Number(watchedValues.finance_charges || 0) < 0
+                              ? 'Negative: Does not reduce price, but lowers margin'
+                              : 'Enter amount or % (e.g., 5%)')
+                        }
+                        value={financeChargesInput}
+                        onFocus={() =>
+                          setFinanceChargesInput(String(field.value ?? ''))
+                        }
+                        onChange={e => {
+                          const raw = sanitizePercentTyping(e.target.value, true);
+                          setFinanceChargesInput(raw);
+                          if (!raw.endsWith('%')) {
+                            const num =
+                              raw === '' || raw === '-' ? 0 : parseFloat(raw);
+                            field.onChange(Number.isNaN(num) ? 0 : num);
+                          }
+                        }}
+                        onBlur={() => {
+                          const itemsCharge = Number(program.total_charge || 0);
+                          const discounts = Number(watchedValues.discounts || 0);
+                          const base = Math.max(0, itemsCharge + discounts);
+                          const converted = convertPercentStringToAmount(
+                            financeChargesInput,
+                            base,
+                            false
+                          );
+                          if (converted !== null) {
+                            field.onChange(converted);
+                            setFinanceChargesInput(
+                              formatCurrencyInline(converted)
+                            );
+                          } else {
+                            setFinanceChargesInput(
+                              formatCurrencyInline(field.value || 0)
+                            );
+                          }
+                        }}
+                        disabled={isLocked || !financingTypeSelected}
+                      />
+                      <Chip
+                        label={
+                          Number(watchedValues.finance_charges || 0) > 0
+                            ? 'Included in Price'
+                            : Number(watchedValues.finance_charges || 0) < 0
+                              ? 'Affects Margin'
+                              : '—'
+                        }
+                        color={
+                          Number(watchedValues.finance_charges || 0) > 0
+                            ? 'primary'
+                            : Number(watchedValues.finance_charges || 0) < 0
+                              ? 'warning'
+                              : 'default'
+                        }
+                        variant="outlined"
+                        sx={{ mt: 0.5 }}
+                      />
+                    </Box>
                   )}
                 />
-                {errors.financing_type_id && (
-                  <Typography
-                    variant="caption"
-                    color="error"
-                    sx={{ mt: 0.5, ml: 1.75 }}
-                  >
-                    {errors.financing_type_id.message}
-                  </Typography>
-                )}
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Controller
-                name="finance_charges"
-                control={control}
-                render={({ field }) => (
-                  <Box
-                    sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}
-                  >
-                    <TextField
-                      label="Finance Charges"
-                      fullWidth
-                      error={!!errors.finance_charges}
-                      helperText={
-                        errors.finance_charges?.message ||
-                        (Number(watchedValues.finance_charges || 0) > 0
-                          ? 'Positive: Increases Program Price; already counted in revenue'
-                          : Number(watchedValues.finance_charges || 0) < 0
-                            ? 'Negative: Does not reduce price, but lowers margin'
-                            : 'Enter amount or % (e.g., 5%)')
-                      }
-                      value={financeChargesInput}
-                      onFocus={() =>
-                        setFinanceChargesInput(String(field.value ?? ''))
-                      }
-                      onChange={e => {
-                        const raw = sanitizePercentTyping(e.target.value, true);
-                        setFinanceChargesInput(raw);
-                        if (!raw.endsWith('%')) {
-                          const num =
-                            raw === '' || raw === '-' ? 0 : parseFloat(raw);
-                          field.onChange(Number.isNaN(num) ? 0 : num);
-                        }
-                      }}
-                      onBlur={() => {
-                        const itemsCharge = Number(program.total_charge || 0);
-                        const discounts = Number(watchedValues.discounts || 0);
-                        const base = Math.max(0, itemsCharge + discounts);
-                        const converted = convertPercentStringToAmount(
-                          financeChargesInput,
-                          base,
-                          false
-                        );
-                        if (converted !== null) {
-                          field.onChange(converted);
-                          setFinanceChargesInput(
-                            formatCurrencyInline(converted)
-                          );
-                        } else {
-                          setFinanceChargesInput(
-                            formatCurrencyInline(field.value || 0)
-                          );
-                        }
-                      }}
-                      disabled={isLocked || !financingTypeSelected}
-                    />
-                    <Chip
-                      label={
-                        Number(watchedValues.finance_charges || 0) > 0
-                          ? 'Included in Price'
-                          : Number(watchedValues.finance_charges || 0) < 0
-                            ? 'Affects Margin'
-                            : '—'
-                      }
-                      color={
-                        Number(watchedValues.finance_charges || 0) > 0
-                          ? 'primary'
-                          : Number(watchedValues.finance_charges || 0) < 0
-                            ? 'warning'
-                            : 'default'
-                      }
-                      variant="outlined"
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
-                )}
-              />
-            </Grid>
+              </Grid>
+            )}
             <Grid size={{ xs: 12, md: 4 }}>
               <Controller
                 name="discounts"
@@ -676,7 +752,7 @@ export default function ProgramFinancialsTab({
                     label="Discounts"
                     fullWidth
                     error={!!errors.discounts}
-                    helperText={errors.discounts?.message}
+                    helperText={errors.discounts?.message || 'Enter amount or % (e.g., 10%)'}
                     value={discountsInput}
                     onFocus={() => setDiscountsInput(String(field.value ?? ''))}
                     onChange={e => {
@@ -721,7 +797,6 @@ export default function ProgramFinancialsTab({
             {/* Row 3: Final Total Price and Taxes */}
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
-                {...register('final_total_price', { valueAsNumber: true })}
                 label="Program Price"
                 fullWidth
                 disabled
@@ -740,17 +815,20 @@ export default function ProgramFinancialsTab({
                 helperText="Calculated from taxable items (8.25%)"
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="Credit"
-                fullWidth
-                disabled
-                value={formatCurrency(
-                  Number(-(existingFinances?.variance || 0))
-                )}
-                InputProps={{ readOnly: true }}
-              />
-            </Grid>
+            {/* Credit - Hidden for memberships */}
+            {!isMembership && (
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="Credit"
+                  fullWidth
+                  disabled
+                  value={formatCurrency(
+                    Number(-(existingFinances?.variance || 0))
+                  )}
+                  InputProps={{ readOnly: true }}
+                />
+              </Grid>
+            )}
           </Grid>
 
           {/* Actions */}
@@ -772,7 +850,7 @@ export default function ProgramFinancialsTab({
               startIcon={isSaving ? <CircularProgress size={16} /> : null}
               sx={{ borderRadius: 0, fontWeight: 600 }}
             >
-              {isSaving ? 'Saving...' : 'Save and Update Payments'}
+              {isSaving ? 'Saving...' : (isMembership ? 'Save' : 'Save and Update Payments')}
             </Button>
           </Box>
           </fieldset>

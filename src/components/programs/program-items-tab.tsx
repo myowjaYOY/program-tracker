@@ -112,6 +112,14 @@ export default function ProgramItemsTab({
   const readOnlyAll = isProgramReadOnly(currentStatus?.status_name);
   const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
+  // Membership programs: items are locked after activation (status is not Quote)
+  const isMembership = program.program_type === 'membership';
+  const isQuoteStatus = statusName === 'quote';
+  const membershipItemsLocked = isMembership && !isQuoteStatus;
+  
+  // Combined disabled state: either final status read-only OR membership items locked
+  const itemsDisabled = readOnlyAll || membershipItemsLocked;
+
   // Update parent component when program data changes
   React.useEffect(() => {
     if (updatedProgram) {
@@ -327,7 +335,7 @@ export default function ProgramItemsTab({
       sortable: false,
       renderCell: params => {
         if (!params?.row) return null;
-        const actionsDisabled = readOnlyAll;
+        const actionsDisabled = itemsDisabled;
         const usedCount = Number((params as any).row?.used_count || 0);
         const deleteDisabled = actionsDisabled || usedCount > 0;
         return (
@@ -352,6 +360,8 @@ export default function ProgramItemsTab({
               title={
                 deleteDisabled && usedCount > 0
                   ? `${usedCount} of ${params.row.quantity || 0} used – cannot delete`
+                  : membershipItemsLocked
+                  ? 'Items are locked for active membership programs'
                   : undefined
               }
             >
@@ -368,6 +378,11 @@ export default function ProgramItemsTab({
       {readOnlyAll && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {readOnlyMessage}
+        </Alert>
+      )}
+      {membershipItemsLocked && !readOnlyAll && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Items cannot be edited after activation for membership programs. Items are locked to ensure consistent monthly billing.
         </Alert>
       )}
       <Box
@@ -392,7 +407,7 @@ export default function ProgramItemsTab({
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => setIsAddModalOpen(true)}
-            disabled={readOnlyAll}
+            disabled={itemsDisabled}
             sx={{
               borderRadius: 0,
               fontWeight: 600,

@@ -67,6 +67,18 @@ const memberProgramColumns: GridColDef[] = [
     },
   },
   {
+    field: 'program_type',
+    headerName: 'Type',
+    width: 120,
+    renderCell: (params: any) => {
+      const programType = params.row.program_type;
+      if (programType === 'membership') {
+        return 'Membership';
+      }
+      return 'One-Time';
+    },
+  },
+  {
     field: 'start_date',
     headerName: 'Start Date',
     width: 120,
@@ -214,9 +226,9 @@ export default function ProgramsGrid({
       id: program.member_program_id,
       created_at: program.created_at || new Date().toISOString(),
       updated_at: program.updated_at || new Date().toISOString(),
-      // Use the proper user email fields from the API joins (following vendors pattern)
-      created_by: program.created_by_email || '-',
-      updated_by: program.updated_by_email || '-',
+      // Use full name first, then fall back to email (following coordinator script pattern)
+      created_by: program.created_by_full_name || program.created_by_email || '-',
+      updated_by: program.updated_by_full_name || program.updated_by_email || '-',
     })
   );
 
@@ -247,6 +259,8 @@ export default function ProgramsGrid({
       lead_name: row.lead_name || null,
       template_name: row.template_name || null,
       status_name: row.status_name || null,
+      program_type: row.program_type,
+      next_billing_date: row.next_billing_date,
     };
     onProgramSelect(program);
   };
@@ -273,7 +287,7 @@ export default function ProgramsGrid({
       autoHeight={true}
       showActionsColumn={false}
       sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
-      enableExport={false}
+      enableExport={true}
       aggregationModel={{ margin: 'avg' }}
       showAggregationFooter={true}
       aggregationLabel="Average Margin:"

@@ -122,6 +122,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'Description',
   },
   {
+    path: '/dashboard/admin/system-jobs',
+    label: 'System Jobs',
+    section: 'admin',
+    icon: 'Schedule',
+  },
+  {
     path: '/dashboard/admin/analytics',
     label: 'Dashboard Analytics',
     section: 'admin',

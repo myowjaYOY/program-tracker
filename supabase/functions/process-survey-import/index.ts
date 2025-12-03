@@ -572,11 +572,46 @@ async function processSurveyData(
         console.log(`Using existing user mapping for external_user_id ${firstRow.user_id} -> Lead ${leadId}`);
       } else {
         // No mapping exists, find the lead by name first
-        const { data: nameMatches } = await supabase
+        // IMPORTANT: Trim whitespace from both CSV values AND use trimmed comparison
+        // to handle any leading/trailing spaces in either source
+        const csvFirstName = firstRow.first_name.trim();
+        const csvLastName = firstRow.last_name.trim();
+        
+        // Log warning if CSV had whitespace that needed trimming
+        if (csvFirstName !== firstRow.first_name || csvLastName !== firstRow.last_name) {
+          console.warn(`Session ${sessionKey}: CSV name had whitespace - trimmed "${firstRow.first_name} ${firstRow.last_name}" to "${csvFirstName} ${csvLastName}"`);
+        }
+        
+        // Query leads with exact name match (case-insensitive)
+        // First try exact match, then try with pattern to catch trailing/leading spaces
+        let { data: nameMatches } = await supabase
           .from('leads')
           .select('lead_id, first_name, last_name, email')
-          .ilike('first_name', firstRow.first_name)
-          .ilike('last_name', firstRow.last_name);
+          .ilike('first_name', csvFirstName)
+          .ilike('last_name', csvLastName);
+        
+        // If no exact match, try a broader search to catch whitespace issues in DB
+        // and filter in-memory with trimmed comparison
+        if (!nameMatches || nameMatches.length === 0) {
+          console.log(`Session ${sessionKey}: No exact match for "${csvFirstName} ${csvLastName}", trying broader search with trimmed comparison`);
+          
+          // Search for names that start with the target (handles trailing spaces in DB)
+          const { data: broaderMatches } = await supabase
+            .from('leads')
+            .select('lead_id, first_name, last_name, email')
+            .ilike('first_name', `${csvFirstName}%`)
+            .ilike('last_name', `${csvLastName}%`);
+          
+          // Filter to exact trimmed matches only
+          nameMatches = (broaderMatches || []).filter(lead => 
+            lead.first_name.trim().toLowerCase() === csvFirstName.toLowerCase() &&
+            lead.last_name.trim().toLowerCase() === csvLastName.toLowerCase()
+          );
+          
+          if (nameMatches.length > 0) {
+            console.log(`Session ${sessionKey}: Found ${nameMatches.length} match(es) after trimmed comparison`);
+          }
+        }
 
         let matchMethod = 'name_match';
         let leadData: { lead_id: number; first_name: string; last_name: string; email?: string } | null = null;

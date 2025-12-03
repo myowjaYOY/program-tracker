@@ -42,6 +42,9 @@ export default function ProgramPaymentsTab({
   const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
   const canEdit = !isReadOnly && (statusName === 'quote' || statusName === 'active');
 
+  // Check if this is a membership program
+  const isMembership = program.program_type === 'membership';
+
   const rows: PaymentRow[] = (data || []).map(p => ({
     ...p,
     id: p.member_program_payment_id,
@@ -84,9 +87,14 @@ export default function ProgramPaymentsTab({
           {readOnlyMessage}
         </Alert>
       )}
+      {isMembership && statusName === 'quote' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Payments will be generated when this program is activated.
+        </Alert>
+      )}
       <fieldset disabled={isReadOnly} style={{ border: 'none', padding: 0, margin: 0 }}>
       <BaseDataTable<any>
-        title="Payments"
+        title=""
         data={rows}
         columns={columns as any}
         loading={isLoading}
@@ -103,6 +111,7 @@ export default function ProgramPaymentsTab({
             mode={mode}
             onSuccess={onClose}
             programStatus={statusName}
+            programType={program.program_type}
           />
         )}
         pageSize={10}

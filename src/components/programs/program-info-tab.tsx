@@ -264,8 +264,9 @@ export default function ProgramInfoTab({
       return;
     }
 
-    // 1b) If status is Active, program must have financing type selected
-    if (currentStatus === 'active' && !finances?.financing_type_id) {
+    // 1b) If status is Active, program must have financing type selected (skip for memberships - always Full Pay)
+    const isMembership = program.program_type === 'membership';
+    if (currentStatus === 'active' && !finances?.financing_type_id && !isMembership) {
       setStatusMsg({
         ok: false,
         message: 'Financing Type must be selected before activating program.',
@@ -273,8 +274,8 @@ export default function ProgramInfoTab({
       return;
     }
 
-    // 1c) If status is Active, program must have at least one payment row
-    if (currentStatus === 'active' && (!payments || payments.length === 0)) {
+    // 1c) If status is Active, program must have at least one payment row (skip for memberships - payment created on activation)
+    if (currentStatus === 'active' && (!payments || payments.length === 0) && !isMembership) {
       setStatusMsg({
         ok: false,
         message: 'Program must have at least one payment before activating.',
@@ -660,8 +661,10 @@ export default function ProgramInfoTab({
                     
                     // Additional business rules for Active status
                     const isActive = targetStatusName === 'active';
-                    const missingPayments = isActive && (!payments || payments.length === 0);
-                    const missingFinancingType = isActive && !finances?.financing_type_id;
+                    const isMembershipProgram = program.program_type === 'membership';
+                    // Skip payment/financing checks for memberships (payment created on activation, financing is always Full Pay)
+                    const missingPayments = isActive && (!payments || payments.length === 0) && !isMembershipProgram;
+                    const missingFinancingType = isActive && !finances?.financing_type_id && !isMembershipProgram;
                     
                     const disabled = !isValidTransition || missingPayments || missingFinancingType;
                     
@@ -775,23 +778,50 @@ export default function ProgramInfoTab({
               )}
             />
 
-            <Controller
-              name="duration"
-              control={control}
-              render={({ field }) => (
+            {/* Program Type and Duration Row */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* Program Type - Read Only */}
+              <TextField
+                label="Program Type"
+                value={program.program_type === 'membership' ? 'Membership' : 'One-Time'}
+                fullWidth
+                disabled
+                InputProps={{ readOnly: true }}
+                sx={{ flex: 1 }}
+              />
+              
+              {/* Duration - editable for one-time, "Monthly" for membership */}
+              {program.program_type === 'membership' ? (
                 <TextField
-                  {...field}
-                  label="Duration (days)"
-                  type="number"
+                  label="Billing Cycle"
+                  value="Monthly"
                   fullWidth
-                  required
-                  error={!!errors.duration}
-                  helperText={errors.duration?.message}
-                  inputProps={{ min: 1 }}
-                  onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                  disabled
+                  InputProps={{ readOnly: true }}
+                  sx={{ flex: 1 }}
+                />
+              ) : (
+                <Controller
+                  name="duration"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      label="Duration (days)"
+                      type="number"
+                      fullWidth
+                      required
+                      disabled={isReadOnly}
+                      error={!!errors.duration}
+                      helperText={errors.duration?.message}
+                      inputProps={{ min: 1 }}
+                      onChange={(e) => field.onChange(Number(e.target.value) || 0)}
+                      sx={{ flex: 1 }}
+                    />
+                  )}
                 />
               )}
-            />
+            </Box>
           </Box>
         </Box>
 

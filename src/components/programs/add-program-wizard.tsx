@@ -43,6 +43,9 @@ const step2Schema = z.object({
 
 const step3Schema = z.object({
   program_template_name: z.string().min(1, 'Program name is required'),
+  program_type: z.enum(['one-time', 'membership'], {
+    required_error: 'Please select a program type',
+  }),
   description: z.string().optional(),
 });
 
@@ -99,6 +102,7 @@ export default function AddProgramWizard({
       lead_id: 0,
       selected_template_ids: [],
       program_template_name: '',
+      program_type: undefined as unknown as 'one-time' | 'membership', // Required field, no default
       description: '',
     },
   });
@@ -110,6 +114,7 @@ export default function AddProgramWizard({
         lead_id: 0,
         selected_template_ids: [],
         program_template_name: '',
+        program_type: undefined as unknown as 'one-time' | 'membership',
         description: '',
       });
       setActiveStep(0);
@@ -142,7 +147,7 @@ export default function AddProgramWizard({
     } else if (activeStep === 1) {
       isValidStep = await trigger(['selected_template_ids']);
     } else if (activeStep === 2) {
-      isValidStep = await trigger(['program_template_name']);
+      isValidStep = await trigger(['program_template_name', 'program_type']);
     }
 
     if (isValidStep) {
@@ -170,12 +175,14 @@ export default function AddProgramWizard({
 
       await createProgram.mutateAsync({
         program_template_name: data.program_template_name,
+        program_type: data.program_type,
         description: data.description || '',
         lead_id: data.lead_id,
         start_date: null, // Start date is blank by default
         program_status_id: quoteStatus?.program_status_id || 1, // Default to "Quote" or fallback to first status
         selected_template_ids: data.selected_template_ids,
         // The database function will handle copying costs, charges, and margin from the templates
+        // program_type and duration (for memberships) handled by API route
       } as any);
 
       toast.success('Program created successfully!');
@@ -359,6 +366,34 @@ export default function AddProgramWizard({
                     error={!!errors.program_template_name}
                     helperText={errors.program_template_name?.message}
                   />
+                )}
+              />
+
+              <Controller
+                name="program_type"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth required error={!!errors.program_type}>
+                    <InputLabel>Program Type</InputLabel>
+                    <Select
+                      {...field}
+                      label="Program Type"
+                      value={field.value || ''}
+                      onChange={(e) => field.onChange(e.target.value)}
+                    >
+                      <MenuItem value="one-time">One-Time Program</MenuItem>
+                      <MenuItem value="membership">Membership (Monthly)</MenuItem>
+                    </Select>
+                    {errors.program_type && (
+                      <Typography
+                        variant="caption"
+                        color="error"
+                        sx={{ mt: 0.5, ml: 1.75 }}
+                      >
+                        {errors.program_type.message}
+                      </Typography>
+                    )}
+                  </FormControl>
                 )}
               />
 

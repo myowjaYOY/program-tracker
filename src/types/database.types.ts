@@ -97,6 +97,8 @@ export interface MemberProgramItems {
   created_by: string | null;
   updated_at: string | null;
   updated_by: string | null;
+  // Membership billing period (null for one-time programs, 1/2/3... for memberships)
+  billing_period_month?: number | null | undefined;
   // Joined fields from API
   therapy_name?: string | null;
   therapies?: {
@@ -173,6 +175,9 @@ export interface MemberPrograms {
   source_template_id: number | null;
   program_status_id: number | null;
   template_version_date: string | null;
+  // Membership program fields (optional - defaults in database)
+  program_type?: 'one-time' | 'membership' | undefined;
+  next_billing_date?: string | null | undefined;
   // API-mapped fields
   created_by_email?: string | null;
   created_by_full_name?: string | null;
@@ -207,6 +212,20 @@ export interface MemberProgramFinances {
   updated_by_email?: string | null;
   updated_by_full_name?: string | null;
   financing_type_name?: string | null;
+}
+
+// Membership finances - locked monthly values for membership programs
+export interface MemberProgramMembershipFinances {
+  membership_finance_id: number;
+  member_program_id: number;
+  monthly_rate: number;
+  monthly_discount: number | null;
+  monthly_tax: number | null;
+  billing_frequency: 'monthly' | 'quarterly' | 'annual';
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
 }
 
 export interface MemberProgramPayments {
@@ -662,6 +681,15 @@ export interface Database {
         };
         Update: Partial<
           Omit<MemberProgramFinances, 'member_program_finance_id'>
+        >;
+      };
+      member_program_membership_finances: {
+        Row: MemberProgramMembershipFinances;
+        Insert: Omit<MemberProgramMembershipFinances, 'membership_finance_id'> & {
+          membership_finance_id?: number;
+        };
+        Update: Partial<
+          Omit<MemberProgramMembershipFinances, 'membership_finance_id'>
         >;
       };
       member_program_payments: {
