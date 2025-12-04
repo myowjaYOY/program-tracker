@@ -283,7 +283,7 @@ export async function validateActiveProgramItemAddition(
         item_cost: itemData.item_cost || 0,
         item_charge: itemData.item_charge || 0,
         therapy_id: itemData.therapy_id,
-        therapies: { taxable: false } // Will be updated below
+        therapies: { taxable: undefined } // Must be undefined so taxable lookup is triggered below
       };
       updatedItems.push(newItem);
     }
@@ -317,7 +317,7 @@ export async function validateActiveProgramItemAddition(
       }
     }
 
-    // Calculate projected values
+    // Calculate projected values (after the change)
     const taxes = calculateTaxesOnTaxableItems(
       totalCharge,
       totalTaxableCharge,
@@ -349,6 +349,20 @@ export async function validateActiveProgramItemAddition(
     });
 
     if (!validation.isValid) {
+      // Provide a clearer error message for price ceiling violations on 'add' operation
+      if (operation === 'add' && projectedPrice > lockedPrice + 0.01) {
+        // Calculate item cost with tax efficiently (no extra loop)
+        const newItemCharge = (itemData.item_charge || 0) * (itemData.quantity || 1);
+        const newItem = updatedItems.find((i: any) => i.member_program_item_id === -1);
+        const newItemTaxable = newItem?.therapies?.taxable === true;
+        const itemCostWithTax = newItemCharge + (newItemTaxable ? newItemCharge * 0.0825 : 0);
+        const availableCredit = lockedPrice - projectedPrice + itemCostWithTax;
+        const overBy = itemCostWithTax - availableCredit;
+        throw new Error(
+          `Cannot add item: Cost $${itemCostWithTax.toFixed(2)} (incl. tax) exceeds available credit of $${availableCredit.toFixed(2)} by $${overBy.toFixed(2)}`
+        );
+      }
+      // For margin violations or other operations, use the original error
       throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
     }
 

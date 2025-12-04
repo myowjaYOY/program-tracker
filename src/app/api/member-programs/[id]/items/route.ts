@@ -205,7 +205,20 @@ export async function POST(
     await updateMemberProgramCalculatedFields(supabase, parseInt(id));
 
     // Update variance and margin for Active programs
-    await validateAndUpdateActiveProgramFinances(supabase, parseInt(id));
+    // If this fails, rollback by deleting the item we just inserted
+    try {
+      await validateAndUpdateActiveProgramFinances(supabase, parseInt(id));
+    } catch (validationError: any) {
+      // Rollback: delete the item we just inserted
+      if (data?.member_program_item_id) {
+        await supabase
+          .from('member_program_items')
+          .delete()
+          .eq('member_program_item_id', data.member_program_item_id);
+      }
+      // Re-throw to be handled by outer catch block
+      throw validationError;
+    }
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {

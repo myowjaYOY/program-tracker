@@ -172,11 +172,12 @@ export async function GET(request: NextRequest) {
       'not applicable': 1,
     };
 
-    // Get all survey sessions for active members
+    // Get all survey sessions for active members WITH completion date
     const { data: memberSessions } = await supabase
       .from('survey_response_sessions')
-      .select('session_id, lead_id')
-      .in('lead_id', uniqueLeadIds);
+      .select('session_id, lead_id, completed_on')
+      .in('lead_id', uniqueLeadIds)
+      .order('completed_on', { ascending: false });
 
     let avgSupportRating: number | null = null;
     let lowSupportRatingCount = 0;
@@ -193,9 +194,12 @@ export async function GET(request: NextRequest) {
         .in('question_id', RATING_QUESTION_IDS);
 
       if (ratingResponses && ratingResponses.length > 0) {
-        // Create session -> lead_id map
+        // Create session -> lead_id and session -> completed_on maps
         const sessionToLeadMap = new Map(
           memberSessions.map(s => [s.session_id, s.lead_id])
+        );
+        const sessionToDateMap = new Map(
+          memberSessions.map(s => [s.session_id, s.completed_on])
         );
 
         // Question ID to dimension mapping
@@ -203,67 +207,75 @@ export async function GET(request: NextRequest) {
         const STAFF_IDS = [208, 251, 418];
         const CURRICULUM_IDS = [209, 252];
 
-        // Track ratings per member per dimension
-        interface MemberRatings {
-          provider: number[];
-          staff: number[];
-          curriculum: number[];
+        // Find the most recent session with rating responses for each member
+        const memberLatestSession = new Map<number, { sessionId: number; completedOn: string }>();
+        
+        ratingResponses.forEach(response => {
+          const leadId = sessionToLeadMap.get(response.session_id);
+          const completedOn = sessionToDateMap.get(response.session_id);
+          if (!leadId || !completedOn) return;
+
+          const existing = memberLatestSession.get(leadId);
+          if (!existing || completedOn > existing.completedOn) {
+            memberLatestSession.set(leadId, { sessionId: response.session_id, completedOn });
+          }
+        });
+
+        // Track MOST RECENT ratings per member (only from their latest session)
+        interface MemberLatestRatings {
+          provider: number | null;
+          staff: number | null;
+          curriculum: number | null;
         }
-        const memberRatings = new Map<number, MemberRatings>();
+        const memberLatestRatings = new Map<number, MemberLatestRatings>();
 
         ratingResponses.forEach(response => {
           const leadId = sessionToLeadMap.get(response.session_id);
           if (!leadId || !response.answer_text) return;
 
+          // Only process if this is from the member's latest session
+          const latestSession = memberLatestSession.get(leadId);
+          if (!latestSession || response.session_id !== latestSession.sessionId) return;
+
           const score = SUPPORT_RATING_MAP[response.answer_text.toLowerCase().trim()];
           if (!score) return;
 
-          if (!memberRatings.has(leadId)) {
-            memberRatings.set(leadId, { provider: [], staff: [], curriculum: [] });
+          if (!memberLatestRatings.has(leadId)) {
+            memberLatestRatings.set(leadId, { provider: null, staff: null, curriculum: null });
           }
 
-          const ratings = memberRatings.get(leadId)!;
+          const ratings = memberLatestRatings.get(leadId)!;
           if (PROVIDER_IDS.includes(response.question_id)) {
-            ratings.provider.push(score);
+            ratings.provider = score;
           } else if (STAFF_IDS.includes(response.question_id)) {
-            ratings.staff.push(score);
+            ratings.staff = score;
           } else if (CURRICULUM_IDS.includes(response.question_id)) {
-            ratings.curriculum.push(score);
+            ratings.curriculum = score;
           }
         });
 
-        // Calculate overall scores per member and find low scores
+        // Calculate overall scores per member based on MOST RECENT ratings
         const memberOverallScores: { leadId: number; overall: number; lowestDimension: string; lowestScore: number }[] = [];
 
-        memberRatings.forEach((ratings, leadId) => {
-          const providerAvg = ratings.provider.length > 0
-            ? ratings.provider.reduce((a, b) => a + b, 0) / ratings.provider.length
-            : null;
-          const staffAvg = ratings.staff.length > 0
-            ? ratings.staff.reduce((a, b) => a + b, 0) / ratings.staff.length
-            : null;
-          const curriculumAvg = ratings.curriculum.length > 0
-            ? ratings.curriculum.reduce((a, b) => a + b, 0) / ratings.curriculum.length
-            : null;
-
-          const scores = [providerAvg, staffAvg, curriculumAvg].filter(s => s !== null) as number[];
+        memberLatestRatings.forEach((ratings, leadId) => {
+          const scores = [ratings.provider, ratings.staff, ratings.curriculum].filter(s => s !== null) as number[];
           if (scores.length === 0) return;
 
           const overall = scores.reduce((a, b) => a + b, 0) / scores.length;
 
-          // Find lowest dimension for members needing attention
+          // Find lowest dimension from most recent ratings
           let lowestScore = 5;
           let lowestDimension = '';
-          if (providerAvg !== null && providerAvg < lowestScore) {
-            lowestScore = providerAvg;
+          if (ratings.provider !== null && ratings.provider < lowestScore) {
+            lowestScore = ratings.provider;
             lowestDimension = 'Provider';
           }
-          if (staffAvg !== null && staffAvg < lowestScore) {
-            lowestScore = staffAvg;
+          if (ratings.staff !== null && ratings.staff < lowestScore) {
+            lowestScore = ratings.staff;
             lowestDimension = 'Staff';
           }
-          if (curriculumAvg !== null && curriculumAvg < lowestScore) {
-            lowestScore = curriculumAvg;
+          if (ratings.curriculum !== null && ratings.curriculum < lowestScore) {
+            lowestScore = ratings.curriculum;
             lowestDimension = 'Curriculum';
           }
 
@@ -276,19 +288,29 @@ export async function GET(request: NextRequest) {
           avgSupportRating = Math.round((totalOverall / memberOverallScores.length) * 10) / 10;
         }
 
-        // Find members with any dimension ≤ 2
+        // Find members with:
+        // 1. Most recent rating in any dimension ≤ 2
+        // 2. OR overall score < 3
         const lowRatingMembers = memberOverallScores
-          .filter(m => m.lowestScore <= 2)
-          .sort((a, b) => a.lowestScore - b.lowestScore); // Lowest first
+          .filter(m => m.lowestScore <= 2 || m.overall < 3)
+          .sort((a, b) => {
+            // Sort by lowest score first, then by overall
+            if (a.lowestScore !== b.lowestScore) return a.lowestScore - b.lowestScore;
+            return a.overall - b.overall;
+          });
 
         lowSupportRatingCount = lowRatingMembers.length;
 
         // Get top 5 for the list
         lowSupportRatingList = lowRatingMembers.slice(0, 5).map(m => {
           const lead = leadsMap.get(m.leadId);
+          // Show the most relevant info: if they have a rating ≤ 2, show that; otherwise show overall
+          const displayValue = m.lowestScore <= 2 
+            ? `${m.lowestDimension}: ${m.lowestScore}/5`
+            : `Overall: ${m.overall.toFixed(1)}/5`;
           return {
             name: lead ? `${lead.first_name} ${lead.last_name}`.trim() : 'Unknown',
-            value: `${m.lowestDimension}: ${m.lowestScore.toFixed(1)}/5`,
+            value: displayValue,
           };
         });
       }
