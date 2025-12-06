@@ -3,6 +3,7 @@
 import { Box } from '@mui/material';
 import { User } from '@supabase/supabase-js';
 import Sidebar from './Sidebar';
+import { NotificationBell } from '@/components/notifications';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -29,6 +30,8 @@ export default function DashboardLayout({
       >
         {children}
       </Box>
+      {/* Floating notification bell - appears when there are active notifications */}
+      <NotificationBell floating />
     </Box>
   );
 }

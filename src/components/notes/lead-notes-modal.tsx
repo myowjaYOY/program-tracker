@@ -3,13 +3,13 @@
 import React, { useState } from 'react';
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   IconButton,
   Typography,
   Box,
   Divider,
+  Button,
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import NoteForm from './note-form';
@@ -52,47 +52,59 @@ export default function LeadNotesModal({
           borderRadius: 2,
           margin: { xs: 2, sm: 'auto' },
           width: { xs: 'calc(100% - 32px)', sm: 'auto' },
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
-      <DialogTitle
+      {/* Colored Header */}
+      <Box
         sx={{
+          bgcolor: 'primary.main',
+          color: 'white',
+          px: 3,
+          py: 2,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          pb: 1,
         }}
       >
-        <Typography variant="h6" component="div">
-          Add Note to {leadName}
-        </Typography>
-        <IconButton onClick={handleClose} size="small">
+        <Box>
+          <Typography variant="overline" sx={{ opacity: 0.9, display: 'block', lineHeight: 1 }}>
+            NEW
+          </Typography>
+          <Typography variant="h6" fontWeight="bold">
+            {leadName}
+          </Typography>
+        </Box>
+        <IconButton 
+          onClick={handleClose} 
+          size="small"
+          sx={{ color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+        >
           <CloseIcon />
         </IconButton>
-      </DialogTitle>
+      </Box>
 
       <DialogContent
         sx={{
           p: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflow: 'hidden',
+          flex: 1,
+          overflow: 'auto',
         }}
       >
-        {/* Form Section - Top 40% */}
-        <Box sx={{ flex: '0 0 auto' }}>
+        {/* Form Section */}
+        <Box sx={{ px: 2, pt: 2, pb: 1 }}>
           <NoteForm
             leadId={leadId}
             onSuccess={handleNoteAdded}
+            hideButtons
+            formId="note-form"
           />
         </Box>
 
-        {/* Divider */}
-        <Divider />
-
-        {/* History Section - Bottom 60% */}
-        <Box sx={{ flex: 1, minHeight: 0 }}>
+        {/* History Section */}
+        <Box sx={{ minHeight: 300 }}>
           <NotesHistoryGrid
             leadId={leadId}
             onRefresh={refreshTrigger}
@@ -100,6 +112,32 @@ export default function LeadNotesModal({
         </Box>
       </DialogContent>
 
+      {/* Fixed Footer with Action Buttons */}
+      <DialogActions 
+        sx={{ 
+          px: 3, 
+          py: 2, 
+          borderTop: 1, 
+          borderColor: 'divider',
+          bgcolor: 'grey.50',
+        }}
+      >
+        <Button 
+          onClick={handleClose}
+          sx={{ borderRadius: 0 }}
+        >
+          Close
+        </Button>
+        <Button
+          type="submit"
+          form="note-form"
+          variant="contained"
+          color="primary"
+          sx={{ borderRadius: 0, fontWeight: 600, minWidth: 120 }}
+        >
+          Create
+        </Button>
+      </DialogActions>
     </Dialog>
   );
 }

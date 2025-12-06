@@ -6,6 +6,7 @@ export const userSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   is_admin: z.boolean().default(false),
   is_active: z.boolean().default(false),
+  program_role_id: z.number().int().positive('Role is required'),
 });
 
 export const userUpdateSchema = userSchema.partial().omit({ password: true });

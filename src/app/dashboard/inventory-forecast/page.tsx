@@ -73,6 +73,17 @@ export default function InventoryForecastPage() {
     cost_owed_next_month: 0,
   };
 
+  // Count inventoried items with shortage (on_hand + on_order < owed)
+  const inventoryShortageCount = useMemo(() => {
+    return inventoryData.filter((row) => {
+      if (!row.in_inventory) return false;
+      const onHand = row.quantity_on_hand || 0;
+      const onOrder = row.quantity_on_order || 0;
+      const owed = row.owed_count || 0;
+      return (onHand + onOrder) < owed;
+    }).length;
+  }, [inventoryData]);
+
   // Handle date range change
   const handleDateRangeChange = (value: string) => {
     const newRange = value as 'this_month' | 'next_month' | 'custom';
@@ -185,6 +196,8 @@ export default function InventoryForecastPage() {
       width: 100,
       align: 'center',
       headerAlign: 'center',
+      type: 'boolean',
+      valueGetter: (_, row) => row.in_inventory,
       renderCell: (params) => {
         // Only show checkbox for items that exist in inventory_items table
         if (!params.row.in_inventory) {
@@ -267,7 +280,7 @@ export default function InventoryForecastPage() {
       {/* Metrics Cards */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* Card 1: Total Cost Owed */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -293,7 +306,7 @@ export default function InventoryForecastPage() {
                     Cost of Undispensed Products
                   </Typography>
                   <Typography
-                    variant="h3"
+                    variant="h4"
                     component="div"
                     sx={{ fontWeight: 'bold', color: 'error.main', mt: 1 }}
                   >
@@ -314,8 +327,53 @@ export default function InventoryForecastPage() {
           </Card>
         </Grid>
 
-        {/* Card 2: Total Products Owed */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        {/* Card 2: Inventory Shortages */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+          <Card
+            sx={{
+              height: '100%',
+              borderTop: (theme) => `4px solid ${theme.palette.error.main}`,
+              transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: (theme) => theme.shadows[4],
+              },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
+                }}
+              >
+                <Box>
+                  <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                    Inventory Shortages
+                  </Typography>
+                  <Typography
+                    variant="h4"
+                    component="div"
+                    sx={{ fontWeight: 'bold', color: 'error.main', mt: 1 }}
+                  >
+                    {inventoryShortageCount}
+                  </Typography>
+                </Box>
+                <Box sx={{ color: 'error.main', opacity: 0.8 }}>
+                  <InventoryIcon sx={{ fontSize: 40 }} />
+                </Box>
+              </Box>
+              <Typography variant="caption" color="textSecondary">
+                Inventoried items needing reorder
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Card 3: Total Products Owed */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -341,7 +399,7 @@ export default function InventoryForecastPage() {
                     Total Products Owed
                   </Typography>
                   <Typography
-                    variant="h3"
+                    variant="h4"
                     component="div"
                     sx={{ fontWeight: 'bold', color: 'warning.main', mt: 1 }}
                   >
@@ -359,8 +417,8 @@ export default function InventoryForecastPage() {
           </Card>
         </Grid>
 
-        {/* Card 3: Cost Owed This Month */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        {/* Card 4: Cost Owed This Month */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -386,7 +444,7 @@ export default function InventoryForecastPage() {
                     Cost Owed This Month
                   </Typography>
                   <Typography
-                    variant="h3"
+                    variant="h4"
                     component="div"
                     sx={{ fontWeight: 'bold', color: 'info.main', mt: 1 }}
                   >
@@ -407,8 +465,8 @@ export default function InventoryForecastPage() {
           </Card>
         </Grid>
 
-        {/* Card 4: Cost Owed Next Month */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+        {/* Card 5: Cost Owed Next Month */}
+        <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
           <Card
             sx={{
               height: '100%',
@@ -434,7 +492,7 @@ export default function InventoryForecastPage() {
                     Cost Owed Next Month
                   </Typography>
                   <Typography
-                    variant="h3"
+                    variant="h4"
                     component="div"
                     sx={{ fontWeight: 'bold', color: 'success.main', mt: 1 }}
                   >
@@ -574,11 +632,26 @@ export default function InventoryForecastPage() {
               loading={isLoading}
               showCreateButton={false}
               showActionsColumn={false}
+              enableExport={true}
               sortModel={[
+                { field: 'order', sort: 'desc' },
                 { field: 'therapy_type_name', sort: 'asc' },
                 { field: 'therapy_name', sort: 'asc' },
               ]}
-              enableExport={true}
+              rowClassName={(row) => {
+                const onHand = row.quantity_on_hand || 0;
+                const onOrder = row.quantity_on_order || 0;
+                const owed = row.owed_count || 0;
+                return (onHand + onOrder) < owed ? 'row-shortage' : '';
+              }}
+              sx={{
+                '& .row-shortage': {
+                  backgroundColor: (theme: Theme) => alpha(theme.palette.error.main, 0.15),
+                  '&:hover': {
+                    backgroundColor: (theme: Theme) => alpha(theme.palette.error.main, 0.25),
+                  },
+                },
+              }}
             />
           )}
         </CardContent>

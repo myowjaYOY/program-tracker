@@ -60,6 +60,27 @@ const userColumns: GridColDef[] = [
     renderCell: params => params.value || '-',
   },
   {
+    field: 'program_role_id',
+    headerName: 'Role',
+    width: 150,
+    renderCell: (params) => {
+      const role = params.row.program_roles;
+      return role ? (
+        <Chip
+          label={role.role_name}
+          size="small"
+          sx={{
+            bgcolor: role.display_color,
+            color: (theme) => theme.palette.getContrastText(role.display_color),
+            fontWeight: 'bold',
+          }}
+        />
+      ) : (
+        '-'
+      );
+    },
+  },
+  {
     field: 'is_admin',
     headerName: 'Admin',
     width: 100,
@@ -117,12 +138,14 @@ export default function UserTable({
     if (!open) return null;
 
     // Convert UserEntity to UserFormData for the form
-    const formData: Partial<UserFormData> & { id?: string } = initialValues
+    const formData: Partial<UserFormData> & { id?: string; program_roles?: { role_name: string; display_color: string } } = initialValues
       ? {
           email: initialValues.email || '',
           full_name: initialValues.full_name || '',
           is_admin: initialValues.is_admin ?? false,
           is_active: initialValues.is_active ?? false,
+          program_role_id: (initialValues as any).program_role_id ?? 1,
+          program_roles: (initialValues as any).program_roles,
           ...(initialValues.id && {
             id: initialValues.id,
           }),

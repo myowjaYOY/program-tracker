@@ -126,13 +126,12 @@ export default function DashboardPage() {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ mb: 2 }}>
+      <Box sx={{ mb: 3 }}>
         <Typography
           variant="h4"
           component="h1"
           fontWeight="bold"
           color="primary.main"
-          gutterBottom
         >
           Dashboard
         </Typography>

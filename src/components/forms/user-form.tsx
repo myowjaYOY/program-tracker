@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   TextField,
@@ -15,6 +15,11 @@ import {
   InputAdornment,
   IconButton,
   CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormHelperText,
 } from '@mui/material';
 
 import {
@@ -32,10 +37,11 @@ import {
   useMenuItems,
   useUpdateUserPermissions,
 } from '@/lib/hooks/use-admin';
+import { useActiveProgramRoles } from '@/lib/hooks/use-program-roles';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 
 interface UserFormProps {
-  initialValues?: Partial<UserFormData> & { id?: string };
+  initialValues?: Partial<UserFormData> & { id?: string; program_roles?: { role_name: string; display_color: string } };
   onSuccess?: () => void;
   mode?: 'create' | 'edit';
 }
@@ -64,6 +70,7 @@ export default function UserForm({
     formState: { errors, isSubmitting },
     setValue,
     watch,
+    control,
   } = useForm<UserFormData>({
     resolver: zodResolver(isEdit ? editSchema : userSchema) as any,
     defaultValues: {
@@ -72,6 +79,7 @@ export default function UserForm({
       password: '',
       is_admin: false,
       is_active: false,
+      program_role_id: 1,
       ...initialValues,
     },
   });
@@ -79,6 +87,7 @@ export default function UserForm({
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const updatePermissions = useUpdateUserPermissions();
+  const { data: programRoles = [], isLoading: rolesLoading } = useActiveProgramRoles();
 
   // For edit mode, fetch user permissions and menu items
   const { data: userPermissions, isLoading: userPermissionsLoading } =
@@ -214,6 +223,7 @@ export default function UserForm({
           is_admin: values.is_admin,
           is_active: values.is_active,
           password: values.password || '',
+          program_role_id: values.program_role_id,
         },
       });
 
@@ -229,6 +239,7 @@ export default function UserForm({
       await createUser.mutateAsync({
         ...values,
         full_name: values.full_name || '',
+        program_role_id: values.program_role_id || 1,
       });
     }
 
@@ -265,6 +276,40 @@ export default function UserForm({
         {...register('full_name')}
         error={!!errors.full_name}
         helperText={errors.full_name?.message}
+      />
+
+      <Controller
+        name="program_role_id"
+        control={control}
+        render={({ field }) => (
+          <FormControl fullWidth error={!!errors.program_role_id}>
+            <InputLabel id="program-role-label">Role</InputLabel>
+            <Select
+              labelId="program-role-label"
+              label="Role"
+              {...field}
+              value={field.value || 1}
+              onChange={(e) => field.onChange(Number(e.target.value))}
+              disabled={rolesLoading}
+            >
+              {rolesLoading ? (
+                <MenuItem disabled>Loading roles...</MenuItem>
+              ) : (
+                programRoles.map((role) => (
+                  <MenuItem key={role.program_role_id} value={role.program_role_id}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: role.display_color }} />
+                      {role.role_name}
+                    </Box>
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+            {errors.program_role_id && (
+              <FormHelperText>{errors.program_role_id.message}</FormHelperText>
+            )}
+          </FormControl>
+        )}
       />
 
       {!isEdit && (

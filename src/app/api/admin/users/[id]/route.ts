@@ -38,13 +38,25 @@ export async function GET(
       .select('*')
       .eq('id', id)
       .single();
-
+    
     if (error) {
       console.error('Error fetching user:', error);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: targetUser });
+    // Get role info
+    const { data: role } = await supabase
+      .from('program_roles')
+      .select('program_role_id, role_name, display_color')
+      .eq('program_role_id', targetUser.program_role_id)
+      .single();
+    
+    const userWithRole = {
+      ...targetUser,
+      program_roles: role || null
+    };
+
+    return NextResponse.json({ data: userWithRole });
   } catch (error) {
     console.error('Get user API error:', error);
     return NextResponse.json(
@@ -86,7 +98,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { full_name, is_admin, is_active, password } = body;
+    const { full_name, is_admin, is_active, password, program_role_id } = body;
 
     // Update password in Supabase Auth if provided
     if (password && password.trim() !== '') {
@@ -113,9 +125,10 @@ export async function PUT(
         full_name: full_name || null,
         is_admin: is_admin || false,
         is_active: is_active !== undefined ? is_active : true,
+        ...(program_role_id && { program_role_id }),
       })
       .eq('id', id)
-      .select()
+      .select('*')
       .single();
 
     if (updateError) {
@@ -126,8 +139,15 @@ export async function PUT(
       );
     }
 
+    // Get role info for response
+    const { data: updatedRole } = await supabase
+      .from('program_roles')
+      .select('program_role_id, role_name, display_color')
+      .eq('program_role_id', updatedUser.program_role_id)
+      .single();
+
     return NextResponse.json({
-      data: updatedUser,
+      data: { ...updatedUser, program_roles: updatedRole || null },
       message: 'User updated successfully',
     });
   } catch (error) {

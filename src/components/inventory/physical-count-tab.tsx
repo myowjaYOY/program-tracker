@@ -25,7 +25,6 @@ import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import { useCountSessions, useCancelCountSession } from '@/lib/hooks/use-inventory-counts';
 import StartCountModal from './start-count-modal';
 import CountSessionDetailModal from './count-session-detail-modal';
-import { format } from 'date-fns';
 
 export default function PhysicalCountTab() {
   const [startModalOpen, setStartModalOpen] = useState(false);
@@ -64,19 +63,27 @@ export default function PhysicalCountTab() {
     {
       field: 'session_number',
       headerName: 'Session #',
-      renderCell: (params: GridRenderCellParams) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {params.value}
-          </Typography>
-        </Box>
-      ),
     },
     {
       field: 'session_date',
       headerName: 'Date',
-      valueGetter: (_, row) =>
-        row.session_date ? format(new Date(row.session_date), 'MMM dd, yyyy') : 'N/A',
+      renderCell: (params: GridRenderCellParams) => {
+        if (!params.value) return <Typography variant="body2">-</Typography>;
+        const v = params.value as string;
+        let formatted: string;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          const [y, m, d] = v.split('-').map(Number);
+          const local = new Date(y ?? 2024, (m ?? 1) - 1, d ?? 1);
+          formatted = local.toLocaleDateString('en-US');
+        } else {
+          formatted = new Date(v).toLocaleDateString('en-US');
+        }
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%' }}>
+            <Typography variant="body2">{formatted}</Typography>
+          </Box>
+        );
+      },
     },
     {
       field: 'count_type',

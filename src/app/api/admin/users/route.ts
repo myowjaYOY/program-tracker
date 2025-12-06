@@ -34,7 +34,7 @@ export async function GET() {
       .from('users')
       .select('*')
       .order('created_at', { ascending: false });
-
+    
     if (error) {
       console.error('Error fetching users:', error);
       return NextResponse.json(
@@ -43,7 +43,19 @@ export async function GET() {
       );
     }
 
-    return NextResponse.json({ data: users || [] });
+    // Get program roles for mapping
+    const { data: roles } = await supabase
+      .from('program_roles')
+      .select('program_role_id, role_name, display_color');
+    
+    // Map role info to users
+    const rolesMap = new Map(roles?.map(r => [r.program_role_id, r]) || []);
+    const usersWithRoles = users?.map(u => ({
+      ...u,
+      program_roles: rolesMap.get(u.program_role_id) || null
+    })) || [];
+
+    return NextResponse.json({ data: usersWithRoles });
   } catch (error) {
     console.error('Users API error:', error);
     return NextResponse.json(
@@ -87,6 +99,7 @@ export async function POST(request: NextRequest) {
       password,
       is_admin = false,
       is_active = false,
+      program_role_id = 1, // Default to Coordinator
     } = body;
 
     console.log('Creating user with data:', {
@@ -94,6 +107,7 @@ export async function POST(request: NextRequest) {
       full_name,
       is_admin,
       is_active,
+      program_role_id,
     });
 
     if (!email || !password) {
@@ -162,9 +176,10 @@ export async function POST(request: NextRequest) {
         full_name: full_name || '',
         is_admin,
         is_active,
+        program_role_id,
       })
       .eq('id', authData.user.id)
-      .select()
+      .select('*')
       .single();
 
     if (userError2) {
@@ -184,8 +199,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get role info for response
+    const { data: newUserRole } = await supabase
+      .from('program_roles')
+      .select('program_role_id, role_name, display_color')
+      .eq('program_role_id', userData.program_role_id)
+      .single();
+
     return NextResponse.json({
-      data: userData,
+      data: { ...userData, program_roles: newUserRole || null },
       message: 'User created successfully',
     });
   } catch (error) {

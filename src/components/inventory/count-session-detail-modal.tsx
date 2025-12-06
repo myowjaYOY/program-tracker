@@ -17,7 +17,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
+import { DataGridPro, GridColDef, GridRenderCellParams } from '@mui/x-data-grid-pro';
 import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
@@ -372,7 +372,7 @@ export default function CountSessionDetailModal({
             )}
           </Box>
 
-          <DataGrid
+          <DataGridPro
             rows={session.details}
             columns={columns}
             getRowId={(row) => row.count_detail_id}
@@ -384,6 +384,7 @@ export default function CountSessionDetailModal({
             pageSizeOptions={[10, 25, 50, 100]}
             disableRowSelectionOnClick
             autoHeight
+            showToolbar
             sx={{
               border: 0,
               '& .MuiDataGrid-cell:focus': {

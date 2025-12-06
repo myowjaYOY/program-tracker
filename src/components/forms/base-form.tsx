@@ -30,16 +30,34 @@ export function BaseForm<T>({
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-      <Grid container spacing={2} mt={3} mb={3}>
-        {children}
-      </Grid>
+    <Box 
+      component="form" 
+      onSubmit={handleSubmit} 
+      sx={{ 
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        flex: 1,
+      }}
+    >
+      <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, px: 3, pt: 2 }}>
+        <Grid container spacing={2} mb={2}>
+          {children}
+        </Grid>
+      </Box>
       <Box
         sx={{
           display: 'flex',
           justifyContent: 'flex-end',
           gap: 2,
-          mt: 2,
+          bgcolor: 'grey.50',
+          borderTop: 1,
+          borderColor: 'divider',
+          pt: 2,
+          pb: 2,
+          px: 3,
+          flexShrink: 0,
           ...buttonContainerSx,
         }}
       >

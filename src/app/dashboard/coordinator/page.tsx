@@ -74,26 +74,17 @@ export default function CoordinatorPage() {
   }, [programs]);
 
   return (
-    <Box sx={{ p: 2 }}>
-      {/* Header (match Reports page style) */}
-      <Box sx={{ mb: 1 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 1,
-          }}
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 3 }}>
+        <Typography
+          variant="h4"
+          component="h1"
+          fontWeight="bold"
+          color="primary.main"
         >
-          <Typography
-            variant="h4"
-            component="h1"
-            fontWeight="bold"
-            color="primary.main"
-          >
-            Coordinator Dashboard
-          </Typography>
-        </Box>
+          Coordinator Dashboard
+        </Typography>
       </Box>
 
       {/* Summary Cards */}

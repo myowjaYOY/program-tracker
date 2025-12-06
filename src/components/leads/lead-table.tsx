@@ -194,7 +194,11 @@ const leadColumns: GridColDef[] = [
   commonColumns.updatedAt,
 ];
 
-export default function LeadTable() {
+interface LeadTableProps {
+  title?: string;
+}
+
+export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
   const { data: leads, isLoading, error } = useLeads();
   const deleteLead = useDeleteLead();
 
@@ -274,7 +278,7 @@ export default function LeadTable() {
   return (
     <>
       <BaseDataTable<LeadEntity>
-        title="Leads"
+        title={title}
         data={leadsWithId}
         columns={leadColumns}
         loading={isLoading}
@@ -290,8 +294,7 @@ export default function LeadTable() {
         deleteConfirmMessage="Are you sure you want to delete this lead? This action cannot be undone."
         pageSize={25}
         pageSizeOptions={[10, 25, 50, 100]}
-        autoHeight={false}
-        gridHeight="calc(100vh - 120px)"
+        autoHeight={true}
         enableExport={true}
       />
 

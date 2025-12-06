@@ -9,6 +9,11 @@ export interface User {
   is_admin: boolean;
   is_active: boolean;
   created_at: string;
+  program_role_id: number;
+  program_roles?: {
+    role_name: string;
+    display_color: string;
+  };
 }
 
 export interface MenuItem {
@@ -27,6 +32,7 @@ export interface CreateUserData {
   password: string;
   is_admin?: boolean;
   is_active?: boolean;
+  program_role_id?: number;
 }
 
 export interface UpdateUserData {
@@ -34,6 +40,7 @@ export interface UpdateUserData {
   is_admin?: boolean;
   is_active?: boolean;
   password?: string;
+  program_role_id?: number;
 }
 
 // Query keys

@@ -707,22 +707,41 @@ export default function BaseDataTable<T extends BaseEntity>({
               borderRadius: 2,
               margin: { xs: 2, sm: 'auto' },
               width: { xs: 'calc(100% - 32px)', sm: 'auto' },
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
             },
           }}
         >
-          <DialogTitle
+          {/* Colored Header */}
+          <Box
             sx={{
+              bgcolor: formMode === 'create' ? 'primary.main' : 'secondary.main',
+              color: 'white',
+              px: 3,
+              py: 2,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
             }}
           >
-            {formMode === 'create' ? `Create ${title}` : `Edit ${title}`}
-            <IconButton onClick={handleFormClose} size="small">
+            <Box>
+              <Typography variant="overline" sx={{ opacity: 0.9, display: 'block', lineHeight: 1 }}>
+                {formMode === 'create' ? 'NEW' : 'EDITING'}
+              </Typography>
+              <Typography variant="h6" fontWeight="bold">
+                {title}
+              </Typography>
+            </Box>
+            <IconButton
+              onClick={handleFormClose}
+              size="small"
+              sx={{ color: 'white', '&:hover': { bgcolor: 'rgba(255,255,255,0.1)' } }}
+            >
               <CloseIcon />
             </IconButton>
-          </DialogTitle>
-          <DialogContent>
+          </Box>
+          <DialogContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 0 }}>
             {renderForm({
               open: formOpen,
               onClose: handleFormSuccess,
