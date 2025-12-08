@@ -10,7 +10,11 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+  Refresh as RefreshIcon,
+  NotificationsActive as AlertIcon,
+  CheckCircle as AcknowledgedIcon,
+} from '@mui/icons-material';
 import { GridColDef } from '@mui/x-data-grid';
 import BaseDataTable from '@/components/tables/base-data-table';
 import { useLeadNotes, LeadNote } from '@/lib/hooks/use-lead-notes';
@@ -44,8 +48,38 @@ export default function NotesHistoryGrid({ leadId, onRefresh }: NotesHistoryGrid
     {
       field: 'created_at',
       headerName: 'Date/Time',
-      width: 180,
-      renderCell: renderDateTime,
+      width: 200,
+      renderCell: (params) => {
+        const isSource = params.row.is_alert_source;
+        const isResponse = params.row.is_alert_response;
+        const alertId = params.row.alert_id;
+        const alertRoles = params.row.alert_roles;
+        const rolesText = alertRoles?.join(', ') || '';
+        
+        const dateContent = renderDateTime(params);
+        
+        if (isSource && alertId) {
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title={`Alert #${alertId} (${rolesText})`}>
+                <AlertIcon sx={{ color: 'warning.main', fontSize: 18 }} />
+              </Tooltip>
+              {dateContent}
+            </Box>
+          );
+        }
+        if (isResponse && alertId) {
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Tooltip title={`Alert #${alertId} (${rolesText})`}>
+                <AcknowledgedIcon sx={{ color: 'success.main', fontSize: 18 }} />
+              </Tooltip>
+              {dateContent}
+            </Box>
+          );
+        }
+        return dateContent;
+      },
       sortable: true,
     },
     {

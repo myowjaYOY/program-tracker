@@ -113,9 +113,15 @@ export default function NotificationBell({ floating = true }: NotificationBellPr
         color: 'white',
         boxShadow: 8,
         overflow: 'visible',
+        animation: 'pulse 2s ease-in-out infinite',
+        '@keyframes pulse': {
+          '0%, 100%': { boxShadow: 8 },
+          '50%': { boxShadow: '0 0 20px 8px rgba(0,0,0,0.3)' },
+        },
         '&:hover': {
           bgcolor: `${priorityColor}.dark`,
           transform: 'translateX(-50%) scale(1.05)',
+          animation: 'none',
         },
         transition: 'transform 0.2s ease-in-out',
       }}
@@ -294,6 +300,16 @@ export default function NotificationBell({ floating = true }: NotificationBellPr
                         >
                           {notification.lead?.first_name} {notification.lead?.last_name}
                         </Typography>
+                        {notification.target_role_names && notification.target_role_names.length > 0 && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            color="primary.main"
+                            sx={{ display: 'block', mt: 0.25, fontWeight: 500 }}
+                          >
+                            → {notification.target_role_names.join(', ')}
+                          </Typography>
+                        )}
                         <Typography
                           component="span"
                           variant="caption"

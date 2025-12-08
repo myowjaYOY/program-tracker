@@ -10,6 +10,7 @@ export interface Notification {
   message: string;
   source_note_id: number | null;
   target_role_ids: number[];
+  target_role_names?: string[];
   status: 'active' | 'acknowledged';
   acknowledged_at: string | null;
   acknowledged_by: string | null;

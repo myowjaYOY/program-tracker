@@ -31,6 +31,12 @@ export async function GET(_req: NextRequest) {
 
   // Fetch all notifications with related data
   try {
+    // Fetch all role names for lookup
+    const { data: allRoles } = await supabase
+      .from('program_roles')
+      .select('program_role_id, role_name');
+    const roleMap = new Map((allRoles || []).map((r: any) => [r.program_role_id, r.role_name]));
+
     // First, try a simple query to verify table exists
     const { data: notifications, error: notificationsError } = await supabase
       .from('notifications')
@@ -48,6 +54,11 @@ export async function GET(_req: NextRequest) {
     // Fetch additional user data for creator/acknowledger
     const enrichedNotifications = await Promise.all(
       (notifications || []).map(async (notification: any) => {
+        // Add target role names
+        const targetRoleNames = (notification.target_role_ids || []).map(
+          (id: number) => roleMap.get(id) || `Role ${id}`
+        );
+        notification.target_role_names = targetRoleNames;
         // Get creator info
         if (notification.created_by) {
           const { data: creator } = await supabase

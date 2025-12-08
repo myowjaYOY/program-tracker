@@ -56,15 +56,65 @@ export async function GET(request: NextRequest) {
 
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    // Enrich notes with user email information and BaseEntity fields
-    const enrichedNotes = (notes || []).map((note: any) => ({
-      ...note,
-      id: note.note_id.toString(), // BaseEntity requires string id
-      active_flag: true, // BaseEntity requires active_flag
-      updated_at: note.created_at, // BaseEntity requires updated_at (using created_at as fallback)
-      created_by_email: userMap.get(note.created_by)?.email || null,
-      created_by_name: userMap.get(note.created_by)?.full_name || null,
-    }));
+    // Get note IDs to check for alert associations
+    const noteIds = (notes || []).map((note: any) => note.note_id);
+    
+    // Maps to store note_id -> notification info relationships
+    let sourceNoteToAlert: Map<number, { id: number; roles: string[] }> = new Map();
+    let responseNoteToAlert: Map<number, { id: number; roles: string[] }> = new Map();
+    
+    if (noteIds.length > 0) {
+      // Get all role names for lookup
+      const { data: allRoles } = await supabase
+        .from('program_roles')
+        .select('program_role_id, role_name');
+      const roleMap = new Map((allRoles || []).map((r: any) => [r.program_role_id, r.role_name]));
+      
+      // Get notes that created alerts (source notes) with notification_id and target_role_ids
+      const { data: sourceNotifications } = await supabase
+        .from('notifications')
+        .select('notification_id, source_note_id, target_role_ids')
+        .in('source_note_id', noteIds);
+      
+      (sourceNotifications || []).forEach((n: any) => {
+        if (n.source_note_id) {
+          const roleNames = (n.target_role_ids || []).map((id: number) => roleMap.get(id) || `Role ${id}`);
+          sourceNoteToAlert.set(n.source_note_id, { id: n.notification_id, roles: roleNames });
+        }
+      });
+      
+      // Get notes that acknowledged alerts (response notes) with notification_id and target_role_ids
+      const { data: responseNotifications } = await supabase
+        .from('notifications')
+        .select('notification_id, response_note_id, target_role_ids')
+        .in('response_note_id', noteIds);
+      
+      (responseNotifications || []).forEach((n: any) => {
+        if (n.response_note_id) {
+          const roleNames = (n.target_role_ids || []).map((id: number) => roleMap.get(id) || `Role ${id}`);
+          responseNoteToAlert.set(n.response_note_id, { id: n.notification_id, roles: roleNames });
+        }
+      });
+    }
+
+    // Enrich notes with user email information, BaseEntity fields, and alert info
+    const enrichedNotes = (notes || []).map((note: any) => {
+      const sourceAlert = sourceNoteToAlert.get(note.note_id);
+      const responseAlert = responseNoteToAlert.get(note.note_id);
+      
+      return {
+        ...note,
+        id: note.note_id.toString(), // BaseEntity requires string id
+        active_flag: true, // BaseEntity requires active_flag
+        updated_at: note.created_at, // BaseEntity requires updated_at (using created_at as fallback)
+        created_by_email: userMap.get(note.created_by)?.email || null,
+        created_by_name: userMap.get(note.created_by)?.full_name || null,
+        is_alert_source: !!sourceAlert,
+        is_alert_response: !!responseAlert,
+        alert_id: sourceAlert?.id || responseAlert?.id || null,
+        alert_roles: sourceAlert?.roles || responseAlert?.roles || null,
+      };
+    });
 
     return NextResponse.json({ data: enrichedNotes });
   } catch (error) {

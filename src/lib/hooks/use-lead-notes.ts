@@ -11,6 +11,10 @@ export interface LeadNote extends BaseEntity {
   created_by: string | null;
   created_by_email: string | null;
   created_by_name: string | null;
+  is_alert_source?: boolean;
+  is_alert_response?: boolean;
+  alert_id?: number | null;
+  alert_roles?: string[] | null;
 }
 
 export interface LeadNotesResponse {
