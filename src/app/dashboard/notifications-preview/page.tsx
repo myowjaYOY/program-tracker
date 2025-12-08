@@ -31,66 +31,80 @@ import { NotificationDetailModal } from '@/components/notifications';
 import type { Notification } from '@/components/notifications';
 import { formatDistanceToNow } from 'date-fns';
 
-// Mock notifications for preview
+// Mock notifications for preview - matches Notification type from use-notifications.ts
 const mockNotifications: Notification[] = [
   {
     notification_id: 1,
-    notification_type: 'feedback',
+    lead_id: 42,
     priority: 'urgent',
     title: 'Negative Survey Response',
     message:
       'John Smith submitted a survey with negative feedback on their treatment experience. Patient reported dissatisfaction with wait times and communication. Immediate follow-up recommended.',
-    source_type: 'survey',
-    related_entity_type: 'lead',
-    related_entity_id: 42,
-    target_role: 'manager',
+    source_note_id: null,
+    target_role_ids: [1],
+    target_role_names: ['Manager'],
     status: 'active',
+    acknowledged_at: null,
+    acknowledged_by: null,
+    response_note_id: null,
+    created_by: 'system',
     created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 min ago
+    lead: { lead_id: 42, first_name: 'John', last_name: 'Smith' },
   },
   {
     notification_id: 2,
-    notification_type: 'alert',
+    lead_id: 156,
     priority: 'high',
     title: 'Member Requires Attention',
     message:
       'Jane Doe has missed 3 consecutive appointments. Provider intervention may be needed to re-engage the member.',
-    source_type: 'system',
-    related_entity_type: 'member_program',
-    related_entity_id: 156,
-    target_role: 'provider',
+    source_note_id: null,
+    target_role_ids: [2],
+    target_role_names: ['Provider'],
     status: 'active',
+    acknowledged_at: null,
+    acknowledged_by: null,
+    response_note_id: null,
+    created_by: 'system',
     created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(), // 15 min ago
+    lead: { lead_id: 156, first_name: 'Jane', last_name: 'Doe' },
   },
   {
     notification_id: 3,
-    notification_type: 'system',
+    lead_id: 89,
     priority: 'normal',
     title: 'New Lead Assigned',
     message:
       'A new lead from the Spring Campaign has been assigned to your region. Please review and schedule initial contact.',
-    source_type: 'system',
-    related_entity_type: 'lead',
-    related_entity_id: 89,
-    target_role: 'coordinator',
+    source_note_id: null,
+    target_role_ids: [3],
+    target_role_names: ['Coordinator'],
     status: 'active',
+    acknowledged_at: null,
+    acknowledged_by: null,
+    response_note_id: null,
+    created_by: 'system',
     created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
+    lead: { lead_id: 89, first_name: 'New', last_name: 'Lead' },
   },
   {
     notification_id: 4,
-    notification_type: 'feedback',
+    lead_id: 78,
     priority: 'normal',
     title: 'Positive Survey Response',
     message:
       'Robert Johnson left a 5-star review praising the program. Consider requesting a testimonial.',
-    source_type: 'survey',
-    related_entity_type: 'member_program',
-    related_entity_id: 78,
-    target_role: 'manager',
+    source_note_id: null,
+    target_role_ids: [1],
+    target_role_names: ['Manager'],
     status: 'acknowledged',
     acknowledged_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
     acknowledged_by: 'user-123',
-    acknowledged_by_name: 'Sarah Manager',
+    response_note_id: null,
+    created_by: 'system',
     created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    lead: { lead_id: 78, first_name: 'Robert', last_name: 'Johnson' },
+    acknowledger: { id: 'user-123', full_name: 'Sarah Manager', email: 'sarah@example.com' },
   },
 ];
 
@@ -128,7 +142,7 @@ export default function NotificationsPreviewPage() {
     setFabAnchorEl(null);
   };
 
-  const handleAcknowledge = (notification: Notification, note?: string) => {
+  const handleAcknowledge = (notification: Notification) => {
     setNotifications((prev) =>
       prev.map((n) =>
         n.notification_id === notification.notification_id
@@ -136,7 +150,8 @@ export default function NotificationsPreviewPage() {
               ...n,
               status: 'acknowledged' as const,
               acknowledged_at: new Date().toISOString(),
-              acknowledged_by_name: 'Current User',
+              acknowledged_by: 'current-user',
+              acknowledger: { id: 'current-user', full_name: 'Current User', email: 'user@example.com' },
             }
           : n
       )
@@ -446,7 +461,7 @@ export default function NotificationsPreviewPage() {
                             )}
                           </Box>
                         }
-                        secondary={`${notification.target_role} role`}
+                        secondary={`${notification.target_role_names?.[0] ?? 'Unknown'} role`}
                       />
                     </ListItem>
                   </React.Fragment>
@@ -500,7 +515,7 @@ export default function NotificationsPreviewPage() {
                         </ListItemIcon>
                         <ListItemText
                           primary={notification.title}
-                          secondary={`Acknowledged by ${notification.acknowledged_by_name}`}
+                          secondary={`Acknowledged by ${notification.acknowledger?.full_name ?? 'Unknown'}`}
                         />
                       </ListItem>
                     </React.Fragment>
@@ -586,8 +601,6 @@ export default function NotificationsPreviewPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         notification={selectedNotification}
-        onAcknowledge={handleAcknowledge}
-        onNavigateToEntity={(n) => alert(`Navigate to ${n.related_entity_type} #${n.related_entity_id}`)}
       />
     </Box>
   );
