@@ -54,6 +54,7 @@ export default function StatusForm({
   return (
     <BaseForm<StatusFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createStatus.isPending || updateStatus.isPending

@@ -62,6 +62,7 @@ export default function ProgramStatusForm({
   return (
     <BaseForm<ProgramStatusFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||

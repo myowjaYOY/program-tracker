@@ -89,6 +89,7 @@ const onSubmit = async (values: LeadFormData) => {
   return (
     <BaseForm<LeadFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createLead.isPending || updateLead.isPending

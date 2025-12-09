@@ -251,6 +251,7 @@ export default function UserForm({
   return (
     <BaseForm<UserFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||

@@ -122,6 +122,7 @@ export default function TherapyTaskForm({
   return (
     <BaseForm<TherapyTaskFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||

@@ -278,7 +278,7 @@ export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
   return (
     <>
       <BaseDataTable<LeadEntity>
-        title={title}
+        title="Leads"
         data={leadsWithId}
         columns={leadColumns}
         loading={isLoading}

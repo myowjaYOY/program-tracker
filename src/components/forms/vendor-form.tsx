@@ -71,6 +71,7 @@ export default function VendorForm({
   return (
     <BaseForm<VendorFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createVendor.isPending || updateVendor.isPending

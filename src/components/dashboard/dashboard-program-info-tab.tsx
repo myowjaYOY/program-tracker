@@ -99,27 +99,11 @@ export default function DashboardProgramInfoTab({
                   {currentLead.email}
                 </Typography>
               )}
-            </Box>
-
-            {/* Status */}
-            <Box>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Status
-              </Typography>
-              <Chip
-                label={currentStatus?.status_name || 'Unknown'}
-                color={
-                  currentStatus?.status_name?.toLowerCase() === 'active'
-                    ? 'success'
-                    : currentStatus?.status_name?.toLowerCase() === 'paused'
-                    ? 'warning'
-                    : currentStatus?.status_name?.toLowerCase() === 'completed'
-                    ? 'info'
-                    : 'default'
-                }
-                variant="outlined"
-                sx={{ fontWeight: 500 }}
-              />
+              {currentLead?.phone && (
+                <Typography variant="body2" color="text.secondary">
+                  {currentLead.phone}
+                </Typography>
+              )}
             </Box>
 
             {/* Start Date */}
@@ -136,18 +120,26 @@ export default function DashboardProgramInfoTab({
             </Box>
           </Box>
 
-          {/* Column 2: Active Flag, Description */}
+          {/* Column 2: Status, Description */}
           <Box
             sx={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}
           >
-            {/* Active Flag */}
+            {/* Status */}
             <Box>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Active Flag
+                Status
               </Typography>
               <Chip
-                label={program.active_flag ? 'Active' : 'Inactive'}
-                color={program.active_flag ? 'success' : 'default'}
+                label={currentStatus?.status_name || 'Unknown'}
+                color={
+                  currentStatus?.status_name?.toLowerCase() === 'active'
+                    ? 'success'
+                    : currentStatus?.status_name?.toLowerCase() === 'paused'
+                    ? 'warning'
+                    : currentStatus?.status_name?.toLowerCase() === 'completed'
+                    ? 'info'
+                    : 'default'
+                }
                 variant="outlined"
                 sx={{ fontWeight: 500 }}
               />

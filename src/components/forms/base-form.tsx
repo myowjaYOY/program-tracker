@@ -5,7 +5,7 @@ import { Box, Button, Grid, Typography, CircularProgress } from '@mui/material';
 
 interface BaseFormProps<T> {
   onSubmit: (values: T) => void | Promise<void>;
-  onCancel?: () => void;
+  onCancel?: (() => void) | undefined;
   isSubmitting?: boolean;
   submitText?: string;
   children: React.ReactNode;

@@ -355,6 +355,7 @@ export default function MemberProgramPaymentForm({
   return (
     <BaseForm<MemberProgramPaymentsFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createPayment.isPending || updatePayment.isPending || batchUpdatePayments.isPending

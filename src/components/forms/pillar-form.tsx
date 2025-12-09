@@ -54,6 +54,7 @@ export default function PillarForm({
   return (
     <BaseForm<PillarFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createPillar.isPending || updatePillar.isPending

@@ -94,6 +94,7 @@ export default function CampaignForm({
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <BaseForm<CampaignFormData>
         onSubmit={onSubmit}
+        onCancel={onSuccess ? onSuccess : undefined}
         submitHandler={handleSubmit(onSubmit)}
         isSubmitting={
           isSubmitting || createCampaign.isPending || updateCampaign.isPending

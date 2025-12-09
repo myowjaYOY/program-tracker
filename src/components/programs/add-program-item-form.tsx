@@ -22,6 +22,7 @@ import {
 } from '@/lib/validations/member-program-item';
 import { Therapies } from '@/types/database.types';
 import { useTherapyTypes } from '@/lib/hooks/use-therapy-types';
+import { useActiveProgramRoles } from '@/lib/hooks/use-program-roles';
 import { BaseForm } from '@/components/forms/base-form';
 
 interface AddProgramItemFormProps {
@@ -45,6 +46,7 @@ export default function AddProgramItemForm({
   validationError,
 }: AddProgramItemFormProps) {
   const { data: therapyTypes = [] } = useTherapyTypes();
+  const { data: programRoles = [] } = useActiveProgramRoles();
   const usedCount = Number((initialValues as any)?.used_count || 0);
 
   const {
@@ -59,6 +61,7 @@ export default function AddProgramItemForm({
     defaultValues: {
       therapy_type_id: initialValues?.therapy_type_id || 0,
       therapy_id: initialValues?.therapy_id || 0,
+      program_role_id: (initialValues as any)?.program_role_id || null,
       quantity: initialValues?.quantity || 1,
       days_from_start: initialValues?.days_from_start || 0,
       days_between: initialValues?.days_between || 0,
@@ -115,6 +118,7 @@ export default function AddProgramItemForm({
       reset({
         therapy_type_id: initialValues.therapy_type_id || 0,
         therapy_id: initialValues.therapy_id || 0,
+        program_role_id: (initialValues as any)?.program_role_id || null,
         quantity: initialValues.quantity || 1,
         days_from_start: initialValues.days_from_start || 0,
         days_between: initialValues.days_between || 0,
@@ -133,6 +137,13 @@ export default function AddProgramItemForm({
   const selectedTherapy = therapies.find(
     t => t.therapy_id === selectedTherapyId
   );
+
+  // Auto-populate Responsible from selected therapy's default program_role_id (create mode only)
+  React.useEffect(() => {
+    if (mode === 'create' && selectedTherapyId && selectedTherapy?.program_role_id) {
+      setValue('program_role_id', selectedTherapy.program_role_id);
+    }
+  }, [mode, selectedTherapyId, selectedTherapy?.program_role_id, setValue]);
 
   // In edit mode, use locked-in prices from member_program_items
   // In create mode, use current prices from therapies table
@@ -205,7 +216,7 @@ export default function AddProgramItemForm({
             : 'Create'
       }
       submitHandler={handleSubmit(onSubmit)}
-      buttonContainerSx={{ width: 615, justifyContent: 'flex-end' }}
+      buttonContainerSx={{ justifyContent: 'flex-end' }}
     >
       {validationError && (
         <Box sx={{ 
@@ -234,6 +245,7 @@ export default function AddProgramItemForm({
         </Box>
       )}
       
+      {/* Row 1: Therapy Type | Therapy */}
       <Grid size={{ xs: 12, md: 6 }}>
         <Controller
           name="therapy_type_id"
@@ -247,7 +259,6 @@ export default function AddProgramItemForm({
               required
               error={!!errors.therapy_type_id}
               helperText={errors.therapy_type_id?.message}
-              sx={{ minWidth: 300, maxWidth: 300 }}
               disabled={mode === 'edit'}
               onChange={e => {
                 const value = Number(e.target.value);
@@ -288,7 +299,6 @@ export default function AddProgramItemForm({
               disabled={mode === 'edit' || !selectedTherapyTypeId}
               error={!!errors.therapy_id}
               helperText={errors.therapy_id?.message}
-              sx={{ minWidth: 300, maxWidth: 300 }}
             >
               <MenuItem value={0}>Select a therapy...</MenuItem>
               {filteredTherapies
@@ -303,82 +313,112 @@ export default function AddProgramItemForm({
         />
       </Grid>
 
-      <Grid size={12}>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Box sx={{ width: '31%' }}>
-            <Controller
-              name="quantity"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Quantity"
-                  type="number"
-                  fullWidth
-                  required
-                  disabled={mode === 'create' && !selectedTherapyId}
-                  inputProps={{ min: Math.max(1, usedCount) }}
-                  error={
-                    !!errors.quantity ||
-                    (mode === 'edit' && quantity < usedCount)
-                  }
-                  helperText={
-                    errors.quantity?.message ||
-                    (mode === 'edit' && quantity < usedCount
-                      ? `Minimum is ${usedCount} (used)`
-                      : undefined) ||
-                    calculateDuration(quantity, daysBetween, daysFromStart) ||
-                    initialDuration ||
-                    (usedCount > 0 ? `${usedCount} used` : undefined)
-                  }
-                  onChange={e => field.onChange(Number(e.target.value))}
-                />
-              )}
+      {/* Row 2: Responsible | Quantity */}
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Controller
+          name="program_role_id"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              select
+              label="Responsible"
+              fullWidth
+              disabled={mode === 'create' && !selectedTherapyId}
+              error={!!errors.program_role_id}
+              helperText={errors.program_role_id?.message}
+              value={field.value || ''}
+              onChange={e => {
+                const value = e.target.value;
+                field.onChange(value === '' ? null : Number(value));
+              }}
+            >
+              <MenuItem value="">Select responsible...</MenuItem>
+              {programRoles.map(role => (
+                <MenuItem key={role.program_role_id} value={role.program_role_id}>
+                  {role.role_name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        />
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Controller
+          name="quantity"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Quantity"
+              type="number"
+              fullWidth
+              required
+              disabled={mode === 'create' && !selectedTherapyId}
+              inputProps={{ min: Math.max(1, usedCount) }}
+              error={
+                !!errors.quantity ||
+                (mode === 'edit' && quantity < usedCount)
+              }
+              helperText={
+                errors.quantity?.message ||
+                (mode === 'edit' && quantity < usedCount
+                  ? `Minimum is ${usedCount} (used)`
+                  : undefined) ||
+                calculateDuration(quantity, daysBetween, daysFromStart) ||
+                initialDuration ||
+                (usedCount > 0 ? `${usedCount} used` : undefined)
+              }
+              onChange={e => field.onChange(Number(e.target.value))}
             />
-          </Box>
-          <Box sx={{ width: '31%' }}>
-            <Controller
-              name="days_from_start"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Days From Start"
-                  type="number"
-                  fullWidth
-                  required
-                  disabled={mode === 'create' && !selectedTherapyId}
-                  inputProps={{ min: 0 }}
-                  error={!!errors.days_from_start}
-                  helperText={errors.days_from_start?.message}
-                  onChange={e => field.onChange(Number(e.target.value))}
-                />
-              )}
+          )}
+        />
+      </Grid>
+
+      {/* Row 3: Days From Start | Days Between */}
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Controller
+          name="days_from_start"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Days From Start"
+              type="number"
+              fullWidth
+              required
+              disabled={mode === 'create' && !selectedTherapyId}
+              inputProps={{ min: 0 }}
+              error={!!errors.days_from_start}
+              helperText={errors.days_from_start?.message}
+              onChange={e => field.onChange(Number(e.target.value))}
             />
-          </Box>
-          <Box sx={{ width: '31%' }}>
-            <Controller
-              name="days_between"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Days Between (if recurring)"
-                  type="number"
-                  fullWidth
-                  disabled={mode === 'create' && !selectedTherapyId}
-                  inputProps={{ min: 0 }}
-                  error={!!errors.days_between}
-                  helperText={
-                    errors.days_between?.message ||
-                    'Leave as 0 for single occurrence'
-                  }
-                  onChange={e => field.onChange(Number(e.target.value))}
-                />
-              )}
+          )}
+        />
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Controller
+          name="days_between"
+          control={control}
+          render={({ field }) => (
+            <TextField
+              {...field}
+              label="Days Between (if recurring)"
+              type="number"
+              fullWidth
+              disabled={mode === 'create' && !selectedTherapyId}
+              inputProps={{ min: 0 }}
+              error={!!errors.days_between}
+              helperText={
+                errors.days_between?.message ||
+                'Leave as 0 for single occurrence'
+              }
+              onChange={e => field.onChange(Number(e.target.value))}
             />
-          </Box>
-        </Box>
+          )}
+        />
       </Grid>
 
       <Grid size={12}>
@@ -391,10 +431,10 @@ export default function AddProgramItemForm({
               label="Instructions"
               multiline
               rows={3}
+              fullWidth
               disabled={!selectedTherapyId}
               error={!!errors.instructions}
               helperText={errors.instructions?.message}
-              sx={{ width: 615 }}
             />
           )}
         />
@@ -402,7 +442,7 @@ export default function AddProgramItemForm({
 
       <Grid size={12}>
         {/* Cost Summary - Always visible */}
-        <Paper sx={{ p: 2, bgcolor: 'grey.50', width: 615 }}>
+        <Paper sx={{ p: 2, bgcolor: 'grey.50' }}>
           <Grid container spacing={2}>
             <Grid size={2.4}>
               <Typography variant="body2" color="text.secondary">

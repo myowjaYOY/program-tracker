@@ -135,7 +135,8 @@ export async function POST(
       days_from_start: body.days_from_start,
       days_between: body.days_between || 0,
       instructions: body.instructions || '',
-      program_role_id: therapyData.program_role_id,
+      // Allow override of program_role_id from body, otherwise use therapy's default
+      program_role_id: body.program_role_id !== undefined ? body.program_role_id : therapyData.program_role_id,
       active_flag: true,
       created_by: session.user.id,
       updated_by: session.user.id,

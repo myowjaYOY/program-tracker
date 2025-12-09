@@ -55,6 +55,7 @@ export default function RashaListForm({
   return (
     <BaseForm<RashaListFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createRashaList.isPending || updateRashaList.isPending

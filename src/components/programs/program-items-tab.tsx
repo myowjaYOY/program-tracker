@@ -149,6 +149,7 @@ export default function ProgramItemsTab({
       await createItem.mutateAsync({
         member_program_id: program.member_program_id,
         therapy_id: formData.therapy_id,
+        program_role_id: formData.program_role_id ?? null,
         quantity: formData.quantity,
         days_from_start: formData.days_from_start,
         days_between: formData.days_between,
@@ -213,6 +214,7 @@ export default function ProgramItemsTab({
         itemId: editingItem.member_program_item_id,
         data: {
           therapy_id: formData.therapy_id,
+          program_role_id: formData.program_role_id ?? null,
           quantity: formData.quantity,
           days_from_start: formData.days_from_start,
           days_between: formData.days_between,
@@ -517,6 +519,7 @@ export default function ProgramItemsTab({
                 {
                   therapy_type_id: editingItem.therapies?.therapy_type_id || 0,
                   therapy_id: editingItem.therapy_id || 0,
+                  program_role_id: editingItem.program_role_id || null,
                   quantity: editingItem.quantity || 1,
                   days_from_start: editingItem.days_from_start || 0,
                   days_between: editingItem.days_between || 0,

@@ -64,6 +64,7 @@ export default function TherapyRelationshipForm({
   return (
     <BaseForm
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={isSubmitting || createRelationship.isPending}
       submitText="Add Relationship"

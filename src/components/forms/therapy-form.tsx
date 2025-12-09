@@ -109,6 +109,7 @@ export default function TherapyForm({
   return (
     <BaseForm<TherapyFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createTherapy.isPending || updateTherapy.isPending

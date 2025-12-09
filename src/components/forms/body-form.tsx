@@ -54,6 +54,7 @@ export default function BodyForm({
   return (
     <BaseForm<BodyFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createBody.isPending || updateBody.isPending

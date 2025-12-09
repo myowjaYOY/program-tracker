@@ -63,6 +63,7 @@ export default function ProgramRoleForm({
   return (
     <BaseForm<ProgramRolesFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit)}
       isSubmitting={
         isSubmitting || createProgramRole.isPending || updateProgramRole.isPending

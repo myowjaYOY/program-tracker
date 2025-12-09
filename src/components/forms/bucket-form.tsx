@@ -54,6 +54,7 @@ export default function BucketForm({
   return (
     <BaseForm<BucketFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting || createBucket.isPending || updateBucket.isPending

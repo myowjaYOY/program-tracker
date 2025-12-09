@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const memberProgramItemSchema = z.object({
   therapy_type_id: z.number().min(1, 'Therapy type is required').optional(),
   therapy_id: z.number().min(1, 'Therapy is required'),
+  program_role_id: z.number().nullable().optional(),
   quantity: z.number()
     .min(1, 'Quantity must be at least 1')
     .max(9999, 'Quantity cannot exceed 9,999'),

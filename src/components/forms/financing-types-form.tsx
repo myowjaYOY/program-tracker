@@ -69,6 +69,7 @@ export default function FinancingTypesForm({
   return (
     <BaseForm<FinancingTypesFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||

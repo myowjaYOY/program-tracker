@@ -67,6 +67,7 @@ export default function PaymentMethodsForm({
   return (
     <BaseForm<PaymentMethodsFormData>
       onSubmit={onSubmit}
+      onCancel={onSuccess ? onSuccess : undefined}
       submitHandler={handleSubmit(onSubmit) as any}
       isSubmitting={
         isSubmitting ||
