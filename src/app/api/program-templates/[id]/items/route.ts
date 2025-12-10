@@ -91,6 +91,7 @@ export async function POST(
       quantity: body.quantity,
       days_from_start: body.days_from_start,
       days_between: body.days_between || 0,
+      program_role_id: body.program_role_id || null,
       instructions: body.instructions || '',
       active_flag: body.active_flag ?? true,
       created_by: session.user.id,

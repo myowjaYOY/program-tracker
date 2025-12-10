@@ -368,6 +368,7 @@ export default function TemplateItemsTab({
                 therapy_type_id:
                   (editingItem as any).therapies?.therapy_type_id || 0,
                 therapy_id: editingItem.therapy_id || 0,
+                program_role_id: (editingItem as any).program_role_id || null,
                 quantity: editingItem.quantity || 1,
                 days_from_start: editingItem.days_from_start || 0,
                 days_between: editingItem.days_between || 0,

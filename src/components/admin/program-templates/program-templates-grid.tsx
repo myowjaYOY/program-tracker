@@ -215,7 +215,6 @@ export default function ProgramTemplatesGrid({
       pageSize={5}
       pageSizeOptions={[5, 10, 25, 50]}
       autoHeight={true}
-      selectedRowId={selectedTemplate?.program_template_id || null}
       showActionsColumn={false}
       sortModel={[{ field: 'program_template_name', sort: 'asc' }]}
     />

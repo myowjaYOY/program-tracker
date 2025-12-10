@@ -945,6 +945,38 @@ async function processSurveyData(
     // Don't fail the entire import - just log the error
   }
 
+  // Process feedback alerts for low ratings and text feedback
+  try {
+    console.log('Triggering feedback alerts processing...');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const feedbackAlertsUrl = `${supabaseUrl}/functions/v1/process-feedback-alerts`;
+    
+    const alertsResponse = await fetch(feedbackAlertsUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        import_batch_id: jobId
+      })
+    });
+
+    if (!alertsResponse.ok) {
+      const errorText = await alertsResponse.text();
+      throw new Error(`Feedback alerts function returned ${alertsResponse.status}: ${errorText}`);
+    }
+
+    const alertsResult = await alertsResponse.json();
+    console.log(`Feedback alerts processing completed: ${alertsResult.notes_created} notes, ${alertsResult.alerts_created} alerts, ${alertsResult.duplicates_skipped} duplicates skipped`);
+  } catch (alertsError) {
+    console.error('Feedback alerts processing failed:', alertsError);
+    console.error('Feedback alerts error details:', alertsError.message);
+    // Don't fail the entire import - just log the error
+  }
+
   return result;
 }
 

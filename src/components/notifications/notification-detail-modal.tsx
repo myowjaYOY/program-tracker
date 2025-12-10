@@ -172,11 +172,10 @@ export default function NotificationDetailModal({
       </Box>
 
       <DialogContent sx={{ pt: 3, flex: 1, overflow: 'auto' }}>
-        {/* Message */}
-        <Typography variant="body1" sx={{ mb: 3, lineHeight: 1.7 }}>
-          {notification.message}
-        </Typography>
-
+        {/* TODO: Remove duplicate message display once notifications.message 
+            field is no longer populated (see process-feedback-alerts TODO).
+            Currently notification.message duplicates source_note content. */}
+        
         {/* Metadata */}
         <Box
           sx={{
@@ -199,14 +198,16 @@ export default function NotificationDetailModal({
               {' '}({format(new Date(notification.created_at), 'MMM d, yyyy h:mm a')})
             </Typography>
           </Box>
-          {notification.creator && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PersonIcon fontSize="small" color="action" />
-              <Typography variant="body2" color="text.secondary">
-                Created by: <strong>{notification.creator.full_name || notification.creator.email}</strong>
-              </Typography>
-            </Box>
-          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PersonIcon fontSize="small" color="action" />
+            <Typography variant="body2" color="text.secondary">
+              Created by: <strong>
+                {notification.created_by === '00000000-0000-0000-0000-000000000000' 
+                  ? 'System' 
+                  : (notification.creator?.full_name || notification.creator?.email || 'Unknown')}
+              </strong>
+            </Typography>
+          </Box>
         </Box>
 
         {/* Source Note */}

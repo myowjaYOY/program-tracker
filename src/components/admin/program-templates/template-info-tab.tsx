@@ -116,57 +116,21 @@ export default function TemplateInfoTab({
               label="Total Cost"
               value={`$${(template.total_cost || 0).toFixed(2)}`}
               fullWidth
-              InputProps={{ readOnly: true }}
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  backgroundColor: 'action.disabledBackground',
-                  '&:hover': {
-                    backgroundColor: 'action.disabledBackground',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: 'text.secondary',
-                },
-              }}
+              disabled
             />
 
             <TextField
               label="Total Charge"
               value={`$${(template.total_charge || 0).toFixed(2)}`}
               fullWidth
-              InputProps={{ readOnly: true }}
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  backgroundColor: 'action.disabledBackground',
-                  '&:hover': {
-                    backgroundColor: 'action.disabledBackground',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: 'text.secondary',
-                },
-              }}
+              disabled
             />
 
             <TextField
               label="Margin Percentage"
               value={`${(template.margin_percentage || 0).toFixed(1)}%`}
               fullWidth
-              InputProps={{ readOnly: true }}
-              variant="outlined"
-              sx={{
-                '& .MuiInputBase-root': {
-                  backgroundColor: 'action.disabledBackground',
-                  '&:hover': {
-                    backgroundColor: 'action.disabledBackground',
-                  },
-                },
-                '& .MuiInputLabel-root': {
-                  color: 'text.secondary',
-                },
-              }}
+              disabled
             />
           </Box>
 

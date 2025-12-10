@@ -15,6 +15,10 @@ const SUPPORT_RATING_MAP: Record<string, number> = {
 
 /**
  * Question IDs for feedback questions (across forms)
+ * 
+ * TODO: Need to fix this at some point so that it's not hardcoded
+ * and is more dynamic (e.g., query by question text pattern or
+ * use a question metadata/tag system).
  */
 const FEEDBACK_QUESTION_IDS = {
   // Provider support questions
