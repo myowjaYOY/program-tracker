@@ -1,44 +1,30 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 
+/**
+ * DISABLED FOR PRODUCTION SECURITY
+ * 
+ * This endpoint previously allowed any authenticated user to make themselves admin.
+ * This is a critical security vulnerability and has been disabled.
+ * 
+ * Admin privileges should be granted through the database or by existing admins
+ * via the /dashboard/admin/users page.
+ */
 export async function POST() {
-  try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { session },
-      error: authError,
-    } = await supabase.auth.getSession();
-    if (authError || !session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Update user to be admin
-    const { data: user, error: updateError } = await supabase
-      .from('users')
-      .update({ is_admin: true })
-      .eq('id', session.user.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('Error updating user to admin:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to update user to admin' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      message: 'User successfully made admin',
-      user: user,
-    });
-  } catch (error) {
-    console.error('Make admin error:', error);
+  // Block in production - this is a development-only utility
+  if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'This endpoint is disabled in production' },
+      { status: 403 }
     );
   }
+
+  // Even in development, return disabled message
+  // Admin creation should be done via proper admin tools or database
+  return NextResponse.json(
+    { 
+      error: 'This endpoint is disabled for security reasons. Use the admin panel or database to manage admin users.',
+      hint: 'Contact an existing admin or modify the database directly to grant admin privileges.'
+    },
+    { status: 403 }
+  );
 }

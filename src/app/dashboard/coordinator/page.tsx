@@ -46,7 +46,7 @@ export default function CoordinatorPage() {
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
-  const [hideMissed, setHideMissed] = useState<boolean>(false);
+  const [showMissed, setShowMissed] = useState<boolean>(false);
 
 
   // Members: only leads with Active programs (matching centralized service logic)
@@ -83,7 +83,7 @@ export default function CoordinatorPage() {
           fontWeight="bold"
           color="primary.main"
         >
-          Coordinator Dashboard
+          Coordinator
         </Typography>
       </Box>
 
@@ -429,13 +429,13 @@ export default function CoordinatorPage() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={hideMissed}
-                    onChange={e => setHideMissed(e.target.checked)}
+                    checked={showMissed}
+                    onChange={e => setShowMissed(e.target.checked)}
                     size="small"
                     disabled={tab === 2}
                   />
                 }
-                label="Hide Missed"
+                label="Show Missed"
               />
             </Box>
           </Box>
@@ -468,7 +468,7 @@ export default function CoordinatorPage() {
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
                 showCompleted={showCompleted}
-                hideMissed={hideMissed}
+                showMissed={showMissed}
               />
             )}
             {tab === 1 && (
@@ -478,7 +478,7 @@ export default function CoordinatorPage() {
                 {...(start ? { start } : {})}
                 {...(end ? { end } : {})}
                 showCompleted={showCompleted}
-                hideMissed={hideMissed}
+                showMissed={showMissed}
               />
             )}
             {tab === 2 && (

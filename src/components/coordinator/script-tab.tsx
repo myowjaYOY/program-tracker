@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Box, IconButton, Chip, Tooltip } from '@mui/material';
+import { Box, IconButton, Chip, Tooltip, Typography } from '@mui/material';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import {
   useCoordinatorScript,
   coordinatorKeys,
@@ -13,7 +14,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { LeadNotesModal } from '@/components/notes';
 import ScheduleStatusChip from '@/components/ui/schedule-status-chip';
 import ScheduleAdjustmentModal from '@/components/modals/schedule-adjustment-modal';
+import DateChangeModal from '@/components/modals/date-change-modal';
 import { toast } from 'sonner';
+import { format, parseISO } from 'date-fns';
 
 interface CoordinatorScriptTabProps {
   memberId?: number | null;
@@ -21,7 +24,7 @@ interface CoordinatorScriptTabProps {
   start?: string | undefined;
   end?: string | undefined;
   showCompleted?: boolean;
-  hideMissed?: boolean;
+  showMissed?: boolean;
 }
 
 type Row = {
@@ -57,7 +60,7 @@ export default function CoordinatorScriptTab({
   start,
   end,
   showCompleted = false,
-  hideMissed = false,
+  showMissed = false,
 }: CoordinatorScriptTabProps) {
   const {
     data = [],
@@ -69,7 +72,7 @@ export default function CoordinatorScriptTab({
     start: start ?? null,
     end: end ?? null,
     showCompleted,
-    hideMissed,
+    showMissed,
   });
   const qc = useQueryClient();
 
@@ -99,6 +102,18 @@ export default function CoordinatorScriptTab({
   } | null>(null);
   const [isProcessingAdjustment, setIsProcessingAdjustment] = useState(false);
 
+  // Date change modal state (calendar icon feature)
+  const [isDateChangeModalOpen, setIsDateChangeModalOpen] = useState(false);
+  const [dateChangeRow, setDateChangeRow] = useState<Row | null>(null);
+  const [dateChangeFutureCount, setDateChangeFutureCount] = useState(0);
+  const [dateChangeItemDetails, setDateChangeItemDetails] = useState<{
+    therapyName?: string;
+    instanceNumber?: number;
+    daysBetween?: number;
+  } | undefined>(undefined);
+  const [isLoadingDateChange, setIsLoadingDateChange] = useState(false);
+  const [isProcessingDateChange, setIsProcessingDateChange] = useState(false);
+
   async function handleStatusChange(row: Row, newValue: boolean | null): Promise<void> {
     // Generate query key exactly the same way as the hook
     const sp = new URLSearchParams();
@@ -107,7 +122,7 @@ export default function CoordinatorScriptTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
-    if (hideMissed) sp.set('hideMissed', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.script(qs);
 
@@ -124,8 +139,8 @@ export default function CoordinatorScriptTab({
         );
       }
       
-      // If hideMissed is active, handle accordingly
-      if (hideMissed) {
+      // If showMissed is false (default), we're only showing pending items
+      if (!showMissed) {
         // Only showing pending - if changing to anything other than null, remove it
         if (newValue !== null) {
           return oldData.filter((item: any) => 
@@ -235,7 +250,7 @@ export default function CoordinatorScriptTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
-    if (hideMissed) sp.set('hideMissed', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.script(qs);
 
@@ -304,11 +319,111 @@ export default function CoordinatorScriptTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
-    if (hideMissed) sp.set('hideMissed', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
     qc.invalidateQueries({
       queryKey: coordinatorKeys.script(sp.toString()),
     });
   };
+
+  // Handle opening date change modal (calendar icon click)
+  async function handleOpenDateChangeModal(row: Row) {
+    // Only allow for pending items on active programs
+    if (row.completed_flag !== null) {
+      toast.error('Cannot change date for completed or missed items');
+      return;
+    }
+    if ((row.program_status_name || '').toLowerCase() !== 'active') {
+      toast.error('Cannot change date for items on inactive programs');
+      return;
+    }
+
+    setIsLoadingDateChange(true);
+    setDateChangeRow(row);
+
+    try {
+      // Fetch future instance count and item details
+      const url = `/api/member-programs/${row.member_program_id}/schedule/${row.member_program_item_schedule_id}/future-count`;
+      const res = await fetch(url, { credentials: 'include' });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to fetch schedule details');
+      }
+
+      const data = await res.json();
+      setDateChangeFutureCount(data.futureInstanceCount || 0);
+      setDateChangeItemDetails(data.itemDetails);
+      setIsDateChangeModalOpen(true);
+    } catch (err: any) {
+      console.error('Error fetching future count:', err);
+      toast.error(err.message || 'Failed to load schedule details');
+      setDateChangeRow(null);
+    } finally {
+      setIsLoadingDateChange(false);
+    }
+  }
+
+  // Handle date change confirmation from modal
+  async function handleDateChangeConfirm(newDate: string, adjustFuture: boolean) {
+    if (!dateChangeRow) return;
+
+    setIsProcessingDateChange(true);
+
+    const sp = new URLSearchParams();
+    if (memberId) sp.set('memberId', String(memberId));
+    if (range && range !== 'all') sp.set('range', range);
+    if (start) sp.set('start', start);
+    if (end) sp.set('end', end);
+    if (showCompleted) sp.set('showCompleted', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
+    const queryKey = coordinatorKeys.script(sp.toString());
+
+    try {
+      const url = `/api/member-programs/${dateChangeRow.member_program_id}/schedule/${dateChangeRow.member_program_item_schedule_id}`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          scheduled_date: newDate,
+          adjust_future: adjustFuture,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to change date');
+      }
+
+      const result = await res.json();
+
+      // Show success message
+      if (adjustFuture && result.cascade) {
+        const { updated_instances, updated_tasks } = result.cascade;
+        toast.success(
+          `Date changed! Updated ${updated_instances} future instance${updated_instances !== 1 ? 's' : ''} ` +
+          `and ${updated_tasks} task${updated_tasks !== 1 ? 's' : ''}.`
+        );
+      } else {
+        toast.success('Scheduled date updated successfully');
+      }
+
+      // Refresh data
+      await qc.invalidateQueries({ queryKey, refetchType: 'active' });
+      await qc.invalidateQueries({ queryKey: coordinatorKeys.metrics(), refetchType: 'active' });
+
+      // Close modal and reset state
+      setIsDateChangeModalOpen(false);
+      setDateChangeRow(null);
+      setDateChangeFutureCount(0);
+      setDateChangeItemDetails(undefined);
+    } catch (err: any) {
+      console.error('Error changing date:', err);
+      toast.error(err.message || 'Failed to change date');
+    } finally {
+      setIsProcessingDateChange(false);
+    }
+  }
 
   const rows: any[] = (data as any[]).map((r: any) => ({
     ...r,
@@ -374,7 +489,53 @@ export default function CoordinatorScriptTab({
     {
       field: 'scheduled_date',
       headerName: 'Scheduled',
-      renderCell: renderDate as any,
+      minWidth: 140,
+      renderCell: (params) => {
+        const row = params.row as Row;
+        const dateStr = row.scheduled_date;
+        const isPending = row.completed_flag === null;
+        const isActive = (row.program_status_name || '').toLowerCase() === 'active';
+        const canChangeDate = isPending && isActive;
+        
+        let dateDisplay = '-';
+        if (dateStr) {
+          try {
+            dateDisplay = format(parseISO(dateStr), 'MMM d, yyyy');
+          } catch {
+            dateDisplay = dateStr;
+          }
+        }
+
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {canChangeDate && (
+              <Tooltip title="Change scheduled date">
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenDateChangeModal(row);
+                  }}
+                  disabled={isLoadingDateChange && dateChangeRow?.member_program_item_schedule_id === row.member_program_item_schedule_id}
+                  sx={{
+                    p: 0.25,
+                    color: 'text.secondary',
+                    '&:hover': {
+                      color: 'primary.main',
+                      backgroundColor: 'primary.50',
+                    },
+                  }}
+                >
+                  <CalendarTodayIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+              {dateDisplay}
+            </Typography>
+          </Box>
+        );
+      },
     },
     { field: 'therapy_type', headerName: 'Therapy Type' },
     { field: 'therapy_name', headerName: 'Therapy' },
@@ -484,6 +645,24 @@ export default function CoordinatorScriptTab({
           onClose={handleCloseNotesModal}
           leadId={selectedLead.id}
           leadName={selectedLead.name}
+        />
+      )}
+
+      {/* Date Change Modal */}
+      {dateChangeRow && (
+        <DateChangeModal
+          open={isDateChangeModalOpen}
+          onClose={() => {
+            setIsDateChangeModalOpen(false);
+            setDateChangeRow(null);
+            setDateChangeFutureCount(0);
+            setDateChangeItemDetails(undefined);
+          }}
+          currentDate={dateChangeRow.scheduled_date}
+          futureInstanceCount={dateChangeFutureCount}
+          itemDetails={dateChangeItemDetails}
+          onConfirm={handleDateChangeConfirm}
+          loading={isProcessingDateChange}
         />
       )}
     </Box>

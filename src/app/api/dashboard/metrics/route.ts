@@ -80,7 +80,26 @@ export async function GET(_req: NextRequest) {
       }
     }
 
-    // 4. Members on Memberships (Placeholder)
+    // 4. Paused Programs - Query programs with Paused status
+    const pausedStatusId = statuses?.find(
+      s => s.status_name?.toLowerCase() === 'paused'
+    )?.program_status_id;
+
+    let pausedPrograms = 0;
+    if (pausedStatusId) {
+      const { count, error: pausedProgramsErr } = await supabase
+        .from('member_programs')
+        .select('*', { count: 'exact', head: true })
+        .eq('program_status_id', pausedStatusId);
+
+      if (pausedProgramsErr) {
+        console.error('Error fetching paused programs:', pausedProgramsErr);
+      } else {
+        pausedPrograms = count || 0;
+      }
+    }
+
+    // 5. Members on Memberships (Placeholder)
     const membersOnMemberships = 0; // Placeholder for now
 
     return NextResponse.json({
@@ -88,6 +107,7 @@ export async function GET(_req: NextRequest) {
         activeMembers,
         newProgramsThisMonth,
         completedPrograms,
+        pausedPrograms,
         membersOnMemberships,
       },
     });

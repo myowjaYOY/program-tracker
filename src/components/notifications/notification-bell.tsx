@@ -50,6 +50,44 @@ const getPriorityColor = (priority: string): 'error' | 'warning' | 'info' => {
   }
 };
 
+const getPriorityWeight = (priority: string | undefined | null): number => {
+  const normalizedPriority = (priority || '').toLowerCase().trim();
+  switch (normalizedPriority) {
+    case 'urgent':
+      return 3;
+    case 'high':
+      return 2;
+    case 'normal':
+    default:
+      return 1;
+  }
+};
+
+const sortNotifications = (notifications: Notification[]): Notification[] => {
+  const sorted = [...notifications].sort((a, b) => {
+    // First sort by priority (urgent > high > normal)
+    const weightA = getPriorityWeight(a.priority);
+    const weightB = getPriorityWeight(b.priority);
+    const priorityDiff = weightB - weightA;
+    if (priorityDiff !== 0) return priorityDiff;
+    
+    // Then sort by date (most recent first)
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+  
+  // Debug logging - can be removed after confirming fix
+  if (sorted.length > 0) {
+    console.log('[NotificationBell] Sorted notifications:', sorted.map(n => ({
+      id: n.notification_id,
+      priority: n.priority,
+      weight: getPriorityWeight(n.priority),
+      created_at: n.created_at
+    })));
+  }
+  
+  return sorted;
+};
+
 const getHighestPriority = (notifications: Notification[]): 'normal' | 'high' | 'urgent' => {
   if (notifications.some(n => n.priority === 'urgent')) return 'urgent';
   if (notifications.some(n => n.priority === 'high')) return 'high';
@@ -66,7 +104,10 @@ export default function NotificationBell({ floating = true }: NotificationBellPr
   const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  const { data: notifications = [], isLoading } = useActiveNotifications();
+  const { data: rawNotifications = [], isLoading } = useActiveNotifications();
+
+  // Sort notifications by severity (urgent > high > normal) then by date (newest first)
+  const notifications = sortNotifications(rawNotifications);
 
   const unreadCount = notifications.length;
   const highestPriority = getHighestPriority(notifications);

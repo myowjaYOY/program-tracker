@@ -20,7 +20,7 @@ interface CoordinatorToDoTabProps {
   start?: string | undefined;
   end?: string | undefined;
   showCompleted?: boolean;
-  hideMissed?: boolean;
+  showMissed?: boolean;
 }
 
 export default function CoordinatorToDoTab({
@@ -29,7 +29,7 @@ export default function CoordinatorToDoTab({
   start,
   end,
   showCompleted = false,
-  hideMissed = false,
+  showMissed = false,
 }: CoordinatorToDoTabProps) {
   const {
     data = [],
@@ -41,7 +41,7 @@ export default function CoordinatorToDoTab({
     start: start ?? null,
     end: end ?? null,
     showCompleted,
-    hideMissed,
+    showMissed,
   });
   const qc = useQueryClient();
 
@@ -67,7 +67,7 @@ export default function CoordinatorToDoTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
-    if (hideMissed) sp.set('hideMissed', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
     qc.invalidateQueries({
       queryKey: coordinatorKeys.todo(sp.toString()),
     });
@@ -81,7 +81,7 @@ export default function CoordinatorToDoTab({
     if (start) sp.set('start', start);
     if (end) sp.set('end', end);
     if (showCompleted) sp.set('showCompleted', 'true');
-    if (hideMissed) sp.set('hideMissed', 'true');
+    if (showMissed) sp.set('showMissed', 'true');
     const qs = sp.toString();
     const queryKey = coordinatorKeys.todo(qs);
 
@@ -98,8 +98,8 @@ export default function CoordinatorToDoTab({
         );
       }
       
-      // If hideMissed is active, handle accordingly
-      if (hideMissed) {
+      // If showMissed is false (default), we're only showing pending items
+      if (!showMissed) {
         // Only showing pending - if changing to anything other than null, remove it
         if (newValue !== null) {
           return oldData.filter((item: any) => 

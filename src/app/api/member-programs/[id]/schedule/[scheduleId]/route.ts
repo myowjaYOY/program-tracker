@@ -7,6 +7,9 @@ interface UpdateScheduleBody {
   confirm_cascade?: boolean;
   adjust_schedule?: boolean;
   redemption_date?: string;
+  // For direct date changes (calendar icon feature)
+  scheduled_date?: string;
+  adjust_future?: boolean;
 }
 
 export async function PUT(
@@ -45,6 +48,117 @@ export async function PUT(
       );
     }
 
+    // ========================================
+    // DIRECT DATE CHANGE (Calendar Icon Feature)
+    // ========================================
+    // If scheduled_date is provided without completed_flag, this is a direct date change
+    if (body.scheduled_date && body.completed_flag === undefined) {
+      const programId = parseInt(id);
+      const newDate = body.scheduled_date;
+
+      try {
+        // Step 1: Update this instance's scheduled_date
+        const { data: updatedItem, error: updateError } = await supabase
+          .from('member_program_item_schedule')
+          .update({ scheduled_date: newDate })
+          .eq('member_program_item_schedule_id', scheduleIdNum)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating scheduled_date:', updateError);
+          return NextResponse.json(
+            { error: 'Failed to update scheduled date' },
+            { status: 500 }
+          );
+        }
+
+        // Step 2: Update this instance's associated tasks
+        // Get tasks with their delays and update due_date = new_date + task_delay
+        const { data: taskSchedules } = await supabase
+          .from('member_program_items_task_schedule')
+          .select(`
+            member_program_item_task_schedule_id,
+            member_program_item_tasks!inner (
+              task_delay
+            )
+          `)
+          .eq('member_program_item_schedule_id', scheduleIdNum);
+
+        if (taskSchedules && taskSchedules.length > 0) {
+          for (const ts of taskSchedules) {
+            const taskDelay = (ts.member_program_item_tasks as any)?.task_delay || 0;
+            const newDueDate = new Date(newDate);
+            newDueDate.setDate(newDueDate.getDate() + taskDelay);
+            // Skip weekends
+            while (newDueDate.getDay() === 0 || newDueDate.getDay() === 6) {
+              newDueDate.setDate(newDueDate.getDate() + 1);
+            }
+            await supabase
+              .from('member_program_items_task_schedule')
+              .update({ due_date: newDueDate.toISOString().split('T')[0] })
+              .eq('member_program_item_task_schedule_id', ts.member_program_item_task_schedule_id);
+          }
+        }
+
+        // Step 3: If adjust_future is true, cascade to future instances
+        if (body.adjust_future) {
+          const { data: cascadeResult, error: cascadeError } = await supabase
+            .rpc('adjust_future_schedule_instances', {
+              p_member_program_item_id: currentItem.member_program_item_id,
+              p_current_instance_number: currentItem.instance_number,
+              p_new_scheduled_date: newDate,
+              p_program_id: programId,
+            });
+
+          if (cascadeError) {
+            console.error('Cascade function error:', cascadeError);
+            return NextResponse.json(
+              {
+                error: 'Failed to cascade schedule changes',
+                details: cascadeError.message,
+                data: updatedItem,
+              },
+              { status: 500 }
+            );
+          }
+
+          if (cascadeResult && !cascadeResult.ok) {
+            console.error('Cascade function returned error:', cascadeResult.error);
+            return NextResponse.json(
+              {
+                error: 'Cascade function failed',
+                details: cascadeResult.error,
+                data: updatedItem,
+              },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            data: updatedItem,
+            cascade: cascadeResult,
+            message: `Date changed. Updated ${cascadeResult?.updated_instances || 0} future instance(s) and ${cascadeResult?.updated_tasks || 0} task(s).`,
+          });
+        }
+
+        // No cascade - just return the updated item
+        return NextResponse.json({
+          data: updatedItem,
+          message: 'Scheduled date updated successfully',
+        });
+      } catch (dateChangeErr: any) {
+        console.error('Unexpected date change error:', dateChangeErr);
+        return NextResponse.json(
+          { error: dateChangeErr?.message || 'Failed to change date' },
+          { status: 500 }
+        );
+      }
+    }
+
+    // ========================================
+    // COMPLETED_FLAG CHANGE (Redemption Flow)
+    // ========================================
     // Check if adjustment prompt is needed
     if (body.completed_flag === true && !body.confirm_cascade) {
       const adjustmentCheck = await checkScheduleAdjustmentNeeded(

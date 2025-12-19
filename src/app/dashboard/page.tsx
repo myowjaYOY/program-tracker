@@ -22,6 +22,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import SchoolIcon from '@mui/icons-material/School';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import DescriptionIcon from '@mui/icons-material/Description';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -31,6 +32,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useDashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
+import PausedProgramsHoverTooltip from '@/components/dashboard/paused-programs-hover-tooltip';
 import { useDashboardMembers } from '@/lib/hooks/use-dashboard-member-programs';
 import { MemberPrograms } from '@/types/database.types';
 import DashboardProgramInfoTab from '@/components/dashboard/dashboard-program-info-tab';
@@ -138,9 +140,9 @@ export default function DashboardPage() {
       </Box>
 
       {/* Metrics Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Card 1: Active Members */}
-        <Grid size={3}>
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {/* Card 1: Active Members - Green */}
+        <Grid size={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -244,8 +246,8 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        {/* Card 2: New Programs This Month */}
-        <Grid size={3}>
+        {/* Card 2: New Programs This Month - Purple */}
+        <Grid size={2.4}>
           <Card
             sx={{
               height: '100%',
@@ -312,14 +314,14 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        {/* Card 3: Completed Programs */}
-        <Grid size={3}>
+        {/* Card 3: Completed Programs - Orange */}
+        <Grid size={2.4}>
           <Card
             sx={{
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
-              borderTop: theme => `4px solid ${theme.palette.info.main}`,
+              borderTop: theme => `4px solid ${theme.palette.warning.main}`,
               transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
               '&:hover': {
                 transform: 'translateY(-2px)',
@@ -349,7 +351,7 @@ export default function DashboardPage() {
                     component="div"
                     sx={{
                       fontWeight: 'bold',
-                      color: 'info.main',
+                      color: 'warning.main',
                       mt: 1,
                     }}
                   >
@@ -362,7 +364,7 @@ export default function DashboardPage() {
                 </Box>
                 <Box
                   sx={{
-                    color: 'info.main',
+                    color: 'warning.main',
                     opacity: 0.8,
                   }}
                 >
@@ -380,8 +382,8 @@ export default function DashboardPage() {
           </Card>
         </Grid>
 
-        {/* Card 4: Program Changes (This Week) - Same as Coordinator */}
-        <Grid size={3}>
+        {/* Card 4: Program Changes (This Week) - Blue */}
+        <Grid size={2.4}>
           <ProgramChangesHoverTooltip>
             <Card
               sx={{
@@ -447,6 +449,79 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </ProgramChangesHoverTooltip>
+        </Grid>
+
+        {/* Card 5: Paused Programs - Red */}
+        <Grid size={2.4}>
+          <PausedProgramsHoverTooltip>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.error.main}`,
+                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Paused Programs
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'error.main',
+                        mt: 1,
+                      }}
+                    >
+                      {isLoading ? (
+                        <CircularProgress size={32} color="inherit" />
+                      ) : (
+                        (metrics?.pausedPrograms ?? 0).toLocaleString()
+                      )}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'error.main',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <PauseCircleIcon sx={{ fontSize: 40 }} />
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Programs currently paused
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </PausedProgramsHoverTooltip>
         </Grid>
       </Grid>
 

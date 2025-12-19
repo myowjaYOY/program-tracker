@@ -4,6 +4,7 @@ export interface DashboardMetrics {
   activeMembers: number;
   newProgramsThisMonth: number;
   completedPrograms: number;
+  pausedPrograms: number;
   membersOnMemberships: number;
 }
 

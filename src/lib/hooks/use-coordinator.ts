@@ -39,7 +39,7 @@ export function useCoordinatorScript(params: {
   start?: string | null;
   end?: string | null;
   showCompleted?: boolean;
-  hideMissed?: boolean;
+  showMissed?: boolean;
 }) {
   const sp = new URLSearchParams();
   if (params.memberId) sp.set('memberId', String(params.memberId));
@@ -47,7 +47,7 @@ export function useCoordinatorScript(params: {
   if (params.start) sp.set('start', params.start);
   if (params.end) sp.set('end', params.end);
   if (params.showCompleted) sp.set('showCompleted', 'true');
-  if (params.hideMissed) sp.set('hideMissed', 'true');
+  if (params.showMissed) sp.set('showMissed', 'true');
   const qs = sp.toString();
   const url = `/api/coordinator/script${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.script(qs);
@@ -72,7 +72,7 @@ export function useCoordinatorToDo(params: {
   start?: string | null;
   end?: string | null;
   showCompleted?: boolean;
-  hideMissed?: boolean;
+  showMissed?: boolean;
 }) {
   const sp = new URLSearchParams();
   if (params.memberId) sp.set('memberId', String(params.memberId));
@@ -80,7 +80,7 @@ export function useCoordinatorToDo(params: {
   if (params.start) sp.set('start', params.start);
   if (params.end) sp.set('end', params.end);
   if (params.showCompleted) sp.set('showCompleted', 'true');
-  if (params.hideMissed) sp.set('hideMissed', 'true');
+  if (params.showMissed) sp.set('showMissed', 'true');
   const qs = sp.toString();
   const url = `/api/coordinator/todo${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.todo(qs);

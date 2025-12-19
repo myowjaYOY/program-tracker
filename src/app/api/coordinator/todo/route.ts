@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get('start');
   const end = searchParams.get('end');
   const showCompleted = searchParams.get('showCompleted') === 'true';
-  const hideMissed = searchParams.get('hideMissed') === 'true';
+  const showMissed = searchParams.get('showMissed') === 'true';
 
   try {
     // Get Active program IDs using centralized service (default: Active only)
@@ -37,18 +37,19 @@ export async function GET(req: NextRequest) {
       .in('member_program_id', programIds);
 
     // Filter by completed_flag
-    if (showCompleted && hideMissed) {
-      // Show completed + pending (exclude missed)
-      todoQuery = todoQuery.or('completed_flag.is.null,completed_flag.eq.true');
-    } else if (showCompleted) {
+    // Default behavior: hide missed and completed, show only pending
+    if (showCompleted && showMissed) {
       // Show everything (pending + missed + completed)
       // No filter needed - show all
-    } else if (hideMissed) {
-      // Show only pending items (exclude missed and completed)
-      todoQuery = todoQuery.is('completed_flag', null);
-    } else {
-      // Default: Show pending + missed (exclude completed)
+    } else if (showCompleted && !showMissed) {
+      // Show completed + pending (exclude missed)
+      todoQuery = todoQuery.or('completed_flag.is.null,completed_flag.eq.true');
+    } else if (!showCompleted && showMissed) {
+      // Show pending + missed (exclude completed)
       todoQuery = todoQuery.or('completed_flag.is.null,completed_flag.eq.false');
+    } else {
+      // Default: Show only pending items (exclude missed and completed)
+      todoQuery = todoQuery.is('completed_flag', null);
     }
 
     // Date range filter on due_date for To Do
