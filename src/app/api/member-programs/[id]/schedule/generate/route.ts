@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient();
@@ -24,9 +24,18 @@ export async function POST(
       );
     }
 
+    // Check for recentOnly query parameter
+    const { searchParams } = new URL(req.url);
+    const recentOnly = searchParams.get('recentOnly') === 'true';
+
+    // Call RPC with optional p_recent_minutes parameter
+    // When recentOnly=true, pass 30 minutes; otherwise pass null for all items
     const { data, error } = await supabase.rpc(
       'generate_member_program_schedule',
-      { p_program_id: programId }
+      { 
+        p_program_id: programId,
+        p_recent_minutes: recentOnly ? 30 : null,
+      }
     );
     if (error) {
       return NextResponse.json(

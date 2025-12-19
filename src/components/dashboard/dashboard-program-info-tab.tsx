@@ -51,23 +51,6 @@ export default function DashboardProgramInfoTab({
   return (
     <Box>
       <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Button
-            variant="contained"
-            onClick={handleGeneratePlanSummary}
-            disabled={isGeneratingPlanSummary}
-            sx={{ borderRadius: 0, fontWeight: 600 }}
-          >
-            {isGeneratingPlanSummary ? (
-              <>
-                <CircularProgress size={20} sx={{ mr: 1 }} />
-                Generating...
-              </>
-            ) : (
-              'Plan Summary'
-            )}
-          </Button>
-        </Box>
         <Box sx={{ display: 'flex', gap: 4 }}>
           {/* Column 1: Program Name, Member, Status, Start Date */}
           <Box
@@ -163,6 +146,24 @@ export default function DashboardProgramInfoTab({
               </Typography>
             </Box>
           </Box>
+        </Box>
+        {/* Plan Summary Button - Bottom Right */}
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+          <Button
+            variant="contained"
+            onClick={handleGeneratePlanSummary}
+            disabled={isGeneratingPlanSummary}
+            sx={{ borderRadius: 0, fontWeight: 600 }}
+          >
+            {isGeneratingPlanSummary ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Generating...
+              </>
+            ) : (
+              'Plan Summary'
+            )}
+          </Button>
         </Box>
       </Paper>
     </Box>

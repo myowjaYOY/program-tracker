@@ -528,19 +528,13 @@ export default function DashboardPage() {
       {/* Member Program Viewer */}
       <Card sx={{ mt: 3 }}>
         <CardContent sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            View Member Programs
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Select a member to view their active programs
-          </Typography>
-
           {/* Member Selection */}
           <Box sx={{ mb: 3 }}>
             <TextField
               select
               label="Select Member"
-              fullWidth
+              size="small"
+              sx={{ minWidth: 220 }}
               value={selectedMember?.lead_id || ''}
               onChange={(e) => {
                 const memberId = Number(e.target.value);

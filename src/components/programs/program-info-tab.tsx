@@ -32,7 +32,6 @@ import {
 import { MemberPrograms } from '@/types/database.types';
 import { useLeadsForProgramCreation } from '@/lib/hooks/use-leads';
 import { useActiveProgramStatus, useProgramStatus } from '@/lib/hooks/use-program-status';
-import FormStatus from '@/components/ui/FormStatus';
 import { useMemberProgramFinances } from '@/lib/hooks/use-member-program-finances';
 import { useMemberProgramPayments } from '@/lib/hooks/use-member-program-payments';
 import { useFinancialsDerived } from '@/lib/hooks/use-financials-derived';
@@ -42,6 +41,7 @@ import { loadTemplate, TEMPLATE_PATHS } from '@/lib/utils/template-loader';
 import { generatePlanSummary } from '@/lib/utils/generate-plan-summary';
 import { toast } from 'sonner';
 import { isProgramReadOnly, getReadOnlyMessage } from '@/lib/utils/program-readonly';
+import GenerateScheduleModal from '@/components/modals/generate-schedule-modal';
 
 interface ProgramInfoTabProps {
   program: MemberPrograms;
@@ -55,16 +55,13 @@ export default function ProgramInfoTab({
   onUnsavedChangesChange,
 }: ProgramInfoTabProps) {
   const [isSaving, setIsSaving] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState<string>('');
   const [pendingSave, setPendingSave] = useState<MemberProgramFormData | null>(
     null
   );
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
   const [isGeneratingQuote, setIsGeneratingQuote] = useState(false);
   const [isGeneratingContract, setIsGeneratingContract] = useState(false);
   const [isGeneratingContractDoc, setIsGeneratingContractDoc] = useState(false);
@@ -176,7 +173,6 @@ export default function ProgramInfoTab({
 
   const performSave = async (data: MemberProgramFormData): Promise<boolean> => {
     setIsSaving(true);
-    setStatusMsg(null);
     try {
       const updatedProgram = {
         ...program,
@@ -188,7 +184,7 @@ export default function ProgramInfoTab({
         program_status_id: data.program_status_id ?? null,
       };
       await onProgramUpdate(updatedProgram);
-      setStatusMsg({ ok: true, message: 'Changes saved successfully' });
+      toast.success('Changes saved successfully');
       // Reset form values to saved state so isDirty becomes false and Save disables
       reset({
         program_template_name: updatedProgram.program_template_name || '',
@@ -203,7 +199,7 @@ export default function ProgramInfoTab({
       return true;
     } catch (error) {
       const msg = (error as any)?.message || 'Failed to save program';
-      setStatusMsg({ ok: false, message: msg });
+      toast.error(msg);
       return false;
     } finally {
       setIsSaving(false);
@@ -229,10 +225,7 @@ export default function ProgramInfoTab({
         const validTransitionsStr = validTransitions.length > 0 
           ? validTransitions.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
           : 'None (final state)';
-        setStatusMsg({
-          ok: false,
-          message: `Invalid status transition: ${prevStatus.charAt(0).toUpperCase() + prevStatus.slice(1)} cannot be changed to ${currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}. Valid options: ${validTransitionsStr}.`
-        });
+        toast.error(`Invalid status transition: ${prevStatus.charAt(0).toUpperCase() + prevStatus.slice(1)} cannot be changed to ${currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}. Valid options: ${validTransitionsStr}.`);
         return;
       }
     }
@@ -256,30 +249,20 @@ export default function ProgramInfoTab({
       (!data.start_date || data.start_date === '')
     ) {
       // Surface validation on the field like other forms (MUI TextField error state)
-      // We do this by setting a temporary error message in local status and aborting save.
-      setStatusMsg({
-        ok: false,
-        message: 'Start Date is required when status is Active.',
-      });
+      toast.error('Start Date is required when status is Active.');
       return;
     }
 
     // 1b) If status is Active, program must have financing type selected (skip for memberships - always Full Pay)
     const isMembership = program.program_type === 'membership';
     if (currentStatus === 'active' && !finances?.financing_type_id && !isMembership) {
-      setStatusMsg({
-        ok: false,
-        message: 'Financing Type must be selected before activating program.',
-      });
+      toast.error('Financing Type must be selected before activating program.');
       return;
     }
 
     // 1c) If status is Active, program must have at least one payment row (skip for memberships - payment created on activation)
     if (currentStatus === 'active' && (!payments || payments.length === 0) && !isMembership) {
-      setStatusMsg({
-        ok: false,
-        message: 'Program must have at least one payment before activating.',
-      });
+      toast.error('Program must have at least one payment before activating.');
       return;
     }
 
@@ -714,20 +697,8 @@ export default function ProgramInfoTab({
                   InputLabelProps={{ shrink: true }}
                   {...field}
                   value={field.value || ''}
-                  error={
-                    !!errors.start_date ||
-                    !!(statusMsg &&
-                      !statusMsg.ok &&
-                      statusMsg.message?.toLowerCase().includes('start date'))
-                  }
-                  helperText={
-                    errors.start_date?.message ||
-                    (statusMsg &&
-                    !statusMsg.ok &&
-                    statusMsg.message?.toLowerCase().includes('start date')
-                      ? statusMsg.message
-                      : undefined)
-                  }
+                  error={!!errors.start_date}
+                  helperText={errors.start_date?.message}
                 />
               )}
             />
@@ -878,73 +849,28 @@ export default function ProgramInfoTab({
             </Box>
           </Box>
 
-          {/* Right side: Status + Generate Schedule + Save Buttons */}
+          {/* Right side: Generate Schedule + Save Buttons */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <FormStatus status={statusMsg} onClose={() => setStatusMsg(null)} />
             {/* Generate Schedule Button */}
             <Button
               variant="contained"
               color="primary"
-              onClick={async () => {
-                try {
-                  setIsGenerating(true);
-                  // If there are unsaved changes, save first to prevent inconsistencies
-                  if (isDirty) {
-                    const ok = await performSave(getValues());
-                    if (!ok) {
-                      // Abort generation if save failed
-                      return;
-                    }
-                  }
-                  const currentStatus = (
-                    programStatuses.find(
-                      s =>
-                        s.program_status_id ===
-                        (getValues('program_status_id') ??
-                          program.program_status_id)
-                    )?.status_name || ''
-                  ).toLowerCase();
-                  const date = getValues('start_date') || program.start_date;
-                  if (currentStatus !== 'active' || !date) {
-                    setStatusMsg({
-                      ok: false,
-                      message:
-                        'Program must be Active and have a Start Date to generate schedule.',
-                    });
-                    return;
-                  }
-                  const res = await fetch(
-                    `/api/member-programs/${program.member_program_id}/schedule/generate`,
-                    { method: 'POST', credentials: 'include' }
-                  );
-                  const json = await res.json();
-                  if (!res.ok)
-                    throw new Error(
-                      json.error || 'Failed to generate schedule'
-                    );
-                  setStatusMsg({
-                    ok: true,
-                    message: 'Schedule generated successfully',
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: scheduleKeys.lists(program.member_program_id),
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: memberProgramItemTaskKeys.byProgram(
-                      program.member_program_id
-                    ),
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: todoKeys.lists(program.member_program_id),
-                  });
-                } catch (e: any) {
-                  setStatusMsg({
-                    ok: false,
-                    message: e?.message || 'Failed to generate schedule',
-                  });
-                } finally {
-                  setIsGenerating(false);
+              onClick={() => {
+                const currentStatus = (
+                  programStatuses.find(
+                    s =>
+                      s.program_status_id ===
+                      (getValues('program_status_id') ??
+                        program.program_status_id)
+                  )?.status_name || ''
+                ).toLowerCase();
+                const date = getValues('start_date') || program.start_date;
+                if (currentStatus !== 'active' || !date) {
+                  toast.error('Program must be Active and have a Start Date to generate schedule.');
+                  return;
                 }
+                // Open confirmation dialog
+                setGenerateConfirmOpen(true);
               }}
               disabled={(() => {
                 const currentStatus = (
@@ -1044,10 +970,7 @@ export default function ProgramInfoTab({
                     queryKey: todoKeys.lists(program.member_program_id),
                   });
                 } catch (e: any) {
-                  setStatusMsg({
-                    ok: false,
-                    message: e?.message || 'Failed to update program status',
-                  });
+                  toast.error(e?.message || 'Failed to update program status');
                 } finally {
                   setPendingSave(null);
                 }
@@ -1060,6 +983,77 @@ export default function ProgramInfoTab({
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Generate Schedule Confirmation Modal */}
+        <GenerateScheduleModal
+          open={generateConfirmOpen}
+          onClose={() => setGenerateConfirmOpen(false)}
+          loading={isGenerating}
+          onGenerateAll={async () => {
+            try {
+              setIsGenerating(true);
+              if (isDirty) {
+                const ok = await performSave(getValues());
+                if (!ok) {
+                  setIsGenerating(false);
+                  return;
+                }
+              }
+              const res = await fetch(
+                `/api/member-programs/${program.member_program_id}/schedule/generate`,
+                { method: 'POST', credentials: 'include' }
+              );
+              const json = await res.json();
+              if (!res.ok) throw new Error(json.error || 'Failed to generate schedule');
+              const data = json.data || {};
+              toast.success(
+                `Schedule generated! ${data.inserted_items || 0} instances, ${data.inserted_tasks || 0} tasks created.`
+              );
+              queryClient.invalidateQueries({ queryKey: scheduleKeys.lists(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
+              setGenerateConfirmOpen(false);
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to generate schedule');
+            } finally {
+              setIsGenerating(false);
+            }
+          }}
+          onGenerateRecent={async () => {
+            try {
+              setIsGenerating(true);
+              if (isDirty) {
+                const ok = await performSave(getValues());
+                if (!ok) {
+                  setIsGenerating(false);
+                  return;
+                }
+              }
+              const res = await fetch(
+                `/api/member-programs/${program.member_program_id}/schedule/generate?recentOnly=true`,
+                { method: 'POST', credentials: 'include' }
+              );
+              const json = await res.json();
+              if (!res.ok) throw new Error(json.error || 'Failed to generate schedule');
+              const data = json.data || {};
+              if (data.items_processed === 0) {
+                toast.info('No items were added or updated in the last 30 minutes.');
+              } else {
+                toast.success(
+                  `Schedule generated for ${data.items_processed} recent item(s)! ${data.inserted_items || 0} instances, ${data.inserted_tasks || 0} tasks created.`
+                );
+              }
+              queryClient.invalidateQueries({ queryKey: scheduleKeys.lists(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: memberProgramItemTaskKeys.byProgram(program.member_program_id) });
+              queryClient.invalidateQueries({ queryKey: todoKeys.lists(program.member_program_id) });
+              setGenerateConfirmOpen(false);
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to generate schedule');
+            } finally {
+              setIsGenerating(false);
+            }
+          }}
+        />
         </fieldset>
       </Paper>
     </Box>

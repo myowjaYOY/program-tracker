@@ -27,7 +27,7 @@ interface DateChangeModalProps {
     therapyName?: string;
     instanceNumber?: number;
     daysBetween?: number;
-  };
+  } | undefined;
   onConfirm: (newDate: string, adjustFuture: boolean) => void;
   loading?: boolean;
 }
