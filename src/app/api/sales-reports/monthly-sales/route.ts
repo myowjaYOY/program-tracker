@@ -428,11 +428,32 @@ export async function GET(req: NextRequest) {
       p.program_status_id === activeStatusId || p.program_status_id === completedStatusId
     ).length;
 
+    // Count leads currently in "PME Scheduled" status (pending PMEs) within date range
+    let pendingPMEsQuery = supabase
+      .from('leads')
+      .select('lead_id', { count: 'exact', head: true })
+      .eq('status_id', pmeScheduledStatusId);
+
+    // Apply date filter to pending PMEs based on pmedate
+    if (dateFilter.start) {
+      pendingPMEsQuery = pendingPMEsQuery.gte('pmedate', dateFilter.start);
+    }
+    if (dateFilter.end) {
+      pendingPMEsQuery = pendingPMEsQuery.lte('pmedate', dateFilter.end);
+    }
+
+    const { count: pendingPMEsCount, error: pendingPMEsError } = await pendingPMEsQuery;
+
+    if (pendingPMEsError) {
+      console.error('Pending PMEs count error:', pendingPMEsError);
+    }
+
     return NextResponse.json({ 
       data: results,
       summary: {
         totalPMEsScheduled,
         totalProgramsWon,
+        pendingPMEs: pendingPMEsCount || 0,
       }
     }, { status: 200 });
 

@@ -6,6 +6,8 @@ export const salesReportKeys = {
     [...salesReportKeys.all, 'executive-dashboard', filters] as const,
   monthlySales: (filters: DateRangeFilter) =>
     [...salesReportKeys.all, 'monthly-sales', filters] as const,
+  salesTax: (filters: DateRangeFilter) =>
+    [...salesReportKeys.all, 'sales-tax', filters] as const,
 };
 
 export interface DateRangeFilter {
@@ -54,6 +56,7 @@ export interface MonthlySalesData {
 export interface MonthlySalesSummary {
   totalPMEsScheduled: number;
   totalProgramsWon: number;
+  pendingPMEs: number;
 }
 
 export function useExecutiveDashboard(filters: DateRangeFilter) {
@@ -90,6 +93,44 @@ export function useMonthlySales(filters: DateRangeFilter) {
       );
       if (!response.ok) {
         throw new Error('Failed to fetch monthly sales data');
+      }
+      return response.json();
+    },
+  });
+}
+
+// Sales Tax Report
+export interface SalesTaxItem {
+  id: number;
+  redemption_date: string;
+  member_name: string;
+  product_service: string;
+  taxable: boolean;
+  unit_charge: number;
+  discount_ratio: number;
+  sales_tax: number;
+}
+
+export interface SalesTaxTotals {
+  total_unit_charge: number;
+  total_taxable_after_discount: number;
+  total_sales_tax: number;
+}
+
+export function useSalesTax(filters: DateRangeFilter) {
+  return useQuery<{ data: SalesTaxItem[]; totals: SalesTaxTotals }, Error>({
+    queryKey: salesReportKeys.salesTax(filters),
+    queryFn: async () => {
+      const params = new URLSearchParams({ range: filters.range });
+      if (filters.startDate) params.set('startDate', filters.startDate);
+      if (filters.endDate) params.set('endDate', filters.endDate);
+      
+      const response = await fetch(
+        `/api/sales-reports/sales-tax?${params}`,
+        { credentials: 'include' }
+      );
+      if (!response.ok) {
+        throw new Error('Failed to fetch sales tax data');
       }
       return response.json();
     },

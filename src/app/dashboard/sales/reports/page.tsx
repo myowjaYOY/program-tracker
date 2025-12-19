@@ -26,8 +26,9 @@ import {
 } from '@mui/icons-material';
 import { GridColDef } from '@mui/x-data-grid';
 import BaseDataTable from '@/components/tables/base-data-table';
-import { useExecutiveDashboard, useMonthlySales, DateRangeFilter, CampaignMetrics } from '@/lib/hooks/use-sales-reports';
+import { useExecutiveDashboard, useMonthlySales, useSalesTax, DateRangeFilter, CampaignMetrics, SalesTaxItem } from '@/lib/hooks/use-sales-reports';
 import MonthlySalesChart from '@/components/sales-reports/MonthlySalesChart';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 
 // Tab Panel component
 interface TabPanelProps {
@@ -70,6 +71,13 @@ export default function SalesReportsPage() {
 
   // Fetch monthly sales data
   const { data: monthlySalesData, isLoading: monthlySalesLoading, error: monthlySalesError } = useMonthlySales({
+    range: dateRange,
+    startDate,
+    endDate,
+  });
+
+  // Fetch sales tax data
+  const { data: salesTaxData, isLoading: salesTaxLoading, error: salesTaxError } = useSalesTax({
     range: dateRange,
     startDate,
     endDate,
@@ -551,6 +559,11 @@ export default function SalesReportsPage() {
                 icon={<TimelineIcon />}
                 iconPosition="start"
               />
+              <Tab
+                label="Sales Tax"
+                icon={<ReceiptIcon />}
+                iconPosition="start"
+              />
             </Tabs>
           </Box>
 
@@ -595,8 +608,8 @@ export default function SalesReportsPage() {
                         }}
                       >
                         <Box>
-                          <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
-                            PMEs Scheduled
+                          <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
+                            PMEs Scheduled ({monthlySalesLoading ? '...' : monthlySalesData?.summary.pendingPMEs || 0} pending)
                           </Typography>
                           <Typography
                             variant="h3"
@@ -663,6 +676,134 @@ export default function SalesReportsPage() {
                 />
               </Grid>
             </Grid>
+          </TabPanel>
+
+          {/* Tab 3: Sales Tax */}
+          <TabPanel value={tabValue} index={2}>
+            {salesTaxError ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography variant="h6" color="error">
+                  Error: {salesTaxError.message}
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                {/* Summary Cards */}
+                <Grid container spacing={3} sx={{ mb: 3 }}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Card
+                      sx={{
+                        borderTop: theme => `4px solid ${theme.palette.primary.main}`,
+                      }}
+                    >
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                          Total Charges
+                        </Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
+                          {salesTaxLoading ? '-' : `$${(salesTaxData?.totals.total_unit_charge || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Card
+                      sx={{
+                        borderTop: theme => `4px solid ${theme.palette.warning.main}`,
+                      }}
+                    >
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                          Taxable Amount (After Discount)
+                        </Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.main', mt: 0.5 }}>
+                          {salesTaxLoading ? '-' : `$${(salesTaxData?.totals.total_taxable_after_discount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <Card
+                      sx={{
+                        borderTop: theme => `4px solid ${theme.palette.error.main}`,
+                      }}
+                    >
+                      <CardContent sx={{ p: 2 }}>
+                        <Typography color="textSecondary" variant="body2" sx={{ fontWeight: 500 }}>
+                          Total Sales Tax (8.25%)
+                        </Typography>
+                        <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'error.main', mt: 0.5 }}>
+                          {salesTaxLoading ? '-' : `$${(salesTaxData?.totals.total_sales_tax || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+
+                {/* Sales Tax Table */}
+                <BaseDataTable<SalesTaxItem>
+                  title=""
+                  data={salesTaxData?.data || []}
+                  columns={[
+                    {
+                      field: 'redemption_date',
+                      headerName: 'Redemption Date',
+                      width: 140,
+                      renderCell: params => {
+                        const value = params.value;
+                        if (!value) return '-';
+                        return new Date(value).toLocaleDateString();
+                      },
+                    },
+                    {
+                      field: 'member_name',
+                      headerName: 'Member',
+                      width: 180,
+                      flex: 1,
+                    },
+                    {
+                      field: 'product_service',
+                      headerName: 'Product/Service',
+                      width: 200,
+                      flex: 1,
+                    },
+                    {
+                      field: 'taxable',
+                      headerName: 'Taxable',
+                      width: 100,
+                      renderCell: params => params.value ? 'Yes' : 'No',
+                    },
+                    {
+                      field: 'unit_charge',
+                      headerName: 'Unit Charge',
+                      width: 120,
+                      type: 'number',
+                      renderCell: params => {
+                        const value = params.value;
+                        if (value == null) return '-';
+                        return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      },
+                    },
+                    {
+                      field: 'sales_tax',
+                      headerName: 'Sales Tax',
+                      width: 120,
+                      type: 'number',
+                      renderCell: params => {
+                        const value = params.value;
+                        if (value == null) return '-';
+                        return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      },
+                    },
+                  ]}
+                  loading={salesTaxLoading}
+                  onEdit={() => {}}
+                  showCreateButton={false}
+                  showActionsColumn={false}
+                  persistStateKey="salesTaxGrid"
+                />
+              </>
+            )}
           </TabPanel>
         </>
       )}
