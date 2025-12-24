@@ -107,6 +107,49 @@ function generateReferenceHash(leadId: number, questionId: number, dateStr: stri
   return `SURVEY-${leadId}-${questionId}-${dateOnly}`;
 }
 
+/**
+ * Check if feedback text is a non-actionable response (e.g., "none", "n/a")
+ * Returns true if the response should be SKIPPED
+ */
+function isNonActionableFeedback(text: string): boolean {
+  const normalized = text.toLowerCase().trim();
+  
+  // Common non-answer patterns
+  const nonAnswers = [
+    'none',
+    'n/a',
+    'na',
+    'no',
+    'nope',
+    'nothing',
+    'none at this time',
+    'no suggestions',
+    'no comment',
+    'no comments',
+    'not applicable',
+    'not at this time',
+    'all good',
+    'all is good',
+    'none needed',
+    'none right now',
+    '-',
+    '.',
+    'x',
+  ];
+  
+  // Check exact matches
+  if (nonAnswers.includes(normalized)) {
+    return true;
+  }
+  
+  // Very short responses (< 5 chars) are likely not actionable
+  if (normalized.length < 5) {
+    return true;
+  }
+  
+  return false;
+}
+
 interface ProcessResult {
   notes_created: number;
   alerts_created: number;
@@ -340,8 +383,12 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
 
   // Step 6: Process text feedback responses
   for (const response of (textResponses || [])) {
-    // Skip empty responses
+    // Skip empty or non-actionable responses (e.g., "none", "n/a")
     if (!response.answer_text || response.answer_text.trim().length === 0) continue;
+    if (isNonActionableFeedback(response.answer_text)) {
+      console.log(`Skipping non-actionable feedback: "${response.answer_text}"`);
+      continue;
+    }
 
     const sessionData = sessionMap.get(response.session_id);
     if (!sessionData) continue;
@@ -449,6 +496,7 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
     console.error('Failed to fetch progress summaries:', progressError);
     result.errors.push(`Failed to fetch progress summaries: ${progressError.message}`);
   } else if (progressSummaries && progressSummaries.length > 0) {
+    // Process ONE consolidated alert per member (not per module)
     for (const summary of progressSummaries) {
       // Parse overdue_milestones (stored as JSON string or array)
       let overdueModules: string[] = [];
@@ -463,74 +511,77 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
         continue;
       }
 
-      if (overdueModules.length === 0) continue;
+      if (overdueModules.length <= 1) continue;
 
       const memberName = leadMap.get(summary.lead_id) || 'Unknown Member';
       const dateStr = new Date().toLocaleDateString();
 
-      for (const moduleName of overdueModules) {
-        // Hash without date - one-time alert per module per member
-        const refHash = `OVERDUE-${summary.lead_id}-${moduleName.replace(/\s+/g, '_')}`;
+      // ONE alert per member - reference hash does not include module name
+      const refHash = `OVERDUE-${summary.lead_id}`;
 
-        // Check for duplicate
-        const { data: existingNote } = await supabase
-          .from('lead_notes')
-          .select('note_id')
-          .eq('lead_id', summary.lead_id)
-          .ilike('note', `%[REF:${refHash}]%`)
-          .maybeSingle();
+      // Check for ACTIVE notification (not dismissed)
+      // This allows new alerts after user dismisses the previous one
+      const { data: existingNotification } = await supabase
+        .from('notifications')
+        .select('notification_id')
+        .eq('lead_id', summary.lead_id)
+        .eq('title', 'Member is behind on their education')
+        .eq('status', 'active')
+        .maybeSingle();
 
-        if (existingNote) {
-          result.duplicates_skipped++;
-          continue;
-        }
-
-        // Create note
-        const noteContent = `${memberName} - ${dateStr}\nMember is behind schedule on: ${moduleName}\nReview member report card for details.\n[REF:${refHash}]`;
-        
-        const { data: newNote, error: noteError } = await supabase
-          .from('lead_notes')
-          .insert({
-            lead_id: summary.lead_id,
-            note_type: 'Challenge',
-            note: noteContent,
-          })
-          .select('note_id')
-          .single();
-
-        if (noteError) {
-          console.error('Failed to create overdue note:', noteError);
-          result.errors.push(`Failed to create overdue note for ${memberName}: ${noteError.message}`);
-          continue;
-        }
-
-        result.notes_created++;
-
-        // Create notification - urgent priority, target Nutritionist and Manager
-        const alertTitle = 'Member is behind on their education';
-        
-        const { error: notifError } = await supabase
-          .from('notifications')
-          .insert({
-            lead_id: summary.lead_id,
-            title: alertTitle,
-            message: noteContent,
-            priority: 'urgent',
-            target_role_ids: [nutritionistRoleId, managerRoleId],
-            source_note_id: newNote.note_id,
-            status: 'active',
-            created_by: SYSTEM_USER_ID,
-          });
-
-        if (notifError) {
-          console.error('Failed to create overdue notification:', notifError);
-          result.errors.push(`Failed to create overdue notification for ${memberName}: ${notifError.message}`);
-          continue;
-        }
-
-        result.alerts_created++;
-        console.log(`Created overdue alert: ${alertTitle} for ${memberName}`);
+      if (existingNotification) {
+        result.duplicates_skipped++;
+        console.log(`Skipping overdue alert for ${memberName} - active notification exists`);
+        continue;
       }
+
+      // Build consolidated message with all overdue modules
+      const modulesList = overdueModules.map(m => `• ${m}`).join('\n');
+      const noteContent = `${memberName} - ${dateStr}\nMember is behind schedule on ${overdueModules.length} module(s):\n${modulesList}\nReview member report card for details.\n[REF:${refHash}]`;
+
+      // Create note
+      const { data: newNote, error: noteError } = await supabase
+        .from('lead_notes')
+        .insert({
+          lead_id: summary.lead_id,
+          note_type: 'Challenge',
+          note: noteContent,
+        })
+        .select('note_id')
+        .single();
+
+      if (noteError) {
+        console.error('Failed to create overdue note:', noteError);
+        result.errors.push(`Failed to create overdue note for ${memberName}: ${noteError.message}`);
+        continue;
+      }
+
+      result.notes_created++;
+
+      // Create notification - urgent priority, target Nutritionist and Manager
+      const alertTitle = 'Member is behind on their education';
+
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert({
+          lead_id: summary.lead_id,
+          title: alertTitle,
+          message: noteContent,
+          priority: 'urgent',
+          target_role_ids: [nutritionistRoleId, managerRoleId],
+          source_note_id: newNote.note_id,
+          status: 'active',
+          created_by: SYSTEM_USER_ID,
+        });
+
+      if (notifError) {
+        console.error('Failed to create overdue notification:', notifError);
+        result.errors.push(`Failed to create overdue notification for ${memberName}: ${notifError.message}`);
+        continue;
+      }
+
+      result.alerts_created++;
+      console.log(`Created consolidated overdue alert for ${memberName} (${overdueModules.length} modules)`);
     }
   }
 
