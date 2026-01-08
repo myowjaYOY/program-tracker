@@ -35,8 +35,10 @@ export async function GET(req: NextRequest) {
           totalAmountOwed: 0,
           totalAmountDue: 0,
           totalAmountLate: 0,
+          totalAmountCancelled: 0,
           membersWithPaymentsDue: 0,
           latePaymentsBreakdown: [],
+          cancelledPaymentsBreakdown: [],
         }
       });
     }
@@ -103,8 +105,15 @@ export async function GET(req: NextRequest) {
       0
     );
 
-    const latePayments = unpaidPayments.filter(
-      (p: any) => p.payment_due_date && p.payment_due_date < todayStr
+    // Late payments: only Pending status with past due date
+    const latePayments = (allPayments || []).filter(
+      (p: any) => {
+        const program = programMap.get(p.member_program_id);
+        return program && 
+          p.payment_status?.payment_status_name === 'Pending' &&
+          p.payment_due_date && 
+          p.payment_due_date < todayStr;
+      }
     );
 
     const totalAmountLate = latePayments.reduce(
@@ -134,6 +143,41 @@ export async function GET(req: NextRequest) {
 
     const latePaymentsBreakdown = Array.from(breakdownMap.values());
 
+    // Cancelled payments: payments with "Cancelled" status
+    const cancelledPayments = (allPayments || []).filter(
+      (p: any) => {
+        const program = programMap.get(p.member_program_id);
+        return program && p.payment_status?.payment_status_name === 'Cancelled';
+      }
+    );
+
+    const totalAmountCancelled = cancelledPayments.reduce(
+      (sum, p) => sum + (Number(p.payment_amount) || 0),
+      0
+    );
+
+    // Create cancelled payments breakdown
+    const cancelledBreakdownMap = new Map<number, { memberId: number; memberName: string; amount: number }>();
+    cancelledPayments.forEach((p: any) => {
+      const program = programMap.get(p.member_program_id);
+      if (program?.lead_id && program?.lead) {
+        const leadId = program.lead_id;
+        const memberName = `${program.lead.first_name} ${program.lead.last_name}`;
+        const existing = cancelledBreakdownMap.get(leadId);
+        if (existing) {
+          existing.amount += Number(p.payment_amount) || 0;
+        } else {
+          cancelledBreakdownMap.set(leadId, {
+            memberId: leadId,
+            memberName,
+            amount: Number(p.payment_amount) || 0,
+          });
+        }
+      }
+    });
+
+    const cancelledPaymentsBreakdown = Array.from(cancelledBreakdownMap.values());
+
     // Count unique members with payments due
     const membersWithPaymentsDue = new Set(
       dueTodayPayments
@@ -148,8 +192,10 @@ export async function GET(req: NextRequest) {
       totalAmountOwed,
       totalAmountDue,
       totalAmountLate,
+      totalAmountCancelled,
       membersWithPaymentsDue,
       latePaymentsBreakdown,
+      cancelledPaymentsBreakdown,
     };
 
     return NextResponse.json({ data: metrics });

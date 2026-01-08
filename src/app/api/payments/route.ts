@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     // Get query parameters
     const { searchParams } = new URL(req.url);
     const memberId = searchParams.get('memberId');
-    const hideCompleted = searchParams.get('hideCompleted') === 'true';
+    const pendingOnly = searchParams.get('pendingOnly') === 'true';
 
     // Follow EXACT coordinator API pattern: Filter programs by status first
     // Load status ids to exclude Cancelled/Completed/Quote
@@ -90,9 +90,10 @@ export async function GET(req: NextRequest) {
 
     // Apply payment-specific filters after query (client-side filtering)
     let filteredData = data;
-    if (hideCompleted) {
+    if (pendingOnly) {
+      // Show only payments with "Pending" status
       filteredData = (data || []).filter(
-        (payment: any) => payment.payment_status?.payment_status_name !== 'Paid'
+        (payment: any) => payment.payment_status?.payment_status_name === 'Pending'
       );
     }
 

@@ -10,8 +10,14 @@ export interface PaymentMetrics {
   totalAmountOwed: number;
   totalAmountDue: number;
   totalAmountLate: number;
+  totalAmountCancelled: number;
   membersWithPaymentsDue: number;
   latePaymentsBreakdown: Array<{
+    memberId: number;
+    memberName: string;
+    amount: number;
+  }>;
+  cancelledPaymentsBreakdown: Array<{
     memberId: number;
     memberName: string;
     amount: number;
@@ -20,11 +26,12 @@ export interface PaymentMetrics {
 
 export function usePayments(params?: {
   memberId?: number | null;
-  hideCompleted?: boolean;
+  showAllPayments?: boolean;
 }) {
   const sp = new URLSearchParams();
   if (params?.memberId) sp.set('memberId', String(params.memberId));
-  if (params?.hideCompleted) sp.set('hideCompleted', 'true');
+  // Default behavior: show only pending. When showAllPayments is true, show all.
+  if (!params?.showAllPayments) sp.set('pendingOnly', 'true');
   const qs = sp.toString();
   const url = `/api/payments${qs ? `?${qs}` : ''}`;
 

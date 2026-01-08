@@ -19,7 +19,7 @@ import {
   AttachMoney as MoneyIcon,
   TrendingUp as TrendingUpIcon,
   Warning as WarningIcon,
-  People as PeopleIcon,
+  Block as CancelIcon,
   InfoOutlined as InfoOutlinedIcon,
 } from '@mui/icons-material';
 import { usePayments, usePaymentMetrics } from '@/lib/hooks/use-payments';
@@ -32,6 +32,7 @@ import BaseDataTable, {
 } from '@/components/tables/base-data-table';
 import { GridColDef } from '@mui/x-data-grid';
 import LatePaymentsHoverTooltip from '@/components/payments/late-payments-hover-tooltip';
+import CancelledPaymentsHoverTooltip from '@/components/payments/cancelled-payments-hover-tooltip';
 import MemberProgramPaymentForm from '@/components/forms/member-program-payment-form';
 import { MemberProgramPayments } from '@/types/database.types';
 
@@ -43,7 +44,7 @@ interface PaymentRow extends MemberProgramPayments {
 
 export default function PaymentsPage() {
   const [memberFilter, setMemberFilter] = useState<number | null>(null);
-  const [hideCompleted, setHideCompleted] = useState<boolean>(false);
+  const [showAllPayments, setShowAllPayments] = useState<boolean>(false);
   const [editingPayment, setEditingPayment] = useState<PaymentRow | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
@@ -54,7 +55,7 @@ export default function PaymentsPage() {
     refetch,
   } = usePayments({
     memberId: memberFilter,
-    hideCompleted,
+    showAllPayments,
   });
   const { data: programStatuses = [] } = useProgramStatus();
   const { data: allPrograms = [] } = useMemberPrograms();
@@ -195,7 +196,7 @@ export default function PaymentsPage() {
                     variant="body2"
                     sx={{ fontWeight: 500 }}
                   >
-                    Total Amount Owed
+                    Accounts Receivable
                   </Typography>
                   <Typography
                     variant="h3"
@@ -209,7 +210,7 @@ export default function PaymentsPage() {
                     {metricsLoading ? (
                       <CircularProgress size={32} />
                     ) : (
-                      `$${(metrics?.totalAmountOwed || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      `$${Math.round(metrics?.totalAmountOwed || 0).toLocaleString('en-US')}`
                     )}
                   </Typography>
                 </Box>
@@ -227,7 +228,7 @@ export default function PaymentsPage() {
                 color="text.secondary"
                 sx={{ fontSize: '0.875rem' }}
               >
-                All unpaid payments
+                Total receivables balance
               </Typography>
             </CardContent>
           </Card>
@@ -278,7 +279,7 @@ export default function PaymentsPage() {
                     {metricsLoading ? (
                       <CircularProgress size={32} />
                     ) : (
-                      `$${(metrics?.totalAmountDue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      `$${Math.round(metrics?.totalAmountDue || 0).toLocaleString('en-US')}`
                     )}
                   </Typography>
                 </Box>
@@ -348,7 +349,7 @@ export default function PaymentsPage() {
                       {metricsLoading ? (
                         <CircularProgress size={32} />
                       ) : (
-                        `$${(metrics?.totalAmountLate || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        `$${Math.round(metrics?.totalAmountLate || 0).toLocaleString('en-US')}`
                       )}
                     </Typography>
                   </Box>
@@ -376,73 +377,78 @@ export default function PaymentsPage() {
           </LatePaymentsHoverTooltip>
         </Grid>
 
-        {/* Card 4: Members with Payments Due */}
+        {/* Card 4: Total Amount Cancelled (with hover) */}
         <Grid size={3}>
-          <Card
-            sx={{
-              height: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              borderTop: theme => `4px solid ${theme.palette.secondary.main}`,
-              transition:
-                'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                boxShadow: theme => theme.shadows[4],
-              },
-            }}
-          >
-            <CardContent sx={{ flexGrow: 1, p: 3 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  mb: 2,
-                }}
-              >
-                <Box>
-                  <Typography
-                    color="textSecondary"
-                    variant="body2"
-                    sx={{ fontWeight: 500 }}
-                  >
-                    Members with Payments Due
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    component="div"
-                    sx={{
-                      fontWeight: 'bold',
-                      color: 'secondary.main',
-                      mt: 1,
-                    }}
-                  >
-                    {metricsLoading ? (
-                      <CircularProgress size={32} />
-                    ) : (
-                      metrics?.membersWithPaymentsDue || 0
-                    )}
-                  </Typography>
-                </Box>
+          <CancelledPaymentsHoverTooltip>
+            <Card
+              sx={{
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                borderTop: theme => `4px solid ${theme.palette.grey[500]}`,
+                transition:
+                  'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+                '&:hover': {
+                  transform: 'translateY(-2px)',
+                  boxShadow: theme => theme.shadows[4],
+                },
+              }}
+            >
+              <CardContent sx={{ flexGrow: 1, p: 3 }}>
                 <Box
                   sx={{
-                    color: 'secondary.main',
-                    opacity: 0.8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
                   }}
                 >
-                  <PeopleIcon sx={{ fontSize: 40 }} />
+                  <Box>
+                    <Typography
+                      color="textSecondary"
+                      variant="body2"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Total Amount Cancelled
+                    </Typography>
+                    <Typography
+                      variant="h3"
+                      component="div"
+                      sx={{
+                        fontWeight: 'bold',
+                        color: 'grey.600',
+                        mt: 1,
+                      }}
+                    >
+                      {metricsLoading ? (
+                        <CircularProgress size={32} />
+                      ) : (
+                        `$${Math.round(metrics?.totalAmountCancelled || 0).toLocaleString('en-US')}`
+                      )}
+                    </Typography>
+                  </Box>
+                  <Box
+                    sx={{
+                      color: 'grey.500',
+                      opacity: 0.8,
+                    }}
+                  >
+                    <CancelIcon sx={{ fontSize: 40 }} />
+                  </Box>
                 </Box>
-              </Box>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ fontSize: '0.875rem' }}
-              >
-                Distinct members with due payments
-              </Typography>
-            </CardContent>
-          </Card>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    Total cancelled payment amount
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </CancelledPaymentsHoverTooltip>
         </Grid>
       </Grid>
 
@@ -472,12 +478,12 @@ export default function PaymentsPage() {
             <FormControlLabel
               control={
                 <Checkbox
-                  checked={hideCompleted}
-                  onChange={e => setHideCompleted(e.target.checked)}
+                  checked={showAllPayments}
+                  onChange={e => setShowAllPayments(e.target.checked)}
                   size="small"
                 />
               }
-              label="Hide completed payments"
+              label="Show All Payments"
             />
           </Box>
 
@@ -513,6 +519,32 @@ export default function PaymentsPage() {
             }}
             showCreateButton={false}
             getRowId={row => row.id}
+            rowClassName={(row: any) => {
+              // Only highlight Pending payments
+              const status = row?.payment_status_name;
+              if (status !== 'Pending') return '';
+              
+              // Check due date for highlighting
+              const dateStr = row?.payment_due_date as string | undefined;
+              if (!dateStr) return '';
+              
+              const today = new Date();
+              const dueDate = new Date(dateStr);
+              dueDate.setHours(0, 0, 0, 0);
+              today.setHours(0, 0, 0, 0);
+              
+              const diffDays = Math.floor(
+                (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+              );
+              
+              // Past due = red highlight
+              if (diffDays < 0) return 'row-late';
+              // 5+ days out = no highlight
+              if (diffDays >= 5) return '';
+              // 0-4 days out = gradient highlight
+              return `row-due-${diffDays}`;
+            }}
+            sortModel={[{ field: 'payment_due_date', sort: 'asc' }]}
           />
         </CardContent>
       </Card>
