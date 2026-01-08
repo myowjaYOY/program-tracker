@@ -153,19 +153,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update program status if provided (name and description are now handled by the database function)
+    // Build update payload for fields not handled by the database function
+    const updatePayload: Record<string, unknown> = {
+      updated_by: session.user.id,
+    };
+
+    // Update program status if provided
     if (body.program_status_id) {
+      updatePayload.program_status_id = body.program_status_id;
+    }
+
+    // Update program_type if provided (critical for membership programs)
+    if (body.program_type && (body.program_type === 'one-time' || body.program_type === 'membership')) {
+      updatePayload.program_type = body.program_type;
+      
+      // For membership programs, set duration to 30 (monthly billing cycle)
+      if (body.program_type === 'membership') {
+        updatePayload.duration = 30;
+      }
+    }
+
+    // Apply updates if we have any fields to update
+    if (Object.keys(updatePayload).length > 1) { // More than just updated_by
       const { error: updateError } = await supabase
         .from('member_programs')
-        .update({ 
-          program_status_id: body.program_status_id,
-          updated_by: session.user.id 
-        })
+        .update(updatePayload)
         .eq('member_program_id', newProgramId);
 
       if (updateError) {
+        console.error('Failed to update member program after creation:', updateError);
         return NextResponse.json(
-          { error: 'Failed to update member program status' },
+          { error: 'Failed to update member program after creation' },
           { status: 500 }
         );
       }

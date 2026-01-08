@@ -241,6 +241,26 @@ export async function PUT(
       updated_by: session.user.id,
     };
 
+    // Check if this is an unpause (Paused -> Active)
+    let isUnpausing = false;
+    if (
+      body.program_status_id !== undefined &&
+      currentProgram.program_status_id !== body.program_status_id
+    ) {
+      const currentStatusName = ((currentProgram as any).program_status?.status_name || '').toLowerCase();
+      const { data: newStatusForUnpause } = await supabase
+        .from('program_status')
+        .select('status_name')
+        .eq('program_status_id', body.program_status_id)
+        .single();
+      const newStatusNameForUnpause = (newStatusForUnpause?.status_name || '').toLowerCase();
+      
+      isUnpausing = currentStatusName === 'paused' && newStatusNameForUnpause === 'active';
+      if (isUnpausing) {
+        console.log('[UNPAUSE] Detected unpause transition for program:', id);
+      }
+    }
+
     // Check if this is a membership activation (Quote -> Active)
     let isActivatingMembership = false;
     if (
@@ -398,6 +418,37 @@ export async function PUT(
         return NextResponse.json({ 
           data,
           warning: `Program activated but some membership setup failed: ${activationError.message}`
+        });
+      }
+    }
+
+    // ===== UNPAUSE SCHEDULE REGENERATION =====
+    // Automatically regenerate schedule when program is unpaused
+    // This shifts incomplete items forward by the total pause duration
+    if (isUnpausing) {
+      console.log('[UNPAUSE] Triggering automatic schedule regeneration for program:', id);
+      
+      try {
+        const { data: scheduleResult, error: scheduleError } = await supabase.rpc(
+          'generate_member_program_schedule',
+          { p_program_id: Number(id), p_recent_minutes: null }
+        );
+        
+        if (scheduleError) {
+          console.error('[UNPAUSE] Schedule regeneration failed:', scheduleError);
+          // Don't fail the request, just return with warning
+          return NextResponse.json({ 
+            data,
+            warning: `Program unpaused but schedule regeneration failed: ${scheduleError.message}`
+          });
+        }
+        
+        console.log('[UNPAUSE] Schedule regeneration complete:', scheduleResult);
+      } catch (regenError: any) {
+        console.error('[UNPAUSE] Schedule regeneration error:', regenError);
+        return NextResponse.json({ 
+          data,
+          warning: `Program unpaused but schedule regeneration failed: ${regenError.message}`
         });
       }
     }

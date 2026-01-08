@@ -125,7 +125,7 @@ export default function AddProgramWizard({
     }
   }, [open, reset]);
 
-  // Calculate totals when selected templates change
+  // Calculate totals and default program name when selected templates change
   React.useEffect(() => {
     const totals = selectedTemplates.reduce((acc, templateId) => {
       const template = programTemplates.find(t => t.program_template_id === templateId);
@@ -137,7 +137,15 @@ export default function AddProgramWizard({
     
     setTotalCost(totals.cost);
     setTotalCharge(totals.charge);
-  }, [selectedTemplates, programTemplates]);
+
+    // Default program name to the first selected template's name
+    if (selectedTemplates.length > 0) {
+      const firstTemplate = programTemplates.find(t => t.program_template_id === selectedTemplates[0]);
+      if (firstTemplate?.program_template_name) {
+        setValue('program_template_name', firstTemplate.program_template_name);
+      }
+    }
+  }, [selectedTemplates, programTemplates, setValue]);
 
   const handleNext = async () => {
     let isValidStep = false;
@@ -299,7 +307,6 @@ export default function AddProgramWizard({
                           />
                           <ListItemText
                             primary={`${template.program_template_name} - $${(template.total_charge || 0).toFixed(2)}`}
-                            secondary={template.description}
                           />
                         </MenuItem>
                       ))}

@@ -393,17 +393,6 @@ export default function MemberProgramPaymentForm({
             helperText={errors.payment_amount?.toString() || (isMembership ? 'Amount is managed by the system for memberships.' : (canEditAmount ? 'Amount can be edited. Other payments will be auto-adjusted.' : (isPaymentPaid ? 'Amount cannot be edited for paid payments.' : 'Amount cannot be edited in current program status.')))}
           />
 
-          <TextField
-            label="Paid Date"
-            type="date"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            {...register('payment_date')}
-            error={!!errors.payment_date}
-            helperText={errors.payment_date?.toString() || (!isPaidSelected ? 'Paid date can only be set when status is Paid' : '')}
-            required={isPaidSelected}
-            disabled={!isPaidSelected}
-          />
           <Controller
             name="payment_status_id"
             control={control}
@@ -437,6 +426,17 @@ export default function MemberProgramPaymentForm({
                 ))}
               </TextField>
             )}
+          />
+          <TextField
+            label="Paid Date"
+            type="date"
+            fullWidth
+            InputLabelProps={{ shrink: true }}
+            {...register('payment_date')}
+            error={!!errors.payment_date}
+            helperText={errors.payment_date?.toString() || (!isPaidSelected ? 'Paid date can only be set when status is Paid' : '')}
+            required={isPaidSelected}
+            disabled={!isPaidSelected}
           />
 
           {/* Left column rows 3-4 merged to keep tight spacing between Method and Reference */}
