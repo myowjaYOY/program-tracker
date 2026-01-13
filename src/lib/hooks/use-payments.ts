@@ -11,6 +11,8 @@ export interface PaymentMetrics {
   totalAmountDue: number;
   totalAmountLate: number;
   totalAmountCancelled: number;
+  cancelledDateRangeStart: string | null;
+  cancelledDateRangeEnd: string | null;
   membersWithPaymentsDue: number;
   latePaymentsBreakdown: Array<{
     memberId: number;

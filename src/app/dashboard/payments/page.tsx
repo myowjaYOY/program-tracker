@@ -49,6 +49,22 @@ export default function PaymentsPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: metrics, isLoading: metricsLoading } = usePaymentMetrics();
+
+  // Format date range for cancelled payments card
+  const formatDateRange = (startDate: string | null, endDate: string | null): string => {
+    if (!startDate || !endDate) return 'No cancelled payments';
+    
+    const formatDate = (dateStr: string): string => {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    };
+    
+    const start = formatDate(startDate);
+    const end = formatDate(endDate);
+    
+    return start === end ? start : `Spanning ${start} – ${end}`;
+  };
+
   const {
     data: payments = [],
     isLoading: paymentsLoading,
@@ -443,7 +459,10 @@ export default function PaymentsPage() {
                     color="text.secondary"
                     sx={{ fontSize: '0.875rem' }}
                   >
-                    Total cancelled payment amount
+                    {formatDateRange(
+                      metrics?.cancelledDateRangeStart ?? null,
+                      metrics?.cancelledDateRangeEnd ?? null
+                    )}
                   </Typography>
                 </Box>
               </CardContent>

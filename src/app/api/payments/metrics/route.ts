@@ -24,12 +24,17 @@ export async function GET(req: NextRequest) {
       .toISOString()
       .slice(0, 10);
 
-    // Step 1: Get valid program IDs (Active + Paused only) using centralized service
-    const validProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
+    // Step 1a: Get valid program IDs (Active + Paused) for operational metrics
+    const activePausedProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
       includeStatuses: ['paused']
     });
 
-    if (validProgramIds.length === 0) {
+    // Step 1b: Get ALL program IDs for metrics that need all programs (Amount Paid, Cancelled)
+    const allProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
+      includeStatuses: ['all']
+    });
+
+    if (activePausedProgramIds.length === 0 && allProgramIds.length === 0) {
       return NextResponse.json({
         data: {
           totalAmountOwed: 0,
@@ -43,19 +48,28 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Step 2: Get programs with leads for the valid program IDs
-    const { data: validPrograms } = await supabase.from('member_programs').select(`
+    // Step 2a: Get programs with leads for Active + Paused programs (operational metrics)
+    const { data: activePausedPrograms } = await supabase.from('member_programs').select(`
         member_program_id,
         lead_id,
         program_status_id,
         lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
       `)
-      .in('member_program_id', validProgramIds);
-    
-    const programIds = validProgramIds;
+      .in('member_program_id', activePausedProgramIds);
 
-    // Step 2: Get all payments for those programs
-    const { data: allPayments } = await supabase
+    // Step 2b: Get programs with leads for ALL programs (for cancelled payments breakdown)
+    const { data: allPrograms } = await supabase.from('member_programs').select(`
+        member_program_id,
+        lead_id,
+        program_status_id,
+        lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
+      `)
+      .in('member_program_id', allProgramIds);
+    
+    const programIds = activePausedProgramIds;
+
+    // Step 3a: Get payments for Active + Paused programs (operational metrics)
+    const { data: activePausedPayments } = await supabase
       .from('member_program_payments')
       .select(
         `*,
@@ -67,17 +81,36 @@ export async function GET(req: NextRequest) {
       .in('member_program_id', programIds)
       .eq('active_flag', true);
 
-    // Create program map for lookups
-    const programMap = new Map<number, any>();
-    validPrograms?.forEach((prog: any) => {
-      programMap.set(prog.member_program_id, prog);
+    // Step 3b: Get payments for ALL programs (for Amount Paid This Month and Cancelled metrics)
+    const { data: allProgramPayments } = await supabase
+      .from('member_program_payments')
+      .select(
+        `*,
+        payment_status (
+          payment_status_id,
+          payment_status_name
+        )`
+      )
+      .in('member_program_id', allProgramIds)
+      .eq('active_flag', true);
+
+    // Create program map for Active + Paused lookups
+    const activePausedProgramMap = new Map<number, any>();
+    activePausedPrograms?.forEach((prog: any) => {
+      activePausedProgramMap.set(prog.member_program_id, prog);
     });
 
-    // Calculate metrics - only include payments from valid programs
-    const unpaidPayments = (allPayments || []).filter(
+    // Create program map for ALL programs lookups
+    const allProgramMap = new Map<number, any>();
+    allPrograms?.forEach((prog: any) => {
+      allProgramMap.set(prog.member_program_id, prog);
+    });
+
+    // Calculate metrics - only include payments from Active + Paused programs
+    const unpaidPayments = (activePausedPayments || []).filter(
       (p: any) => {
-        // Only include if payment is unpaid AND program is valid
-        const program = programMap.get(p.member_program_id);
+        // Only include if payment is unpaid AND program is valid (Active/Paused)
+        const program = activePausedProgramMap.get(p.member_program_id);
         return program && p.payment_status?.payment_status_name !== 'Paid';
       }
     );
@@ -91,24 +124,21 @@ export async function GET(req: NextRequest) {
       (p: any) => p.payment_due_date && p.payment_due_date <= todayStr
     );
 
-    // Card 2 requirement change: Amount paid THIS MONTH for ALL programs regardless of status
-    // We compute this separately without program status filtering
-    const { data: paidThisMonthRows } = await supabase
-      .from('member_program_payments')
-      .select('payment_amount, payment_date')
-      .gte('payment_date', monthStart)
-      .lte('payment_date', monthEnd)
-      .eq('active_flag', true);
+    // Card 2: Amount paid THIS MONTH for ALL programs regardless of status
+    // Uses ProgramStatusService with 'all' for consistency
+    const paidThisMonthPayments = (allProgramPayments || []).filter(
+      (p: any) => p.payment_date && p.payment_date >= monthStart && p.payment_date <= monthEnd
+    );
 
-    const totalAmountDue = (paidThisMonthRows || []).reduce(
-      (sum: number, r: any) => sum + (Number(r.payment_amount) || 0),
+    const totalAmountDue = paidThisMonthPayments.reduce(
+      (sum: number, p: any) => sum + (Number(p.payment_amount) || 0),
       0
     );
 
-    // Late payments: only Pending status with past due date
-    const latePayments = (allPayments || []).filter(
+    // Late payments: only Pending status with past due date (Active + Paused programs only)
+    const latePayments = (activePausedPayments || []).filter(
       (p: any) => {
-        const program = programMap.get(p.member_program_id);
+        const program = activePausedProgramMap.get(p.member_program_id);
         return program && 
           p.payment_status?.payment_status_name === 'Pending' &&
           p.payment_due_date && 
@@ -124,7 +154,7 @@ export async function GET(req: NextRequest) {
     // Create late payments breakdown
     const breakdownMap = new Map<number, { memberId: number; memberName: string; amount: number }>();
     latePayments.forEach((p: any) => {
-      const program = programMap.get(p.member_program_id);
+      const program = activePausedProgramMap.get(p.member_program_id);
       if (program?.lead_id && program?.lead) {
         const leadId = program.lead_id;
         const memberName = `${program.lead.first_name} ${program.lead.last_name}`;
@@ -143,12 +173,9 @@ export async function GET(req: NextRequest) {
 
     const latePaymentsBreakdown = Array.from(breakdownMap.values());
 
-    // Cancelled payments: payments with "Cancelled" status
-    const cancelledPayments = (allPayments || []).filter(
-      (p: any) => {
-        const program = programMap.get(p.member_program_id);
-        return program && p.payment_status?.payment_status_name === 'Cancelled';
-      }
+    // Cancelled payments: ALL programs with "Cancelled" payment status
+    const cancelledPayments = (allProgramPayments || []).filter(
+      (p: any) => p.payment_status?.payment_status_name === 'Cancelled'
     );
 
     const totalAmountCancelled = cancelledPayments.reduce(
@@ -156,10 +183,19 @@ export async function GET(req: NextRequest) {
       0
     );
 
-    // Create cancelled payments breakdown
+    // Get earliest and latest cancelled payment dates
+    const cancelledDates = cancelledPayments
+      .map((p: any) => p.payment_due_date || p.payment_date)
+      .filter((d): d is string => !!d)
+      .sort();
+    
+    const cancelledDateRangeStart = cancelledDates.length > 0 ? cancelledDates[0] : null;
+    const cancelledDateRangeEnd = cancelledDates.length > 0 ? cancelledDates[cancelledDates.length - 1] : null;
+
+    // Create cancelled payments breakdown (using allProgramMap for member names)
     const cancelledBreakdownMap = new Map<number, { memberId: number; memberName: string; amount: number }>();
     cancelledPayments.forEach((p: any) => {
-      const program = programMap.get(p.member_program_id);
+      const program = allProgramMap.get(p.member_program_id);
       if (program?.lead_id && program?.lead) {
         const leadId = program.lead_id;
         const memberName = `${program.lead.first_name} ${program.lead.last_name}`;
@@ -176,13 +212,14 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const cancelledPaymentsBreakdown = Array.from(cancelledBreakdownMap.values());
+    const cancelledPaymentsBreakdown = Array.from(cancelledBreakdownMap.values())
+      .filter(item => item.amount > 0);
 
-    // Count unique members with payments due
+    // Count unique members with payments due (Active + Paused programs)
     const membersWithPaymentsDue = new Set(
       dueTodayPayments
         .map((p: any) => {
-          const program = programMap.get(p.member_program_id);
+          const program = activePausedProgramMap.get(p.member_program_id);
           return program?.lead_id;
         })
         .filter(id => id != null)
@@ -193,6 +230,8 @@ export async function GET(req: NextRequest) {
       totalAmountDue,
       totalAmountLate,
       totalAmountCancelled,
+      cancelledDateRangeStart,
+      cancelledDateRangeEnd,
       membersWithPaymentsDue,
       latePaymentsBreakdown,
       cancelledPaymentsBreakdown,
