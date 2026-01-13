@@ -29,6 +29,7 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import ListIcon from '@mui/icons-material/List';
 import { useDashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
@@ -41,6 +42,7 @@ import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-to
 import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
 import DashboardProgramItemsTab from '@/components/dashboard/dashboard-program-items-tab';
 import DashboardProgramNotesTab from '@/components/dashboard/dashboard-program-notes-tab';
+import DashboardProgramRashaTab from '@/components/dashboard/dashboard-program-rasha-tab';
 import ActiveMembersModal from '@/components/dashboard/active-members-modal';
 
 interface TabPanelProps {
@@ -638,11 +640,16 @@ export default function DashboardPage() {
                     label="To Do"
                     iconPosition="start"
                   />
-                <Tab
-                  icon={<AutoGraphIcon />}
-                  label="Changes"
-                  iconPosition="start"
-                />
+                  <Tab
+                    icon={<ListIcon />}
+                    label="RASHA"
+                    iconPosition="start"
+                  />
+                  <Tab
+                    icon={<AutoGraphIcon />}
+                    label="Changes"
+                    iconPosition="start"
+                  />
                 </Tabs>
               </Box>
 
@@ -670,6 +677,10 @@ export default function DashboardPage() {
               </TabPanel>
 
               <TabPanel value={tabValue} index={5}>
+                <DashboardProgramRashaTab program={selectedProgram} />
+              </TabPanel>
+
+              <TabPanel value={tabValue} index={6}>
                 <ProgramChangesTab
                   memberId={selectedMember?.lead_id ?? null}
                   range="all"
