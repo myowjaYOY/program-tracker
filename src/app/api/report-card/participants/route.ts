@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // Get active AND paused program IDs using centralized service
     // ====================================
     const validProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
-      includeStatuses: ['active', 'paused']
+      includeStatuses: ['paused']
     });
 
     if (!validProgramIds || validProgramIds.length === 0) {

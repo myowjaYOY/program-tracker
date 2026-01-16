@@ -210,9 +210,7 @@ export default function ReportCardPage() {
                   <MenuItem
                     key={member.external_user_id}
                     value={member.external_user_id}
-                    sx={member.is_paused ? {
-                      opacity: 0.3,
-                    } : undefined}
+                    sx={member.is_paused ? { opacity: 0.3 } : {}}
                   >
                     {getRiskIndicator(member.risk_level)}{member.full_name}
                   </MenuItem>
