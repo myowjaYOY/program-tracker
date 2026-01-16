@@ -18,6 +18,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Tooltip,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -27,10 +28,26 @@ import {
   AccessTime as AccessTimeIcon,
   Person as PersonIcon,
   Close as CloseIcon,
+  Assessment as AssessmentIcon,
 } from '@mui/icons-material';
 import { formatDistanceToNow, format } from 'date-fns';
+import { useRouter } from 'next/navigation';
 import { Notification, useAcknowledgeNotification } from '@/lib/hooks/use-notifications';
 import { useCreateLeadNote } from '@/lib/hooks/use-lead-notes';
+
+/**
+ * System User UUID for automated notifications
+ */
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Tab mapping for system-generated alerts
+ * Maps alert title to Report Card tab index
+ */
+const SYSTEM_ALERT_TABS: Record<string, number> = {
+  'Member is behind on their education': 0, // Member Progress
+  'Feedback Provided': 4,                   // Member Feedback
+};
 
 interface NotificationDetailModalProps {
   open: boolean;
@@ -81,6 +98,7 @@ export default function NotificationDetailModal({
   const [acknowledgmentNote, setAcknowledgmentNote] = useState('');
   const [noteType, setNoteType] = useState<NoteType>('Follow-Up');
   
+  const router = useRouter();
   const createNote = useCreateLeadNote();
   const acknowledgeNotification = useAcknowledgeNotification();
   
@@ -93,6 +111,16 @@ export default function NotificationDetailModal({
   const memberName = notification.lead 
     ? `${notification.lead.first_name} ${notification.lead.last_name}`
     : 'Unknown Member';
+  
+  // Check if this is a system-generated alert that can navigate to Report Card
+  const isSystemAlert = notification.created_by === SYSTEM_USER_ID;
+  const targetTab = SYSTEM_ALERT_TABS[notification.title] ?? 0;
+  const showReportCardButton = isSystemAlert && notification.lead_id;
+
+  const handleViewReportCard = () => {
+    router.push(`/dashboard/report-card?leadId=${notification.lead_id}&tab=${targetTab}`);
+    onClose();
+  };
 
   const handleAcknowledge = async () => {
     if (!acknowledgmentNote.trim()) return;
@@ -213,9 +241,23 @@ export default function NotificationDetailModal({
         {/* Source Note */}
         {notification.source_note && (
           <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>
-              Original Note
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Typography variant="subtitle2" fontWeight="bold">
+                Original Note
+              </Typography>
+              {showReportCardButton && (
+                <Tooltip title="View in Report Card">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={handleViewReportCard}
+                    sx={{ ml: 0.5 }}
+                  >
+                    <AssessmentIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
             <Box sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1, borderLeft: 3, borderColor: 'primary.main' }}>
               <Chip label={notification.source_note.note_type} size="small" sx={{ mb: 1 }} />
               <Typography variant="body2">{notification.source_note.note}</Typography>

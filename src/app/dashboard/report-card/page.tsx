@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -58,8 +59,10 @@ function TabPanel(props: TabPanelProps) {
 
 export default function ReportCardPage() {
   const theme = useTheme();
+  const searchParams = useSearchParams();
   const [tabValue, setTabValue] = useState(0);
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [lastAppliedParams, setLastAppliedParams] = useState<string | null>(null);
   
   // Notes modal state
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -69,6 +72,39 @@ export default function ReportCardPage() {
   
   // Fetch members for dropdown
   const { data: membersData, isLoading: membersLoading } = useReportCardParticipants();
+  
+  // Apply URL params after members data loads
+  // Re-applies if URL params change (e.g., navigating from notification)
+  useEffect(() => {
+    if (membersLoading || !membersData) return;
+    
+    const leadIdParam = searchParams.get('leadId');
+    const tabParam = searchParams.get('tab');
+    
+    // Create a key from current params to detect changes
+    const paramsKey = `${leadIdParam}-${tabParam}`;
+    
+    // Skip if we already applied these exact params
+    if (paramsKey === lastAppliedParams) return;
+    
+    if (leadIdParam) {
+      const leadId = parseInt(leadIdParam, 10);
+      // Find member by lead_id and get their external_user_id for the dropdown
+      const member = membersData.find(m => m.lead_id === leadId);
+      if (member) {
+        setSelectedMemberId(member.external_user_id);
+      }
+    }
+    
+    if (tabParam) {
+      const tab = parseInt(tabParam, 10);
+      if (tab >= 0 && tab <= 5) {
+        setTabValue(tab);
+      }
+    }
+    
+    setLastAppliedParams(paramsKey);
+  }, [searchParams, membersData, membersLoading, lastAppliedParams]);
   
   // Sort members alphabetically by full_name
   const members = React.useMemo(() => {
@@ -174,6 +210,9 @@ export default function ReportCardPage() {
                   <MenuItem
                     key={member.external_user_id}
                     value={member.external_user_id}
+                    sx={member.is_paused ? {
+                      opacity: 0.3,
+                    } : undefined}
                   >
                     {getRiskIndicator(member.risk_level)}{member.full_name}
                   </MenuItem>

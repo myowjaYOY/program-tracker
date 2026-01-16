@@ -8,6 +8,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import OpenAI from 'npm:openai@4'
 
 /**
  * System User UUID for automated notifications
@@ -62,21 +63,44 @@ const ALL_TEXT_IDS = [
 /**
  * Support rating text to numeric score mapping
  * Scale: 1-5 (higher is better)
+ * 
+ * NOTE: "not applicable", "n/a", etc. are NOT in this map intentionally.
+ * They should return null and be skipped, not treated as low ratings.
  */
 const RATING_MAP: Record<string, number> = {
   'exceeding expectations': 5,
   'very supportive': 4,
   'adequately supportive': 3,
   'mildly supportive': 2,
-  'not applicable': 1,
+  'not supportive': 1,
 };
 
 /**
+ * Responses that should be skipped for rating questions
+ * (not treated as low ratings)
+ */
+const NON_RATING_RESPONSES = [
+  'not applicable',
+  'n/a',
+  'na',
+  'none',
+  'no',
+  '-',
+];
+
+/**
  * Map support rating text to numeric score
+ * Returns null for non-applicable responses (which should be skipped)
  */
 function mapRatingToScore(answer: string | null): number | null {
   if (!answer) return null;
   const normalized = answer.toLowerCase().trim();
+  
+  // Skip non-rating responses (don't treat them as low ratings)
+  if (NON_RATING_RESPONSES.includes(normalized)) {
+    return null;
+  }
+  
   return RATING_MAP[normalized] ?? null;
 }
 
@@ -110,6 +134,7 @@ function generateReferenceHash(leadId: number, questionId: number, dateStr: stri
 /**
  * Check if feedback text is a non-actionable response (e.g., "none", "n/a")
  * Returns true if the response should be SKIPPED
+ * This is a fast pre-filter before AI classification
  */
 function isNonActionableFeedback(text: string): boolean {
   const normalized = text.toLowerCase().trim();
@@ -150,11 +175,119 @@ function isNonActionableFeedback(text: string): boolean {
   return false;
 }
 
+/**
+ * Use AI to classify whether feedback responses are actionable.
+ * Processes responses in a single batch for efficiency.
+ * 
+ * @param feedbackItems - Array of feedback to classify
+ * @param openaiKey - OpenAI API key
+ * @returns Map of refHash -> classification result
+ */
+async function classifyFeedbackWithAI(
+  feedbackItems: Array<{ text: string; questionType: string; refHash: string }>,
+  openaiKey: string
+): Promise<Map<string, FeedbackClassification>> {
+  const results = new Map<string, FeedbackClassification>();
+  
+  if (feedbackItems.length === 0) {
+    return results;
+  }
+
+  try {
+    const openai = new OpenAI({ apiKey: openaiKey });
+    
+    // Build the prompt with all feedback items
+    const feedbackList = feedbackItems.map((item, idx) => 
+      `[${idx + 1}] Question type: "${item.questionType}"\n    Response: "${item.text}"`
+    ).join('\n\n');
+
+    const prompt = `You are analyzing survey responses to determine if they contain actionable feedback.
+
+For each response below, determine if it is ACTIONABLE (contains a specific suggestion, request, complaint, or improvement idea) or NOT ACTIONABLE (deferral, non-answer, general satisfaction without specifics, or doesn't answer the question).
+
+${feedbackList}
+
+Respond with a JSON array where each element has:
+- "index": the number from the bracket (1, 2, etc.)
+- "actionable": true or false
+- "reason": brief explanation (max 10 words)
+
+Example response:
+[{"index": 1, "actionable": true, "reason": "Specific request for more variety"}, {"index": 2, "actionable": false, "reason": "Deferral, not actual feedback"}]
+
+JSON response only, no markdown:`;
+
+    console.log(`[AI Filter] Classifying ${feedbackItems.length} feedback items...`);
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1, // Low temperature for consistent classification
+      max_tokens: 1000,
+    });
+
+    const responseText = completion.choices[0]?.message?.content?.trim();
+    
+    if (!responseText) {
+      console.error('[AI Filter] Empty response from OpenAI');
+      // Fail-open: mark all as actionable
+      feedbackItems.forEach(item => {
+        results.set(item.refHash, { actionable: true, reason: 'AI unavailable - defaulting to actionable' });
+      });
+      return results;
+    }
+
+    // Parse JSON response
+    const classifications = JSON.parse(responseText) as Array<{ index: number; actionable: boolean; reason: string }>;
+    
+    for (const classification of classifications) {
+      const item = feedbackItems[classification.index - 1];
+      if (item) {
+        results.set(item.refHash, {
+          actionable: classification.actionable,
+          reason: classification.reason
+        });
+        console.log(`[AI Filter] "${item.text.substring(0, 30)}..." -> ${classification.actionable ? 'ACTIONABLE' : 'SKIP'} (${classification.reason})`);
+      }
+    }
+
+    // Handle any items that weren't in the response (fail-open)
+    for (const item of feedbackItems) {
+      if (!results.has(item.refHash)) {
+        results.set(item.refHash, { actionable: true, reason: 'Not classified - defaulting to actionable' });
+      }
+    }
+
+  } catch (error) {
+    console.error('[AI Filter] Classification failed:', error);
+    // Fail-open: mark all as actionable
+    feedbackItems.forEach(item => {
+      results.set(item.refHash, { actionable: true, reason: 'AI error - defaulting to actionable' });
+    });
+  }
+
+  return results;
+}
+
 interface ProcessResult {
   notes_created: number;
   alerts_created: number;
   duplicates_skipped: number;
+  ai_filtered: number;
   errors: string[];
+}
+
+interface FeedbackClassification {
+  actionable: boolean;
+  reason: string;
+}
+
+interface PendingFeedback {
+  response: { session_id: number; question_id: number; answer_text: string };
+  sessionData: { lead_id: number; completed_on: string; form_name: string };
+  feedbackType: 'improvement' | 'education';
+  memberName: string;
+  refHash: string;
 }
 
 Deno.serve(async (req) => {
@@ -201,8 +334,15 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
     notes_created: 0,
     alerts_created: 0,
     duplicates_skipped: 0,
+    ai_filtered: 0,
     errors: [],
   };
+
+  // Get OpenAI API key for AI-based feedback classification
+  const openaiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!openaiKey) {
+    console.warn('[AI Filter] OPENAI_API_KEY not set - AI filtering disabled, using basic filter only');
+  }
 
   // Step 1: Get Manager, Provider, and Nutritionist role IDs
   const { data: roles, error: roleError } = await supabase
@@ -307,7 +447,17 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
   // Step 5: Process rating responses for low scores
   for (const response of (ratingResponses || [])) {
     const score = mapRatingToScore(response.answer_text);
-    if (score === null || score >= 3) continue; // Only alert on scores < 3
+    
+    // Skip if no valid score (null means non-applicable or empty)
+    if (score === null) {
+      if (response.answer_text) {
+        console.log(`Skipping non-rating response: "${response.answer_text}" for question ${response.question_id}`);
+      }
+      continue;
+    }
+    
+    // Only alert on scores < 3 (low ratings)
+    if (score >= 3) continue;
 
     const sessionData = sessionMap.get(response.session_id);
     if (!sessionData) continue;
@@ -381,12 +531,17 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
     console.log(`Created alert: ${alertTitle} for ${memberName}`);
   }
 
-  // Step 6: Process text feedback responses
+  // Step 6: Process text feedback responses (with AI classification)
+  // Phase 1: Collect candidates that pass basic filters
+  const pendingFeedback: PendingFeedback[] = [];
+  
   for (const response of (textResponses || [])) {
-    // Skip empty or non-actionable responses (e.g., "none", "n/a")
+    // Skip empty responses
     if (!response.answer_text || response.answer_text.trim().length === 0) continue;
+    
+    // Basic pre-filter (fast, catches obvious non-answers)
     if (isNonActionableFeedback(response.answer_text)) {
-      console.log(`Skipping non-actionable feedback: "${response.answer_text}"`);
+      console.log(`[Basic Filter] Skipping: "${response.answer_text}"`);
       continue;
     }
 
@@ -397,10 +552,9 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
     if (!feedbackType) continue;
 
     const memberName = leadMap.get(sessionData.lead_id) || 'Unknown Member';
-    const dateStr = new Date(sessionData.completed_on).toLocaleDateString();
     const refHash = generateReferenceHash(sessionData.lead_id, response.question_id, sessionData.completed_on);
 
-    // Check for duplicate
+    // Check for duplicate before adding to pending
     const { data: existingNote } = await supabase
       .from('lead_notes')
       .select('note_id')
@@ -413,13 +567,54 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
       continue;
     }
 
-    // Create note
-    const noteContent = `${memberName} - ${dateStr}\nFeedback provided.\nReview responses in Member Feedback report.\n[REF:${refHash}]`;
+    pendingFeedback.push({
+      response,
+      sessionData,
+      feedbackType,
+      memberName,
+      refHash
+    });
+  }
+
+  console.log(`[Feedback] ${pendingFeedback.length} candidates passed basic filter`);
+
+  // Phase 2: AI classification (if API key available and there are candidates)
+  let aiClassifications: Map<string, FeedbackClassification> = new Map();
+  
+  if (openaiKey && pendingFeedback.length > 0) {
+    const feedbackForAI = pendingFeedback.map(pf => ({
+      text: pf.response.answer_text,
+      questionType: pf.feedbackType === 'improvement' ? 'What improvements would you suggest?' : 'What additional education topics would you like?',
+      refHash: pf.refHash
+    }));
     
+    aiClassifications = await classifyFeedbackWithAI(feedbackForAI, openaiKey);
+  } else if (!openaiKey) {
+    // No API key - all pending feedback is considered actionable
+    pendingFeedback.forEach(pf => {
+      aiClassifications.set(pf.refHash, { actionable: true, reason: 'AI disabled' });
+    });
+  }
+
+  // Phase 3: Create alerts for actionable feedback only
+  for (const pf of pendingFeedback) {
+    const classification = aiClassifications.get(pf.refHash);
+    
+    // Skip if AI determined not actionable
+    if (classification && !classification.actionable) {
+      console.log(`[AI Filter] Skipping "${pf.response.answer_text.substring(0, 40)}..." - ${classification.reason}`);
+      result.ai_filtered++;
+      continue;
+    }
+
+    const dateStr = new Date(pf.sessionData.completed_on).toLocaleDateString();
+    const noteContent = `${pf.memberName} - ${dateStr}\nFeedback provided.\nReview responses in Member Feedback report.\n[REF:${pf.refHash}]`;
+    
+    // Create note
     const { data: newNote, error: noteError } = await supabase
       .from('lead_notes')
       .insert({
-        lead_id: sessionData.lead_id,
+        lead_id: pf.sessionData.lead_id,
         note_type: 'Challenge',
         note: noteContent,
       })
@@ -428,20 +623,20 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
 
     if (noteError) {
       console.error('Failed to create note:', noteError);
-      result.errors.push(`Failed to create note for ${memberName}: ${noteError.message}`);
+      result.errors.push(`Failed to create note for ${pf.memberName}: ${noteError.message}`);
       continue;
     }
 
     result.notes_created++;
 
-    // Create notification - priority based on feedback type
+    // Create notification
     const alertTitle = 'Feedback Provided';
-    const priority = feedbackType === 'improvement' ? 'high' : 'normal';
+    const priority = pf.feedbackType === 'improvement' ? 'high' : 'normal';
     
     const { error: notifError } = await supabase
       .from('notifications')
       .insert({
-        lead_id: sessionData.lead_id,
+        lead_id: pf.sessionData.lead_id,
         title: alertTitle,
         message: noteContent,
         priority: priority,
@@ -453,12 +648,12 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
 
     if (notifError) {
       console.error('Failed to create notification:', notifError);
-      result.errors.push(`Failed to create notification for ${memberName}: ${notifError.message}`);
+      result.errors.push(`Failed to create notification for ${pf.memberName}: ${notifError.message}`);
       continue;
     }
 
     result.alerts_created++;
-    console.log(`Created alert: ${alertTitle} (${feedbackType}) for ${memberName}`);
+    console.log(`Created alert: ${alertTitle} (${pf.feedbackType}) for ${pf.memberName}`);
   }
 
   // Step 7: Process overdue module alerts

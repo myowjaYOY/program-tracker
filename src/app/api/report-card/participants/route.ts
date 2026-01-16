@@ -7,8 +7,8 @@ import type { ParticipantOption } from '@/types/database.types';
  * GET /api/report-card/participants
  * 
  * Returns list of survey participants from survey_user_mappings
- * FILTERED to only members on active programs that have member_progress_summary data
- * (Matches the Member Progress Coverage card logic)
+ * FILTERED to members on active OR paused programs that have member_progress_summary data
+ * (Matches the Member Progress Coverage card logic, extended to include paused)
  * 
  * Query params:
  * - program_id (optional): Filter by specific survey program
@@ -21,6 +21,7 @@ import type { ParticipantOption } from '@/types/database.types';
  * - full_name
  * - survey_count (MSQ-95 surveys only)
  * - latest_survey_date
+ * - is_paused (whether member's program is paused)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -40,36 +41,66 @@ export async function GET(request: NextRequest) {
     const programId = searchParams.get('program_id');
 
     // ====================================
-    // Get active program IDs using centralized service
+    // Get active AND paused program IDs using centralized service
     // ====================================
-    const activeProgramIds = await ProgramStatusService.getValidProgramIds(supabase);
+    const validProgramIds = await ProgramStatusService.getValidProgramIds(supabase, {
+      includeStatuses: ['active', 'paused']
+    });
 
-    if (!activeProgramIds || activeProgramIds.length === 0) {
+    if (!validProgramIds || validProgramIds.length === 0) {
       return NextResponse.json({ data: [] });
     }
 
     // ====================================
-    // Get member_programs for active programs
+    // Get member_programs for active/paused programs with status info
     // ====================================
-    const { data: activePrograms, error: programsError } = await supabase
+    const { data: programsData, error: programsError } = await supabase
       .from('member_programs')
-      .select('lead_id')
-      .in('member_program_id', activeProgramIds);
+      .select('lead_id, member_program_id, program_status_id')
+      .in('member_program_id', validProgramIds);
 
     if (programsError) {
-      console.error('Error fetching active programs:', programsError);
+      console.error('Error fetching programs:', programsError);
       return NextResponse.json(
-        { error: 'Failed to fetch active programs' },
+        { error: 'Failed to fetch programs' },
         { status: 500 }
       );
     }
 
-    if (!activePrograms || activePrograms.length === 0) {
+    if (!programsData || programsData.length === 0) {
       return NextResponse.json({ data: [] });
     }
 
+    // Get the status ID for "Paused" to identify paused members
+    const { data: pausedStatus } = await supabase
+      .from('program_status')
+      .select('program_status_id')
+      .eq('status_name', 'Paused')
+      .single();
+
+    const pausedStatusId = pausedStatus?.program_status_id;
+
+    // Build a map of lead_id → is_paused (true if ANY of their programs is paused)
+    // Note: If a member has multiple programs, we mark as paused if their most recent is paused
+    const leadPausedMap = new Map<number, boolean>();
+    for (const program of programsData) {
+      if (program.lead_id) {
+        // If already marked as NOT paused (active), keep it that way
+        // Only mark as paused if not already in map or if currently marked as paused
+        const currentStatus = leadPausedMap.get(program.lead_id);
+        const isPaused = pausedStatusId ? program.program_status_id === pausedStatusId : false;
+        
+        if (currentStatus === undefined) {
+          leadPausedMap.set(program.lead_id, isPaused);
+        } else if (currentStatus === true && !isPaused) {
+          // If they have an active program, prioritize showing as active
+          leadPausedMap.set(program.lead_id, false);
+        }
+      }
+    }
+
     // Get unique lead_ids
-    const uniqueLeadIds = [...new Set(activePrograms.map(p => p.lead_id).filter(Boolean))];
+    const uniqueLeadIds = [...new Set(programsData.map(p => p.lead_id).filter(Boolean))] as number[];
 
     if (uniqueLeadIds.length === 0) {
       return NextResponse.json({ data: [] });
@@ -123,10 +154,11 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('[Participants API] Filtered results:', {
-      totalActiveProgramIds: activeProgramIds.length,
+      totalValidProgramIds: validProgramIds.length,
       uniqueLeadIds: uniqueLeadIds.length,
       leadIdsWithProgress: leadIdsWithProgress.length,
       userMappingsFound: userMappings.length,
+      pausedMembers: [...leadPausedMap.entries()].filter(([, isPaused]) => isPaused).length,
     });
 
     // Query MSQ-95 sessions for each user
@@ -212,11 +244,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build final participant list from user mappings + survey counts + risk levels
+    // Build final participant list from user mappings + survey counts + risk levels + paused status
     // Always include users; default survey_count to 0 when missing
     const participants: ParticipantOption[] = userMappings.map((user) => {
       const surveyData = surveyDataMap.get(user.external_user_id);
       const riskLevel = user.lead_id ? riskLevelMap.get(user.lead_id) : null;
+      const isPaused = user.lead_id ? (leadPausedMap.get(user.lead_id) ?? false) : false;
       return {
         external_user_id: user.external_user_id,
         lead_id: user.lead_id,
@@ -226,6 +259,7 @@ export async function GET(request: NextRequest) {
         survey_count: surveyData?.count ?? 0,
         latest_survey_date: surveyData?.latest_date ?? null,
         risk_level: riskLevel ?? null,
+        is_paused: isPaused,
       };
     });
 

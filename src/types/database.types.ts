@@ -946,6 +946,7 @@ export interface ParticipantOption {
   survey_count: number; // Count of MSQ-95 surveys completed
   latest_survey_date: string | null;
   risk_level: string | null; // Risk level from member_individual_insights ('green' | 'yellow' | 'red' | null)
+  is_paused: boolean; // Whether member's program is paused
 }
 
 // Program Filter Option (for dropdowns)

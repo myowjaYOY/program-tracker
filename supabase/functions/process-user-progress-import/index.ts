@@ -8,6 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import * as XLSX from 'npm:xlsx@0.18.5'
 
 interface ProgressRow {
+  user_id: number;  // External user ID from wellness curriculum system
   name: string;
   email: string;
   phone: string;
@@ -27,6 +28,7 @@ interface ImportJobResult {
   successful_rows: number;
   failed_rows: number;
   skipped_rows: number;
+  updated_lead_ids: number[];
 }
 
 Deno.serve(async (req) => {
@@ -120,9 +122,11 @@ async function handleFileUpload(req: Request) {
 
     // Convert to JSON starting from row 5 (header) and row 6 (data)
     // Row 5 is index 4 in 0-based indexing
+    // Column order: User ID, Name, Email, Phone, Program, Registration Date, Start Date, 
+    //               Projected Completion, Status, Last Completed, Date of Last Completed, Working On
     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
       range: 4, // Start from row 5 (0-indexed)
-      header: ['name', 'email', 'phone', 'program', 'registration_date', 
+      header: ['user_id', 'name', 'email', 'phone', 'program', 'registration_date', 
                'start_date', 'projected_completion', 'status', 
                'last_completed', 'date_of_last_completed', 'working_on'],
       defval: '' // Default value for empty cells
@@ -135,6 +139,12 @@ async function handleFileUpload(req: Request) {
 
     // Update job status
     await updateJobStatus(supabase, jobId, 'completed', undefined, result);
+
+    // Trigger member progress analysis for updated members
+    if (result.updated_lead_ids.length > 0) {
+      console.log(`Triggering analysis for ${result.updated_lead_ids.length} updated members...`);
+      await triggerMemberProgressAnalysis(supabaseUrl, supabaseServiceKey, result.updated_lead_ids);
+    }
 
     // Rename the processed file
     try {
@@ -192,19 +202,14 @@ async function processProgressData(
   let successfulRows = 0;
   let failedRows = 0;
   let skippedRows = 0;
+  const updatedLeadIds = new Set<number>(); // Track which members were updated
 
   console.log('Preloading lookup data...');
 
-  // Preload user mappings with emails from leads table for performance
+  // Preload user mappings by external_user_id for direct lookup
   const { data: userMappings, error: userError } = await supabase
     .from('survey_user_mappings')
-    .select(`
-      mapping_id, 
-      lead_id, 
-      first_name, 
-      last_name,
-      leads!survey_user_mappings_lead_id_fkey(email)
-    `);
+    .select('mapping_id, lead_id, external_user_id, first_name, last_name');
 
   if (userError) {
     console.error('Error loading user mappings:', userError);
@@ -221,35 +226,15 @@ async function processProgressData(
     throw new Error('Failed to load programs');
   }
 
-  // Create lookup maps - store arrays to detect duplicates
-  const userMap = new Map<string, Array<{ mapping_id: number; lead_id: number }>>();
-  const emailMap = new Map<string, Array<{ mapping_id: number; lead_id: number; first_name: string; last_name: string }>>();
-  
+  // Create simple lookup map by external_user_id (integer key for fast lookup)
+  const userMap = new Map<number, { mapping_id: number; lead_id: number; first_name: string; last_name: string }>();
   for (const user of userMappings || []) {
-    const nameKey = `${user.first_name.toLowerCase()}_${user.last_name.toLowerCase()}`;
-    
-    // Add to name map (allow duplicates)
-    if (!userMap.has(nameKey)) {
-      userMap.set(nameKey, []);
-    }
-    userMap.get(nameKey)!.push({ mapping_id: user.mapping_id, lead_id: user.lead_id });
-    
-    // Also create email lookup if email exists
-    const email = (user.leads as any)?.email;
-    if (email) {
-      const emailKey = email.toLowerCase().trim();
-      
-      // Add to email map (should be unique, but we'll detect duplicates)
-      if (!emailMap.has(emailKey)) {
-        emailMap.set(emailKey, []);
-      }
-      emailMap.get(emailKey)!.push({ 
-        mapping_id: user.mapping_id, 
-        lead_id: user.lead_id,
-        first_name: user.first_name,
-        last_name: user.last_name
-      });
-    }
+    userMap.set(user.external_user_id, {
+      mapping_id: user.mapping_id,
+      lead_id: user.lead_id,
+      first_name: user.first_name,
+      last_name: user.last_name
+    });
   }
 
   const programMap = new Map<string, number>();
@@ -257,17 +242,7 @@ async function processProgressData(
     programMap.set(program.program_name.trim(), program.program_id);
   }
 
-  // Count total user records and detect duplicates
-  const totalUsersByName = Array.from(userMap.values()).reduce((sum, arr) => sum + arr.length, 0);
-  const totalUsersByEmail = Array.from(emailMap.values()).reduce((sum, arr) => sum + arr.length, 0);
-  const duplicateNames = Array.from(userMap.entries()).filter(([_, arr]) => arr.length > 1).length;
-  const duplicateEmails = Array.from(emailMap.entries()).filter(([_, arr]) => arr.length > 1).length;
-  
-  console.log(`Loaded ${userMap.size} unique names (${totalUsersByName} total records, ${duplicateNames} duplicates), ${emailMap.size} unique emails (${totalUsersByEmail} total records, ${duplicateEmails} duplicates), and ${programMap.size} programs`);
-  
-  if (duplicateEmails > 0) {
-    console.warn(`WARNING: ${duplicateEmails} duplicate email(s) detected in survey_user_mappings - these will cause import failures`);
-  }
+  console.log(`Loaded ${userMap.size} user mappings and ${programMap.size} programs`);
 
   // Preload existing progress records for date comparison
   const { data: existingProgress, error: progressError } = await supabase
@@ -290,7 +265,6 @@ async function processProgressData(
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
     const recordsToUpsert: any[] = [];
-    const leadsToUpdate: Array<{ lead_id: number; email?: string; phone?: string }> = [];
 
     for (const row of batch) {
       totalRows++;
@@ -298,14 +272,15 @@ async function processProgressData(
 
       try {
         // Skip completely empty rows
-        if (!row.name && !row.email && !row.program && !row.status) {
+        if (!row.user_id && !row.name && !row.program && !row.status) {
           skippedRows++;
           continue;
         }
 
-        // Validate required fields
-        if (!row.name || !row.name.trim()) {
-          await logError(supabase, jobId, rowNumber, 'validation_error', 'Missing name');
+        // Validate required fields - user_id is now required
+        if (!row.user_id) {
+          await logError(supabase, jobId, rowNumber, 'validation_error', 
+            `Missing user_id for "${row.name || 'unknown'}"`);
           failedRows++;
           continue;
         }
@@ -322,65 +297,13 @@ async function processProgressData(
           continue;
         }
 
-        // Parse name
-        const nameParts = row.name.trim().split(/\s+/);
-        if (nameParts.length < 2) {
-          await logError(supabase, jobId, rowNumber, 'validation_error', `Invalid name format: ${row.name}`);
-          failedRows++;
-          continue;
-        }
-
-        const firstName = nameParts[0];
-        const lastName = nameParts.slice(1).join(' ');
-
-        // Match user in survey_user_mappings
-        // Try name match first
-        const userKey = `${firstName.toLowerCase()}_${lastName.toLowerCase()}`;
-        const nameMatches = userMap.get(userKey) || [];
-        let userMatch: { mapping_id: number; lead_id: number } | null = null;
-        let matchMethod = 'name';
-
-        // If exactly 1 name match, use it
-        if (nameMatches.length === 1) {
-          userMatch = nameMatches[0];
-          matchMethod = 'name';
-        } 
-        // If 0 or >1 name matches, try email match
-        else {
-          if (nameMatches.length > 1) {
-            console.log(`Row ${rowNumber}: Multiple name matches found for "${firstName} ${lastName}" (${nameMatches.length} matches), falling back to email search`);
-          }
-          
-          if (row.email) {
-            const emailKey = row.email.toLowerCase().trim();
-            const emailMatches = emailMap.get(emailKey) || [];
-            
-            if (emailMatches.length === 1) {
-              userMatch = { mapping_id: emailMatches[0].mapping_id, lead_id: emailMatches[0].lead_id };
-              matchMethod = 'email';
-              console.log(`Row ${rowNumber}: Matched "${firstName} ${lastName}" by email (${row.email}) - mapped to ${emailMatches[0].first_name} ${emailMatches[0].last_name}`);
-            } else if (emailMatches.length > 1) {
-              // Multiple email matches - this is a data quality issue
-              const duplicateInfo = emailMatches.map(m => `lead_id: ${m.lead_id}, name: "${m.first_name} ${m.last_name}"`).join('; ');
-              await logError(supabase, jobId, rowNumber, 'duplicate_email_match', 
-                `DUPLICATE EMAIL: Multiple users found with email "${row.email}". Please fix duplicate email addresses in the leads table. Matches: ${duplicateInfo}`);
-              failedRows++;
-              continue;
-            }
-          }
-        }
+        // Direct lookup by external_user_id - simple and fast
+        const userId = typeof row.user_id === 'string' ? parseInt(row.user_id, 10) : row.user_id;
+        const userMatch = userMap.get(userId);
 
         if (!userMatch) {
-          if (nameMatches.length > 1) {
-            // Multiple name matches, no email to disambiguate
-            const duplicateInfo = nameMatches.map(m => `lead_id: ${m.lead_id}`).join(', ');
-            await logError(supabase, jobId, rowNumber, 'duplicate_name_match', 
-              `DUPLICATE NAME: Multiple users found with name "${firstName} ${lastName}" (lead_ids: ${duplicateInfo}). Please provide email address to disambiguate, or fix duplicate names in the cross-reference table.`);
-          } else {
-            // No match found at all
-            await logError(supabase, jobId, rowNumber, 'user_not_found', 
-              `User not found in cross-reference table: "${firstName} ${lastName}"${row.email ? ` with email "${row.email}"` : ' (no email provided)'}. Please add this user to survey_user_mappings table.`);
-          }
+          await logError(supabase, jobId, rowNumber, 'user_not_found', 
+            `User ID ${userId} not found in survey_user_mappings. Name: "${row.name || 'unknown'}". Please add this user to the mappings table.`);
           failedRows++;
           continue;
         }
@@ -432,16 +355,9 @@ async function processProgressData(
           last_completed: row.last_completed?.trim() || null,
           date_of_last_completed: lastCompletedDate ? formatDate(lastCompletedDate) : null,
           working_on: row.working_on?.trim() || null,
-          import_batch_id: jobId
+          import_batch_id: jobId,
+          __lead_id: lead_id // Temporary tracking field (stripped before upsert)
         });
-
-        // Prepare lead update
-        if (row.email || row.phone) {
-          const updateData: any = { lead_id };
-          if (row.email?.trim()) updateData.email = row.email.trim();
-          if (row.phone?.trim()) updateData.phone = row.phone.trim();
-          leadsToUpdate.push(updateData);
-        }
 
       } catch (error) {
         await logError(supabase, jobId, rowNumber, 'processing_error', error.message);
@@ -451,9 +367,17 @@ async function processProgressData(
 
     // Batch upsert into survey_user_progress
     if (recordsToUpsert.length > 0) {
+      // Extract lead_ids and strip temporary tracking field before upsert
+      const batchLeadIds: number[] = [];
+      const cleanRecords = recordsToUpsert.map(record => {
+        const { __lead_id, ...cleanRecord } = record;
+        batchLeadIds.push(__lead_id);
+        return cleanRecord;
+      });
+
       const { error: upsertError } = await supabase
         .from('survey_user_progress')
-        .upsert(recordsToUpsert, {
+        .upsert(cleanRecords, {
           onConflict: 'mapping_id,program_id',
           ignoreDuplicates: false
         });
@@ -466,35 +390,24 @@ async function processProgressData(
         }
       } else {
         successfulRows += recordsToUpsert.length;
+        // Track successfully updated lead_ids
+        batchLeadIds.forEach(id => updatedLeadIds.add(id));
         console.log(`Successfully upserted ${recordsToUpsert.length} records`);
-      }
-    }
-
-    // Batch update leads table
-    for (const leadUpdate of leadsToUpdate) {
-      const { lead_id, ...updateData } = leadUpdate;
-      
-      if (Object.keys(updateData).length > 0) {
-        const { error: leadError } = await supabase
-          .from('leads')
-          .update(updateData)
-          .eq('lead_id', lead_id);
-
-        if (leadError) {
-          console.error(`Error updating lead ${lead_id}:`, leadError);
-        }
       }
     }
   }
 
+  const leadIdsArray = Array.from(updatedLeadIds);
   console.log(`Processing complete: ${successfulRows} successful, ${failedRows} failed, ${skippedRows} skipped`);
+  console.log(`Updated ${leadIdsArray.length} unique members`);
 
   return {
     job_id: jobId,
     total_rows: totalRows,
     successful_rows: successfulRows,
     failed_rows: failedRows,
-    skipped_rows: skippedRows
+    skipped_rows: skippedRows,
+    updated_lead_ids: leadIdsArray
   };
 }
 
@@ -614,3 +527,50 @@ function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+/**
+ * Trigger the analyze-member-progress edge function to recalculate
+ * member_progress_summary for the specified lead_ids.
+ * 
+ * This ensures that overdue_milestones and other timeline metrics
+ * are updated after new progress data is imported.
+ */
+async function triggerMemberProgressAnalysis(
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  leadIds: number[]
+): Promise<void> {
+  try {
+    const analyzeUrl = `${supabaseUrl}/functions/v1/analyze-member-progress`;
+    
+    console.log(`Calling analyze-member-progress for ${leadIds.length} members...`);
+    
+    const response = await fetch(analyzeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        mode: 'specific',
+        lead_ids: leadIds
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Analysis trigger failed (${response.status}): ${errorText}`);
+      // Don't throw - we don't want to fail the import if analysis fails
+      return;
+    }
+
+    const result = await response.json();
+    console.log(`Analysis complete: ${result.analyzed || 0} members analyzed, ${result.failed || 0} failed`);
+    
+    if (result.errors && result.errors.length > 0) {
+      console.warn('Analysis errors:', result.errors.slice(0, 5)); // Log first 5 errors
+    }
+  } catch (error) {
+    console.error('Failed to trigger member progress analysis:', error);
+    // Don't throw - import succeeded, analysis is a secondary concern
+  }
+}
