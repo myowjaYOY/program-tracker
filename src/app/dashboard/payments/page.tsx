@@ -548,9 +548,9 @@ export default function PaymentsPage() {
               if (!dateStr) return '';
               
               const today = new Date();
-              const dueDate = new Date(dateStr);
-              dueDate.setHours(0, 0, 0, 0);
               today.setHours(0, 0, 0, 0);
+              // Parse as local time by appending T00:00:00
+              const dueDate = new Date(dateStr + 'T00:00:00');
               
               const diffDays = Math.floor(
                 (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)

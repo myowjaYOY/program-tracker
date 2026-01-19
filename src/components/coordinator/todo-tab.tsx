@@ -322,9 +322,9 @@ export default function CoordinatorToDoTab({
           const dateStr = row?.due_date as string | undefined;
           if (!dateStr) return '';
           const today = new Date();
-          const date = new Date(dateStr);
-          date.setHours(0, 0, 0, 0);
           today.setHours(0, 0, 0, 0);
+          // Parse as local time by appending T00:00:00
+          const date = new Date(dateStr + 'T00:00:00');
           const diffDays = Math.floor(
             (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
