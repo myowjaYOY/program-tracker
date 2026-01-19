@@ -543,7 +543,7 @@ export default function PaymentsPage() {
               const status = row?.payment_status_name;
               if (status !== 'Pending') return '';
               
-              // Check due date for highlighting
+              // Check due date for late highlighting
               const dateStr = row?.payment_due_date as string | undefined;
               if (!dateStr) return '';
               
@@ -556,12 +556,7 @@ export default function PaymentsPage() {
                 (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
               );
               
-              // Past due = red highlight
-              if (diffDays < 0) return 'row-late';
-              // 5+ days out = no highlight
-              if (diffDays >= 5) return '';
-              // 0-4 days out = gradient highlight
-              return `row-due-${diffDays}`;
+              return diffDays < 0 ? 'row-late' : '';
             }}
             sortModel={[{ field: 'payment_due_date', sort: 'asc' }]}
           />

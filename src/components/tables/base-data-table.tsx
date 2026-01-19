@@ -640,30 +640,10 @@ export default function BaseDataTable<T extends BaseEntity>({
                 backgroundColor: 'primary.main',
               },
             },
-            // Due-date / schedule gradient classes
+            // Late row highlighting (past due date)
             '& .MuiDataGrid-row.row-late, & .MuiDataGrid-row.row-late:hover': {
               backgroundColor: theme => alpha(theme.palette.error.main, 0.24),
             },
-            '& .MuiDataGrid-row.row-due-0, & .MuiDataGrid-row.row-due-0:hover':
-              {
-                backgroundColor: theme => alpha(theme.palette.error.main, 0.2),
-              },
-            '& .MuiDataGrid-row.row-due-1, & .MuiDataGrid-row.row-due-1:hover':
-              {
-                backgroundColor: theme => alpha(theme.palette.error.main, 0.16),
-              },
-            '& .MuiDataGrid-row.row-due-2, & .MuiDataGrid-row.row-due-2:hover':
-              {
-                backgroundColor: theme => alpha(theme.palette.error.main, 0.12),
-              },
-            '& .MuiDataGrid-row.row-due-3, & .MuiDataGrid-row.row-due-3:hover':
-              {
-                backgroundColor: theme => alpha(theme.palette.error.main, 0.08),
-              },
-            '& .MuiDataGrid-row.row-due-4, & .MuiDataGrid-row.row-due-4:hover':
-              {
-                backgroundColor: theme => alpha(theme.palette.error.main, 0.04),
-              },
           }}
         />
         )}

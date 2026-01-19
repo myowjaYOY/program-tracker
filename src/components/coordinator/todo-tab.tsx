@@ -253,6 +253,12 @@ export default function CoordinatorToDoTab({
     { field: 'task_name', headerName: 'Task' },
     { field: 'description', headerName: 'Description' },
     {
+      field: 'instance_number',
+      headerName: 'Instance',
+      type: 'number',
+      width: 80,
+    },
+    {
       field: 'completed_flag',
       headerName: 'Status',
       width: 140,
@@ -312,7 +318,7 @@ export default function CoordinatorToDoTab({
           // If decision made (not null), no color - item is resolved
           if (completedFlag !== null) return '';
           
-          // Only pending items (null) get date-based coloring
+          // Only pending items (null) get late highlighting
           const dateStr = row?.due_date as string | undefined;
           if (!dateStr) return '';
           const today = new Date();
@@ -322,9 +328,7 @@ export default function CoordinatorToDoTab({
           const diffDays = Math.floor(
             (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
-          if (diffDays < 0) return 'row-late';
-          if (diffDays >= 5) return '';
-          return `row-due-${diffDays}`;
+          return diffDays < 0 ? 'row-late' : '';
         }}
         showCreateButton={false}
         showActionsColumn={false}
