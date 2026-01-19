@@ -28,7 +28,7 @@ export async function GET(_req: NextRequest) {
     // Note: Do NOT early-return; still compute programChangesThisWeek even if no active programs
 
     // Use optimized views - filter by program_id (44 IDs) instead of schedule_id (2000+ IDs)
-    // Late tasks
+    // Late tasks (pending only - excludes missed and completed)
     let lateTasks = 0;
     if (programIds.length > 0) {
       const { count } = await supabase
@@ -36,11 +36,11 @@ export async function GET(_req: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .in('member_program_id', programIds)
         .lt('due_date', todayStr)
-        .or('completed_flag.is.null,completed_flag.eq.false');
+        .is('completed_flag', null);
       lateTasks = count || 0;
     }
 
-    // Tasks due today
+    // Tasks due today (pending only - excludes missed and completed)
     let tasksDueToday = 0;
     if (programIds.length > 0) {
       const { count } = await supabase
@@ -48,11 +48,11 @@ export async function GET(_req: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .in('member_program_id', programIds)
         .eq('due_date', todayStr)
-        .or('completed_flag.is.null,completed_flag.eq.false');
+        .is('completed_flag', null);
       tasksDueToday = count || 0;
     }
 
-    // Appointments due today
+    // Script items due today (pending only - excludes missed and completed)
     let apptsDueToday = 0;
     if (programIds.length > 0) {
       const { count } = await supabase
@@ -60,7 +60,7 @@ export async function GET(_req: NextRequest) {
         .select('*', { count: 'exact', head: true })
         .in('member_program_id', programIds)
         .eq('scheduled_date', todayStr)
-        .or('completed_flag.is.null,completed_flag.eq.false');
+        .is('completed_flag', null);
       apptsDueToday = count || 0;
     }
 
