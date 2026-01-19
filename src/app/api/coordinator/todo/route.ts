@@ -176,6 +176,7 @@ export async function GET(req: NextRequest) {
         lead_id: r.lead_id,
         program_status_name: r.program_status_name,
         member_name: r.member_name,
+        instance_number: r.instance_number,
         note_count: r.lead_id ? (noteCounts[r.lead_id] || 0) : 0,
         
         // Audit enrichment
