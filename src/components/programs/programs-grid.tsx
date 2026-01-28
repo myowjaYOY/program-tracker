@@ -87,7 +87,13 @@ const memberProgramColumns: GridColDef[] = [
       if (value == null || value === undefined || value === '') {
         return '-';
       }
-      return new Date(value).toLocaleDateString();
+      // Handle date-only strings (YYYY-MM-DD) to avoid UTC timezone shift
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const parts = value.split('-').map(Number) as [number, number, number];
+        const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+        return localDate.toLocaleDateString('en-US');
+      }
+      return new Date(value).toLocaleDateString('en-US');
     },
   },
   {

@@ -612,7 +612,7 @@ export default function CoordinatorScriptTab({
           const diffDays = Math.floor(
             (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
-          return diffDays < 0 ? 'row-late' : '';
+          return diffDays <= 0 ? 'row-late' : '';
         }}
         showCreateButton={false}
         showActionsColumn={false}

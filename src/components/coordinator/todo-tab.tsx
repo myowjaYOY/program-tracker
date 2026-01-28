@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Box, Chip, IconButton, Tooltip } from '@mui/material';
+import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import BaseDataTable, { renderDate } from '@/components/tables/base-data-table';
 import type { GridColDef } from '@mui/x-data-grid-pro';
 import {
@@ -249,7 +250,51 @@ export default function CoordinatorToDoTab({
       renderCell: renderDate as any,
     },
     { field: 'therapy_type', headerName: 'Therapy Type' },
-    { field: 'therapy_name', headerName: 'Therapy' },
+    { 
+      field: 'therapy_name', 
+      headerName: 'Therapy',
+      width: 240,
+      renderCell: (params: any) => {
+        const therapyName = params.value || '—';
+        const scriptDate = params.row.script_scheduled_date;
+        
+        // Format the script scheduled date
+        let formattedDate = '';
+        if (scriptDate) {
+          // Handle date-only strings to avoid timezone shift
+          if (typeof scriptDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(scriptDate)) {
+            const parts = scriptDate.split('-').map(Number) as [number, number, number];
+            const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            formattedDate = localDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          } else {
+            formattedDate = new Date(scriptDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          }
+        }
+        
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip
+              icon={<CalendarTodayIcon sx={{ fontSize: '12px !important' }} />}
+              label={formattedDate || '—'}
+              size="small"
+              variant="outlined"
+              sx={{ 
+                height: 20,
+                minWidth: 70,
+                fontSize: '0.7rem',
+                '& .MuiChip-label': { px: 0.5 },
+                '& .MuiChip-icon': { ml: 0.5 },
+                borderColor: 'divider',
+                color: 'text.secondary',
+              }}
+            />
+            <Typography variant="body2" noWrap>
+              {therapyName}
+            </Typography>
+          </Box>
+        );
+      },
+    },
     { field: 'task_name', headerName: 'Task' },
     { field: 'description', headerName: 'Description' },
     {
@@ -328,7 +373,7 @@ export default function CoordinatorToDoTab({
           const diffDays = Math.floor(
             (date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
           );
-          return diffDays < 0 ? 'row-late' : '';
+          return diffDays <= 0 ? 'row-late' : '';
         }}
         showCreateButton={false}
         showActionsColumn={false}

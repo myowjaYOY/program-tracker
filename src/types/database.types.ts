@@ -522,6 +522,12 @@ export interface TherapyType {
 
 export interface Users {
   id: string;
+  email: string;
+  full_name: string | null;
+  is_admin: boolean;
+  is_active: boolean;
+  program_role_id: number | null;
+  app_source: 'program_tracker' | 'thrive_radio' | null;
   created_at: string | null;
   updated_at: string | null;
 }

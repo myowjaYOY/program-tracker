@@ -29,10 +29,11 @@ export async function GET() {
       );
     }
 
-    // Get all users
+    // Get all users (filter to only Program Tracker users, exclude Thrive Radio users)
     const { data: users, error } = await supabase
       .from('users')
       .select('*')
+      .eq('app_source', 'program_tracker')
       .order('created_at', { ascending: false });
     
     if (error) {
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest) {
       email_confirm: true, // Auto-confirm email
       user_metadata: {
         full_name: full_name || '',
+        app_source: 'program_tracker', // Identifies this user as a Program Tracker user
       },
     });
 
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 100));
     
     // Update the automatically created user record with our settings
+    // Explicitly set app_source to 'program_tracker' for users created via Program Tracker admin
     const { data: userData, error: userError2 } = await supabase
       .from('users')
       .update({
@@ -177,6 +180,7 @@ export async function POST(request: NextRequest) {
         is_admin,
         is_active,
         program_role_id,
+        app_source: 'program_tracker',
       })
       .eq('id', authData.user.id)
       .select('*')
