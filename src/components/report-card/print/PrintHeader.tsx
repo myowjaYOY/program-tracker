@@ -3,6 +3,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { printStyles } from './print-styles';
+import { getUiIcon } from '@/lib/utils/pdf-icons';
 
 interface PrintHeaderProps {
   memberName: string;
@@ -17,57 +18,66 @@ export default function PrintHeader({
 }: PrintHeaderProps) {
   return (
     <Box sx={printStyles.header}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        {/* Logo */}
-        {logo && (
-          <Box sx={{ width: '150px', height: '50px' }}>
-            <img
-              src={logo}
-              alt="Company Logo"
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-            />
-          </Box>
-        )}
-
-        {/* Report Title */}
-        <Box sx={{ textAlign: logo ? 'center' : 'left', flex: 1 }}>
-          <Typography variant="h4" fontWeight="bold" color="primary.main">
-            Member Progress Report
-          </Typography>
-          <Typography variant="subtitle1" color="textSecondary">
-            {memberName}
-          </Typography>
-        </Box>
-
-        {/* Report Date */}
-        <Box sx={{ textAlign: 'right', minWidth: '120px' }}>
-          <Typography variant="caption" color="textSecondary" display="block">
-            Generated On
-          </Typography>
-          <Typography variant="body2" fontWeight="bold">
-            {reportDate}
+      {/* Title & Member Info */}
+      <Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+          <div
+            dangerouslySetInnerHTML={{ __html: getUiIcon('report', { size: 36, color: '#ffffff' }) }}
+            style={{ display: 'flex', alignItems: 'center' }}
+          />
+          <Typography
+            variant="h1"
+            sx={{
+              fontSize: '36px',
+              fontWeight: 900,
+              color: '#ffffff',
+              letterSpacing: '-0.5px',
+              m: 0,
+            }}
+          >
+            Member Report Card
           </Typography>
         </Box>
+        <Typography
+          variant="h5"
+          sx={{
+            fontSize: '20px',
+            color: '#e9d5ff',
+            fontWeight: 600,
+            m: 0,
+          }}
+        >
+          {memberName}
+        </Typography>
+      </Box>
+
+      {/* Metadata Badge */}
+      <Box sx={printStyles.headerMetadata}>
+        <Typography
+          variant="caption"
+          sx={{
+            fontSize: '10px',
+            color: '#e9d5ff',
+            textTransform: 'uppercase' as const,
+            letterSpacing: '1px',
+            fontWeight: 600,
+            display: 'block',
+            mb: 0.5
+          }}
+        >
+          Generated On
+        </Typography>
+        <Typography
+          variant="body1"
+          sx={{
+            fontSize: '16px',
+            fontWeight: 700,
+            color: '#ffffff'
+          }}
+        >
+          {reportDate}
+        </Typography>
       </Box>
     </Box>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

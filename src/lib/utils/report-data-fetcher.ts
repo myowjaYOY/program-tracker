@@ -78,7 +78,51 @@ export async function fetchReportCardData(
       if (progressError) {
         console.error('Error fetching member progress:', progressError);
       } else if (progressData) {
-        reportData.memberProgress = progressData;
+        // Fetch module completion dates separately (same logic as dashboard API)
+        const { data: completionDates } = await supabase.rpc('get_module_completion_dates', {
+          p_lead_id: memberId
+        });
+
+        let moduleCompletionDatesMap: Record<string, string> = {};
+        if (completionDates) {
+          moduleCompletionDatesMap = Object.fromEntries(
+            completionDates.map((row: any) => [row.module_name, row.completed_on])
+          );
+        } else {
+          const { data: completionData } = await supabase
+            .from('survey_response_sessions')
+            .select(`
+              completed_on,
+              survey_session_program_context!inner(
+                survey_modules!inner(module_name)
+              )
+            `)
+            .eq('lead_id', memberId);
+
+          if (completionData) {
+            const grouped: Record<string, string> = {};
+            completionData.forEach((row: any) => {
+              const moduleName = row.survey_session_program_context?.survey_modules?.module_name;
+              const completedOn = row.completed_on;
+              if (moduleName && completedOn) {
+                if (!grouped[moduleName] || completedOn > grouped[moduleName]) {
+                  grouped[moduleName] = completedOn;
+                }
+              }
+            });
+            moduleCompletionDatesMap = grouped;
+          }
+        }
+
+        reportData.memberProgress = {
+          ...progressData,
+          module_completion_dates: moduleCompletionDatesMap,
+          // Parse JSON fields if they are strings (some environments return strings)
+          goals: typeof progressData.goals === 'string' ? JSON.parse(progressData.goals) : (progressData.goals || []),
+          module_sequence: typeof progressData.module_sequence === 'string' ? JSON.parse(progressData.module_sequence) : (progressData.module_sequence || []),
+          completed_milestones: typeof progressData.completed_milestones === 'string' ? JSON.parse(progressData.completed_milestones) : (progressData.completed_milestones || []),
+          overdue_milestones: typeof progressData.overdue_milestones === 'string' ? JSON.parse(progressData.overdue_milestones) : (progressData.overdue_milestones || []),
+        };
       } else {
         console.warn(`⚠️ No dashboard data found for lead_id ${memberId} - member may not have completed surveys yet`);
       }
@@ -98,7 +142,7 @@ export async function fetchReportCardData(
           console.error('Error fetching user mapping for MSQ:', mappingError);
         } else if (mapping && mapping.external_user_id) {
           const externalUserId = mapping.external_user_id;
-          
+
           // Fetch MSQ sessions
           const MSQ_FORM_ID = 3;
           const { data: sessions, error: sessionsError } = await supabase
@@ -113,7 +157,7 @@ export async function fetchReportCardData(
           } else {
             const sessionIds = sessions.map(s => s.session_id);
             const latestSessionId = sessionIds[sessionIds.length - 1]; // Last session (most recent)
-            
+
             // Fetch domain scores for ALL sessions (for trend calculation)
             const { data: allDomainScores, error: allDomainScoresError } = await supabase
               .from('survey_domain_scores')
@@ -131,7 +175,7 @@ export async function fetchReportCardData(
               if (!domainsError && domains) {
                 // Build MSQ assessment summary and domain cards
                 const assessmentDates = sessions.map(s => s.completed_on);
-                
+
                 // Calculate total scores per session
                 const allTotalScores = sessionIds.map(sessionId => {
                   const sessionDomains = allDomainScores.filter(ds => ds.session_id === sessionId);
@@ -146,7 +190,7 @@ export async function fetchReportCardData(
                   if (first === undefined || last === undefined) return 'no_data';
                   const change = last - first;
                   const pctChange = first > 0 ? Math.abs(change / first) * 100 : 0;
-                  
+
                   if (change < 0 && pctChange >= 5) return 'improving';
                   if (change > 0 && pctChange >= 5) return 'declining';
                   return 'stable';
@@ -161,13 +205,13 @@ export async function fetchReportCardData(
                     );
                     return domainScore ? parseFloat(String(domainScore.domain_total_score || 0)) : 0;
                   });
-                  
+
                   // Get LATEST session's data for this domain
                   const latestDomainData = allDomainScores.find(
                     ds => ds.session_id === latestSessionId && ds.domain_key === domain.domain_key
                   );
-                  
-                  const latestScore = latestDomainData 
+
+                  const latestScore = latestDomainData
                     ? parseFloat(String(latestDomainData.domain_total_score || 0))
                     : 0;
                   const latestSeverity = latestDomainData?.severity_assessment || 'minimal';
@@ -220,7 +264,7 @@ export async function fetchReportCardData(
           console.error('Error fetching user mapping for PROMIS:', mappingError);
         } else if (mapping && mapping.external_user_id) {
           const externalUserId = mapping.external_user_id;
-          
+
           // Get all PROMIS survey sessions for this member (form_id = 6)
           const PROMIS_FORM_ID = 6;
           const { data: sessions, error: sessionsError } = await supabase
@@ -235,7 +279,7 @@ export async function fetchReportCardData(
           } else {
             const sessionIds = sessions.map(s => s.session_id);
             const assessmentDates = sessions.map(s => s.completed_on);
-            
+
             // Get ALL survey responses with question mapping
             const { data: responses, error: responsesError } = await supabase
               .from('survey_responses')
@@ -262,29 +306,29 @@ export async function fetchReportCardData(
 
                 // Calculate raw scores and T-scores for each domain in each session
                 const domainDataBySession = new Map<number, Map<string, { raw_score: number; t_score: number | null }>>();
-                
+
                 sessions.forEach((session, sessionIdx) => {
                   const sessionDomainData = new Map<string, { raw_score: number; t_score: number | null }>();
                   const domainScores = new Map<string, number[]>();
-                  
+
                   // Group responses by domain for this session
                   responses.filter(r => r.session_id === session.session_id).forEach(response => {
                     const domainKey = questionDomainMap.get(response.question_id);
                     if (!domainKey) return;
-                    
+
                     if (!domainScores.has(domainKey)) {
                       domainScores.set(domainKey, []);
                     }
                     domainScores.get(domainKey)!.push(response.answer_numeric || 0);
                   });
-                  
+
                   // Calculate raw score and T-score for each domain
                   domainScores.forEach((scores, domainKey) => {
                     const rawScore = scores.reduce((sum, score) => sum + score, 0);
                     const tScore = domainKey === 'pain_intensity' ? null : convertToTScore(domainKey, rawScore);
                     sessionDomainData.set(domainKey, { raw_score: rawScore, t_score: tScore });
                   });
-                  
+
                   domainDataBySession.set(session.session_id, sessionDomainData);
                 });
 
@@ -292,15 +336,15 @@ export async function fetchReportCardData(
                 const meanTScoresBySession = sessions.map(session => {
                   const sessionData = domainDataBySession.get(session.session_id);
                   if (!sessionData) return 50;
-                  
+
                   const tScores: number[] = [];
                   sessionData.forEach((data, domain) => {
                     if (data.t_score !== null) {
                       tScores.push(data.t_score);
                     }
                   });
-                  
-                  return tScores.length > 0 
+
+                  return tScores.length > 0
                     ? Number((tScores.reduce((sum, score) => sum + score, 0) / tScores.length).toFixed(1))
                     : 50;
                 });
@@ -315,34 +359,34 @@ export async function fetchReportCardData(
                 if (!domainsError && domains) {
                   const domainCards = domains.map(domainDef => {
                     const domainKey = domainDef.domain_key;
-                    
+
                     // Get all raw scores and T-scores for this domain across sessions
                     const allRawScores: number[] = [];
                     const allTScores: (number | null)[] = [];
-                    
+
                     sessions.forEach(session => {
                       const sessionData = domainDataBySession.get(session.session_id);
                       const domainData = sessionData?.get(domainKey);
                       allRawScores.push(domainData?.raw_score || 0);
                       allTScores.push(domainData?.t_score ?? null);
                     });
-                    
+
                     // Current assessment (latest)
                     const currentRawScore = allRawScores[allRawScores.length - 1] || 0;
                     const currentTScore = allTScores[allTScores.length - 1] || null;
-                    
+
                     // Calculate trend
                     const calculateTrend = (scores: (number | null)[]): string => {
                       if (scores.length < 2) return 'stable';
                       const validScores = scores.filter(s => s !== null) as number[];
                       if (validScores.length < 2) return 'stable';
-                      
+
                       const first = validScores[0];
                       const last = validScores[validScores.length - 1];
                       if (first === undefined || last === undefined) return 'stable';
                       const change = last - first;
                       const threshold = domainKey === 'pain_intensity' ? 2 : 5;
-                      
+
                       const isDomainSymptom = !['physical_function', 'social_roles'].includes(domainKey);
                       if (isDomainSymptom) {
                         if (change <= -threshold) return 'improving';
@@ -353,10 +397,10 @@ export async function fetchReportCardData(
                       }
                       return 'stable';
                     };
-                    
+
                     const trendScores = domainKey === 'pain_intensity' ? allRawScores : allTScores;
                     const trend = calculateTrend(trendScores);
-                    
+
                     // Calculate severity (simplified from API endpoint logic)
                     let severity = 'within_normal';
                     if (domainKey === 'pain_intensity') {
@@ -381,7 +425,7 @@ export async function fetchReportCardData(
                         else severity = 'very_severe_limitation';
                       }
                     }
-                    
+
                     return {
                       domain_key: domainKey,
                       domain_label: domainDef.domain_label,
@@ -403,10 +447,10 @@ export async function fetchReportCardData(
                     if (change >= 5) return 'worsening';
                     return 'stable';
                   };
-                  
+
                   // Sort domains alphabetically
                   const sortedDomainCards = sortPromisDomains(domainCards);
-                  
+
                   reportData.promisAssessment = {
                     summary: {
                       member_name: `${mapping.first_name} ${mapping.last_name}`,

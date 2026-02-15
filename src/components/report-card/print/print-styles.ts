@@ -1,146 +1,141 @@
 export const printStyles = {
+  // Theme Tokens
+  colors: {
+    primary: '#8e24ff',
+    primaryGradient: 'linear-gradient(135deg, #8e24ff 0%, #5a0ea4 100%)',
+    secondary: '#5a0ea4',
+    background: '#f8fafc',
+    white: '#ffffff',
+    text: '#1e293b',
+    textSecondary: '#64748b',
+    success: '#10b981',
+    error: '#ef4444',
+    border: '#e2e8f0',
+  },
+
   // Master page layout
   page: {
     width: '8.5in',
     minHeight: '11in',
-    padding: '0.75in 0.5in',
+    padding: '0.4in',
     backgroundColor: '#ffffff',
-    color: '#000000',
-    fontFamily: 'Arial, sans-serif',
+    color: '#1e293b',
+    fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    '-webkit-print-color-adjust': 'exact',
+    'print-color-adjust': 'exact',
     '@media print': {
       margin: 0,
-      padding: 0,
+      padding: '0.4in',
+      '-webkit-print-color-adjust': 'exact',
+      'print-color-adjust': 'exact',
     },
+    '& *': {
+      '-webkit-print-color-adjust': 'exact',
+      'print-color-adjust': 'exact',
+    }
   },
 
-  // Report header
+  // Report header - High Fidelity Gradient
   header: {
-    marginBottom: '24px',
-    borderBottom: '3px solid #8e24ff',
-    paddingBottom: '16px',
+    marginBottom: '32px',
+    background: 'linear-gradient(135deg, #8e24ff 0%, #5a0ea4 100%)',
+    borderRadius: '12px',
+    padding: '32px',
+    color: '#ffffff',
+    boxShadow: '0 4px 16px rgba(142, 36, 255, 0.2)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
 
-  // Section styles
+  headerMetadata: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    padding: '12px 18px',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.2)',
+    textAlign: 'right' as const,
+  },
+
+  // Section titles with purple underline
   section: {
     marginBottom: '32px',
-    pageBreakInside: 'avoid',
+    pageBreakInside: 'avoid' as const,
   },
 
   sectionTitle: {
     fontWeight: 700,
-    fontSize: '20px',
-    marginBottom: '16px',
-    color: '#8e24ff',
-    borderBottom: '2px solid #8e24ff',
-    paddingBottom: '8px',
-  },
-
-  subsection: {
+    fontSize: '24px',
     marginBottom: '24px',
-    pageBreakInside: 'avoid',
+    color: '#8e24ff',
+    borderBottom: '3px solid #8e24ff',
+    paddingBottom: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
 
-  subsectionTitle: {
+  // Cards - 12px radius, specific shadows
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: '8px',
+    padding: '20px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    border: '1px solid #e5e7eb',
+  },
+
+  cardLabel: {
+    fontSize: '11px',
     fontWeight: 600,
-    fontSize: '16px',
-    marginBottom: '12px',
-    color: '#333333',
-  },
-
-  // Data display
-  dataGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '16px',
-    marginBottom: '16px',
-  },
-
-  dataItem: {
-    padding: '12px',
-    backgroundColor: '#f5f5f5',
-    borderRadius: '4px',
-    borderLeft: '3px solid #8e24ff',
-  },
-
-  label: {
-    fontSize: '12px',
-    color: '#666666',
-    marginBottom: '4px',
+    color: '#8e24ff',
     textTransform: 'uppercase' as const,
-    letterSpacing: '0.5px',
+    letterSpacing: '1px',
+    marginBottom: '8px',
   },
 
-  value: {
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#333333',
+  cardValue: {
+    fontSize: '36px',
+    fontWeight: 700,
+    color: '#1a1a1a',
+    lineHeight: 1,
   },
 
   // Table styles
   table: {
     width: '100%',
     borderCollapse: 'collapse' as const,
-    marginBottom: '16px',
-    '& thead': {
-      backgroundColor: '#f5f5f5',
-    },
+    backgroundColor: 'white',
+    borderRadius: '8px',
+    overflow: 'hidden',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
     '& th': {
       padding: '12px',
       textAlign: 'left' as const,
       fontWeight: 600,
       fontSize: '14px',
-      borderBottom: '2px solid #8e24ff',
-      color: '#333333',
+      backgroundColor: '#f9fafb',
+      borderBottom: '1px solid #e5e7eb',
     },
     '& td': {
       padding: '12px',
-      fontSize: '14px',
-      borderBottom: '1px solid #e0e0e0',
-    },
-    '& tbody tr:last-child td': {
-      borderBottom: 'none',
+      fontSize: '13px',
+      borderBottom: '1px solid #e5e7eb',
     },
   },
 
   // Footer
   footer: {
     marginTop: '48px',
-    paddingTop: '16px',
-    borderTop: '1px solid #e0e0e0',
-    fontSize: '12px',
-    color: '#999999',
+    padding: '20px',
+    background: 'linear-gradient(135deg, #f3f0ff 0%, #e9d5ff 100%)',
+    borderRadius: '12px',
     textAlign: 'center' as const,
   },
 
   // Page break utilities
-  pageBreakBefore: {
-    pageBreakBefore: 'always' as const,
-  },
-
-  pageBreakAfter: {
-    pageBreakAfter: 'always' as const,
-  },
-
-  noPageBreak: {
-    pageBreakInside: 'avoid' as const,
-  },
+  pageBreakBefore: { pageBreakBefore: 'always' as const, paddingTop: '48px' },
+  pageBreakAfter: { pageBreakAfter: 'always' as const },
+  noPageBreak: { pageBreakInside: 'avoid' as const },
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

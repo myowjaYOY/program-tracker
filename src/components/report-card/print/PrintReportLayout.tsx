@@ -1,41 +1,44 @@
 'use client';
 
-import React from 'react';
-import { Box } from '@mui/material';
-import { printStyles } from './print-styles';
+import React, { ReactNode } from 'react';
+import { Box, Container } from '@mui/material';
 import PrintHeader from './PrintHeader';
 import PrintFooter from './PrintFooter';
+import { printStyles } from './print-styles';
 
 interface PrintReportLayoutProps {
+  children: ReactNode;
   memberName: string;
-  reportDate?: string;
+  reportDate: string;
   logo?: string;
-  children: React.ReactNode;
+  confidentialityNotice?: string;
 }
 
 export default function PrintReportLayout({
-  memberName,
-  reportDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }),
-  logo,
   children,
+  memberName,
+  reportDate,
+  logo,
+  confidentialityNotice,
 }: PrintReportLayoutProps) {
   return (
     <Box sx={printStyles.page}>
-      <PrintHeader
-        memberName={memberName}
-        reportDate={reportDate}
-        {...(logo && { logo })}
-      />
-      
-      {children}
-      
-      <PrintFooter />
+      {/* Centered Container for Print */}
+      <Container maxWidth="lg" sx={{ p: 0 }}>
+        <PrintHeader
+          memberName={memberName}
+          reportDate={reportDate}
+          {...(logo ? { logo } : {})}
+        />
+
+        <Box sx={{ minHeight: '8in', py: 2 }}>
+          {children}
+        </Box>
+
+        <PrintFooter
+          {...(confidentialityNotice ? { confidentialityNotice } : {})}
+        />
+      </Container>
     </Box>
   );
 }
-
-
