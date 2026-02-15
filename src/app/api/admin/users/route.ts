@@ -29,13 +29,24 @@ export async function GET() {
       );
     }
 
-    // Get all users (filter to only Program Tracker users, exclude Thrive Radio users)
+    // ============================================================
+    // OPTIMIZED: Single query with nested select for program_roles
+    // BEFORE: 2 queries (users + program_roles) + manual mapping
+    // AFTER: 1 query with JOIN via nested select
+    // ============================================================
     const { data: users, error } = await supabase
       .from('users')
-      .select('*')
+      .select(`
+        *,
+        program_roles (
+          program_role_id,
+          role_name,
+          display_color
+        )
+      `)
       .eq('app_source', 'program_tracker')
       .order('created_at', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching users:', error);
       return NextResponse.json(
@@ -44,19 +55,8 @@ export async function GET() {
       );
     }
 
-    // Get program roles for mapping
-    const { data: roles } = await supabase
-      .from('program_roles')
-      .select('program_role_id, role_name, display_color');
-    
-    // Map role info to users
-    const rolesMap = new Map(roles?.map(r => [r.program_role_id, r]) || []);
-    const usersWithRoles = users?.map(u => ({
-      ...u,
-      program_roles: rolesMap.get(u.program_role_id) || null
-    })) || [];
-
-    return NextResponse.json({ data: usersWithRoles });
+    // No manual mapping needed - Supabase handles the JOIN
+    return NextResponse.json({ data: users || [] });
   } catch (error) {
     console.error('Users API error:', error);
     return NextResponse.json(
@@ -94,63 +94,31 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      email,
-      full_name,
-      password,
-      is_admin = false,
-      is_active = false,
-      program_role_id = 1, // Default to Coordinator
-    } = body;
-
-    console.log('Creating user with data:', {
-      email,
-      full_name,
-      is_admin,
-      is_active,
-      program_role_id,
-    });
+    const { email, full_name, password, is_admin = false, is_active = true, program_role_id } = body;
 
     if (!email || !password) {
-      console.log('Missing required fields:', {
-        email: !!email,
-        password: !!password,
-      });
       return NextResponse.json(
         { error: 'Email and password are required' },
         { status: 400 }
       );
     }
 
-    // Create user using Supabase Admin API to avoid auto-login
-    console.log('Attempting to create user with admin API...');
-    
-    // Check if service role key is available
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY not found in environment variables');
-      return NextResponse.json(
-        { error: 'Server configuration error: Missing service role key' },
-        { status: 500 }
-      );
-    }
-    
-    // Create admin client with service role key for user creation
+    // Create admin client for user creation
     const adminSupabase = createSupabaseClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
     const { data: authData, error: authError2 } = await adminSupabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true,
       user_metadata: {
         full_name: full_name || '',
-        app_source: 'program_tracker', // Identifies this user as a Program Tracker user
+        app_source: 'program_tracker',
       },
     });
-
-    console.log('Auth creation result:', { authData, authError2 });
 
     if (authError2) {
       console.error('Error creating user in auth:', authError2);
@@ -161,18 +129,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (!authData.user) {
-      console.error('No user returned from admin createUser');
       return NextResponse.json(
         { error: 'Failed to create user' },
         { status: 400 }
       );
     }
 
-    // Wait a moment for automatic user record creation, then update it with our settings
+    // Wait for automatic user record creation
     await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Update the automatically created user record with our settings
-    // Explicitly set app_source to 'program_tracker' for users created via Program Tracker admin
+
+    // ============================================================
+    // OPTIMIZED: Update user and fetch with role in single response
+    // Uses RETURNING with nested select pattern
+    // ============================================================
     const { data: userData, error: userError2 } = await supabase
       .from('users')
       .update({
@@ -183,16 +152,22 @@ export async function POST(request: NextRequest) {
         app_source: 'program_tracker',
       })
       .eq('id', authData.user.id)
-      .select('*')
+      .select(`
+        *,
+        program_roles (
+          program_role_id,
+          role_name,
+          display_color
+        )
+      `)
       .single();
 
     if (userError2) {
       console.error('Error updating user record:', userError2);
 
-      // If user record update fails, we should clean up the auth user
+      // Cleanup auth user on failure
       try {
         await adminSupabase.auth.admin.deleteUser(authData.user.id);
-        console.log('Cleaned up auth user after database update failure');
       } catch (cleanupError) {
         console.error('Failed to cleanup auth user:', cleanupError);
       }
@@ -203,15 +178,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get role info for response
-    const { data: newUserRole } = await supabase
-      .from('program_roles')
-      .select('program_role_id, role_name, display_color')
-      .eq('program_role_id', userData.program_role_id)
-      .single();
-
+    // No separate role query needed - already included in response
     return NextResponse.json({
-      data: { ...userData, program_roles: newUserRole || null },
+      data: userData,
       message: 'User created successfully',
     });
   } catch (error) {

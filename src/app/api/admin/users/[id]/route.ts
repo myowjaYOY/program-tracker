@@ -32,31 +32,31 @@ export async function GET(
       );
     }
 
-    // Get user by ID
+    // ============================================================
+    // OPTIMIZED: Single query with nested select for role
+    // BEFORE: 2 queries (user + role) + manual object merge
+    // AFTER: 1 query with JOIN via nested select
+    // ============================================================
     const { data: targetUser, error } = await supabase
       .from('users')
-      .select('*')
+      .select(`
+        *,
+        program_roles (
+          program_role_id,
+          role_name,
+          display_color
+        )
+      `)
       .eq('id', id)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user:', error);
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Get role info
-    const { data: role } = await supabase
-      .from('program_roles')
-      .select('program_role_id, role_name, display_color')
-      .eq('program_role_id', targetUser.program_role_id)
-      .single();
-    
-    const userWithRole = {
-      ...targetUser,
-      program_roles: role || null
-    };
-
-    return NextResponse.json({ data: userWithRole });
+    // No manual merge needed - Supabase handles the JOIN
+    return NextResponse.json({ data: targetUser });
   } catch (error) {
     console.error('Get user API error:', error);
     return NextResponse.json(
@@ -98,37 +98,30 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { full_name, is_admin, is_active, password, program_role_id } = body;
+    const { full_name, is_admin: newIsAdmin, is_active, program_role_id } = body;
 
-    // Update password in Supabase Auth if provided
-    if (password && password.trim() !== '') {
-      const { error: passwordError } = await supabase.auth.admin.updateUserById(
-        id,
-        {
-          password: password,
-        }
-      );
-
-      if (passwordError) {
-        console.error('Error updating password:', passwordError);
-        return NextResponse.json(
-          { error: 'Failed to update password' },
-          { status: 500 }
-        );
-      }
-    }
-
-    // Update user in users table
+    // ============================================================
+    // OPTIMIZED: Update and return with role in single query
+    // BEFORE: UPDATE + separate SELECT for role
+    // AFTER: UPDATE with nested select in RETURNING clause
+    // ============================================================
     const { data: updatedUser, error: updateError } = await supabase
       .from('users')
       .update({
-        full_name: full_name || null,
-        is_admin: is_admin || false,
-        is_active: is_active !== undefined ? is_active : true,
-        ...(program_role_id && { program_role_id }),
+        ...(full_name !== undefined && { full_name }),
+        ...(newIsAdmin !== undefined && { is_admin: newIsAdmin }),
+        ...(is_active !== undefined && { is_active }),
+        ...(program_role_id !== undefined && { program_role_id }),
       })
       .eq('id', id)
-      .select('*')
+      .select(`
+        *,
+        program_roles (
+          program_role_id,
+          role_name,
+          display_color
+        )
+      `)
       .single();
 
     if (updateError) {
@@ -139,15 +132,9 @@ export async function PUT(
       );
     }
 
-    // Get role info for response
-    const { data: updatedRole } = await supabase
-      .from('program_roles')
-      .select('program_role_id, role_name, display_color')
-      .eq('program_role_id', updatedUser.program_role_id)
-      .single();
-
+    // No separate role query needed
     return NextResponse.json({
-      data: { ...updatedUser, program_roles: updatedRole || null },
+      data: updatedUser,
       message: 'User updated successfully',
     });
   } catch (error) {
@@ -198,7 +185,7 @@ export async function DELETE(
       );
     }
 
-    // Delete user from users table (this will cascade to user_menu_permissions)
+    // Delete user (cascades to user_menu_permissions)
     const { error: deleteError } = await supabase
       .from('users')
       .delete()

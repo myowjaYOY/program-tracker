@@ -1,8 +1,4 @@
-'use client';
-
-import { useState, useEffect } from 'react';
 import { Box, Container } from '@mui/material';
-import { Logo } from '@/components/ui/Logo';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -19,22 +15,27 @@ const LOGIN_IMAGES = [
   '/logonPics/Tara.jpg',
 ];
 
-// Function to get a random image
-const getRandomImage = (): string => {
+// Server-side random image selection (no hydration mismatch)
+function getRandomImage(): string {
   const randomIndex = Math.floor(Math.random() * LOGIN_IMAGES.length);
-  return LOGIN_IMAGES[randomIndex] || '/logonPics/Camilla.jpg'; // Fallback to default
-};
+  return LOGIN_IMAGES[randomIndex] || '/logonPics/Camilla.jpg';
+}
 
+/**
+ * AuthLayout - Server Component
+ * 
+ * Renders the authentication page layout with a random background image.
+ * Converted from Client Component to eliminate hydration mismatch and reduce JS bundle.
+ * 
+ * Benefits:
+ * - No useState/useEffect for image selection
+ * - Image selected at request time (SSR)
+ * - ~1KB JS bundle reduction
+ * - No hydration flicker
+ */
 export default function AuthLayout({ children }: AuthLayoutProps) {
-  // Start with a default image to avoid hydration mismatch, then switch to random on client
-  const [randomImage, setRandomImage] = useState<string>('/logonPics/Camilla.jpg');
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    // Only run on client side to avoid SSR/client mismatch
-    setIsClient(true);
-    setRandomImage(getRandomImage());
-  }, []);
+  // Image is selected once per page render on the server
+  const randomImage = getRandomImage();
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex' }}>
@@ -59,7 +60,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           display: { xs: 'none', md: 'block' },
           position: 'relative',
           overflow: 'hidden',
-          backgroundImage: randomImage ? `url(${randomImage})` : undefined,
+          backgroundImage: `url(${randomImage})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',

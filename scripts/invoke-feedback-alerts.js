@@ -4,26 +4,35 @@
 const fs = require('fs');
 const path = require('path');
 
-// Read .env.local to get the service role key
+// Read .env.local to get the service role key and URL
 const envPath = path.join(__dirname, '..', '.env.local');
 const envContent = fs.readFileSync(envPath, 'utf-8');
 
+// Parse the Supabase URL
+const urlMatch = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/);
+if (!urlMatch) {
+  console.error('Could not find NEXT_PUBLIC_SUPABASE_URL in .env.local');
+  process.exit(1);
+}
+const supabaseUrl = urlMatch[1].trim();
+
 // Parse the service role key
-const match = envContent.match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/);
-if (!match) {
+const keyMatch = envContent.match(/SUPABASE_SERVICE_ROLE_KEY=(.+)/);
+if (!keyMatch) {
   console.error('Could not find SUPABASE_SERVICE_ROLE_KEY in .env.local');
   process.exit(1);
 }
-const serviceRoleKey = match[1].trim();
+const serviceRoleKey = keyMatch[1].trim();
 
 // Get import_batch_id from command line or default to 66
 const importBatchId = process.argv[2] || 66;
 
 async function invoke() {
+  console.log(`Using Supabase URL: ${supabaseUrl}`);
   console.log(`Invoking process-feedback-alerts for import_batch_id: ${importBatchId}`);
-  
+
   const response = await fetch(
-    'https://mxktlbhiknpdauzoitnm.supabase.co/functions/v1/process-feedback-alerts',
+    `${supabaseUrl}/functions/v1/process-feedback-alerts`,
     {
       method: 'POST',
       headers: {
@@ -35,7 +44,7 @@ async function invoke() {
   );
 
   const result = await response.json();
-  
+
   if (response.ok) {
     console.log('\n✓ Success!\n');
     console.log('Results:');

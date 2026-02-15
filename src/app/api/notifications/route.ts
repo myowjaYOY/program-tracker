@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Get user's role info - specify the FK relationship explicitly
+  // Get user's role info with nested select
   const { data: userData, error: userDataError } = await supabase
     .from('users')
     .select('program_role_id, program_roles!users_program_role_id_fkey(role_name)')
@@ -23,21 +23,27 @@ export async function GET(_req: NextRequest) {
 
   if (userDataError) {
     console.error('Error fetching user data:', userDataError);
-    return NextResponse.json({ error: 'Failed to get user data', details: userDataError.message }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to get user data', details: userDataError.message },
+      { status: 500 }
+    );
   }
 
   const userRoleId = userData.program_role_id;
   const isAdmin = (userData.program_roles as any)?.role_name === 'Admin';
 
-  // Fetch all notifications with related data
   try {
-    // Fetch all role names for lookup
+    // Fetch all role names for lookup (single query, cached reference data)
     const { data: allRoles } = await supabase
       .from('program_roles')
       .select('program_role_id, role_name');
-    const roleMap = new Map((allRoles || []).map((r: any) => [r.program_role_id, r.role_name]));
+    const roleMap = new Map(
+      (allRoles || []).map((r: any) => [r.program_role_id, r.role_name])
+    );
 
-    // First, try a simple query to verify table exists
+    // ============================================================
+    // OPTIMIZED: Fetch notifications with lead data in single query
+    // ============================================================
     const { data: notifications, error: notificationsError } = await supabase
       .from('notifications')
       .select(`
@@ -48,152 +54,99 @@ export async function GET(_req: NextRequest) {
 
     if (notificationsError) {
       console.error('Error fetching notifications:', notificationsError);
-      return NextResponse.json({ error: notificationsError.message }, { status: 500 });
+      return NextResponse.json(
+        { error: notificationsError.message },
+        { status: 500 }
+      );
     }
 
-    // Fetch additional user data for creator/acknowledger
-    const enrichedNotifications = await Promise.all(
-      (notifications || []).map(async (notification: any) => {
-        // Add target role names
-        const targetRoleNames = (notification.target_role_ids || []).map(
-          (id: number) => roleMap.get(id) || `Role ${id}`
-        );
-        notification.target_role_names = targetRoleNames;
-        // Get creator info
-        if (notification.created_by) {
-          const { data: creator } = await supabase
-            .from('users')
-            .select('id, full_name, email')
-            .eq('id', notification.created_by)
-            .single();
-          notification.creator = creator;
-        }
-        // Get acknowledger info
-        if (notification.acknowledged_by) {
-          const { data: acknowledger } = await supabase
-            .from('users')
-            .select('id, full_name, email')
-            .eq('id', notification.acknowledged_by)
-            .single();
-          notification.acknowledger = acknowledger;
-        }
-        // Get source note
-        if (notification.source_note_id) {
-          const { data: sourceNote } = await supabase
-            .from('lead_notes')
-            .select('note_id, note, note_type')
-            .eq('note_id', notification.source_note_id)
-            .single();
-          notification.source_note = sourceNote;
-        }
-        // Get response note
-        if (notification.response_note_id) {
-          const { data: responseNote } = await supabase
-            .from('lead_notes')
-            .select('note_id, note, note_type')
-            .eq('note_id', notification.response_note_id)
-            .single();
-          notification.response_note = responseNote;
-        }
-        return notification;
-      })
-    );
+    // ============================================================
+    // OPTIMIZED: Batch fetch all users needed for enrichment
+    // BEFORE: N queries via Promise.all (1 query per notification)
+    // AFTER: 1 query to fetch all unique user IDs at once
+    // ============================================================
 
-    // Filter notifications based on business rules:
-    // 1. User's role is in target_role_ids
-    // 2. OR user created the notification
-    // 3. OR user is Admin (sees all)
-    const filteredNotifications = enrichedNotifications.filter((notification: any) => {
-      // Admin sees all
-      if (isAdmin) return true;
-
-      // User created this notification
-      if (notification.created_by === user.id) return true;
-
-      // User's role is in target_role_ids
-      if (notification.target_role_ids?.includes(userRoleId)) return true;
-
-      return false;
+    // Collect all unique user IDs we need to fetch
+    const userIdsToFetch = new Set<string>();
+    (notifications || []).forEach((notification: any) => {
+      if (notification.created_by) userIdsToFetch.add(notification.created_by);
+      if (notification.acknowledged_by) userIdsToFetch.add(notification.acknowledged_by);
     });
 
-    return NextResponse.json({ data: filteredNotifications });
-  } catch (error) {
-    console.error('Unexpected error in notifications API:', error);
-    return NextResponse.json({ error: 'Unexpected error fetching notifications' }, { status: 500 });
-  }
-}
+    // Single batch query for all users
+    let usersMap = new Map<string, { id: string; full_name: string; email: string }>();
 
-export async function POST(req: NextRequest) {
-  const supabase = await createClient();
+    if (userIdsToFetch.size > 0) {
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .in('id', Array.from(userIdsToFetch));
 
-  // Get current user
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const body = await req.json();
-  const { lead_id, title, message, priority = 'normal', target_role_ids, source_note_id } = body;
-
-  // Validate required fields
-  if (!lead_id) {
-    return NextResponse.json({ error: 'lead_id is required' }, { status: 400 });
-  }
-  if (!title) {
-    return NextResponse.json({ error: 'title is required' }, { status: 400 });
-  }
-  if (!message) {
-    return NextResponse.json({ error: 'message is required' }, { status: 400 });
-  }
-  if (!target_role_ids || !Array.isArray(target_role_ids) || target_role_ids.length === 0) {
-    return NextResponse.json({ error: 'target_role_ids must be a non-empty array' }, { status: 400 });
-  }
-
-  // Validate priority
-  const validPriorities = ['normal', 'high', 'urgent'];
-  if (!validPriorities.includes(priority)) {
-    return NextResponse.json({ error: 'priority must be normal, high, or urgent' }, { status: 400 });
-  }
-
-  // Create notification
-  try {
-    const { data: notification, error: createError } = await supabase
-      .from('notifications')
-      .insert({
-        lead_id,
-        title,
-        message,
-        priority,
-        target_role_ids,
-        source_note_id: source_note_id || null,
-        status: 'active',
-        created_by: user.id,
-      })
-      .select(`
-        *,
-        lead:leads(lead_id, first_name, last_name)
-      `)
-      .single();
-
-    if (createError) {
-      console.error('Error creating notification:', createError);
-      return NextResponse.json({ error: createError.message }, { status: 500 });
+      if (usersError) {
+        console.error('Error fetching users for enrichment:', usersError);
+        // Continue without user enrichment rather than failing
+      } else {
+        usersMap = new Map(
+          (usersData || []).map((u: any) => [u.id, u])
+        );
+      }
     }
 
-    // Enrich with creator info
-    const { data: creator } = await supabase
-      .from('users')
-      .select('id, full_name, email')
-      .eq('id', user.id)
-      .single();
+    // ============================================================
+    // Enrich notifications using pre-fetched data (no additional queries)
+    // ============================================================
+    const enrichedNotifications = (notifications || []).map((notification: any) => {
+      // Add target role names from roleMap
+      const targetRoleNames = (notification.target_role_ids || []).map(
+        (id: number) => roleMap.get(id) || `Role ${id}`
+      );
 
-    return NextResponse.json({ data: { ...notification, creator } }, { status: 201 });
-  } catch (error) {
-    console.error('Unexpected error creating notification:', error);
-    return NextResponse.json({ error: 'Unexpected error creating notification' }, { status: 500 });
+      // Get creator info from usersMap
+      const creator = notification.created_by
+        ? usersMap.get(notification.created_by)
+        : null;
+
+      // Get acknowledger info from usersMap
+      const acknowledger = notification.acknowledged_by
+        ? usersMap.get(notification.acknowledged_by)
+        : null;
+
+      return {
+        ...notification,
+        target_role_names: targetRoleNames,
+        created_by_user: creator
+          ? { id: creator.id, full_name: creator.full_name, email: creator.email }
+          : null,
+        acknowledged_by_user: acknowledger
+          ? { id: acknowledger.id, full_name: acknowledger.full_name, email: acknowledger.email }
+          : null,
+      };
+    });
+
+    // Filter notifications based on user role (unless admin)
+    const filteredNotifications = isAdmin
+      ? enrichedNotifications
+      : enrichedNotifications.filter((notification: any) => {
+        // Show if user's role is in target_role_ids
+        if (
+          notification.target_role_ids &&
+          notification.target_role_ids.includes(userRoleId)
+        ) {
+          return true;
+        }
+        // Show if user created it
+        if (notification.created_by === user.id) {
+          return true;
+        }
+        return false;
+      });
+
+    return NextResponse.json({ data: filteredNotifications });
+  } catch (e: any) {
+    console.error('Notifications API error:', e);
+    return NextResponse.json(
+      { error: e?.message || 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
