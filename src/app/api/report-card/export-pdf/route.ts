@@ -109,7 +109,10 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     console.log(`✅ PDF export completed in ${duration}ms`);
 
-    return new NextResponse(pdfBuffer, {
+    // Convert Buffer to Uint8Array for NextResponse compatibility with newer TypeScript/Next.js
+    const pdfBytes = new Uint8Array(pdfBuffer);
+
+    return new NextResponse(pdfBytes, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

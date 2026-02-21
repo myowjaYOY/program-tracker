@@ -13,11 +13,11 @@ export const printStyles = {
     border: '#e2e8f0',
   },
 
-  // Master page layout
+  // Master page layout — A4 dimensions (210mm × 297mm ≈ 8.27in × 11.69in)
   page: {
-    width: '8.5in',
-    minHeight: '11in',
-    padding: '0.4in',
+    width: '210mm',
+    minHeight: '297mm',
+    padding: '10mm',
     backgroundColor: '#ffffff',
     color: '#1e293b',
     fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
@@ -25,7 +25,7 @@ export const printStyles = {
     'print-color-adjust': 'exact',
     '@media print': {
       margin: 0,
-      padding: '0.4in',
+      padding: '10mm',
       '-webkit-print-color-adjust': 'exact',
       'print-color-adjust': 'exact',
     },

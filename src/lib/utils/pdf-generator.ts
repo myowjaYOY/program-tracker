@@ -55,7 +55,7 @@ export async function generateReportCardPdf(options: GeneratePdfOptions): Promis
     } as ReportCardPdfProps);
 
     // Render to buffer
-    const pdfBuffer = await renderToBuffer(element);
+    const pdfBuffer = await renderToBuffer(element as any);
 
     const duration = Date.now() - startTime;
     console.log(`✅ PDF generated successfully in ${duration}ms`);
