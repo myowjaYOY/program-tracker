@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Business as BusinessIcon } from '@mui/icons-material';
+import { useTenant } from '@/lib/contexts/TenantContext';
 import { useRouter, usePathname } from 'next/navigation';
 import {
   Box,
@@ -59,6 +61,7 @@ interface SidebarProps {
   user: User;
 }
 
+
 const mainNav = [
   { label: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   {
@@ -114,6 +117,11 @@ const operationsNav = [
 
 // Admin navigation with nested Lookup submenu
 const adminNav = [
+  {
+    label: 'Tenants',
+    icon: <BusinessIcon />,
+    path: '/dashboard/admin/tenants',
+  },
   {
     label: 'Audit Report',
     icon: <AuditIcon />,
@@ -207,6 +215,7 @@ const adminNav = [
 export default function Sidebar({ user }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { tenant } = useTenant();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const [openSection, setOpenSection] = useState<string | undefined>(undefined);
@@ -235,19 +244,28 @@ export default function Sidebar({ user }: SidebarProps) {
           boxShadow: { xs: 'none', md: '0 1px 8px rgba(0,0,0,0.03)' },
         }}
       >
-        {/* Logo */}
-        <Box
-          sx={{ p: 2, pt: 2, display: 'flex', alignItems: 'center', gap: 1 }}
-        >
-          <Logo />
-          <Typography
-            variant="h6"
-            fontWeight={700}
-            color="primary.main"
-            sx={{ ml: 1, fontSize: 18 }}
-          >
-            Program Tracker
-          </Typography>
+        {/* Logo & Tenant */}
+        <Box sx={{ p: 2, pt: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Logo />
+            <Typography
+              variant="h6"
+              fontWeight={700}
+              color="primary.main"
+              sx={{ ml: 1, fontSize: 18 }}
+            >
+              Program Tracker
+            </Typography>
+          </Box>
+          {tenant && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ pl: 0.5, mt: 0.5, display: 'block' }}
+            >
+              {tenant.tenant_name}
+            </Typography>
+          )}
         </Box>
 
         {/* Loading State */}
@@ -280,10 +298,10 @@ export default function Sidebar({ user }: SidebarProps) {
       isAdmin || permissions.includes('*') || permissions.includes(path);
 
     // Filter admin nav including submenu items
+    // Filter admin nav including submenu items
     const filteredAdminNav = adminNav
       .map(item => {
         if (item.submenu) {
-          // Filter submenu items based on permissions
           const filteredSubmenu = item.submenu.filter(subItem =>
             hasPermission(subItem.path)
           );
@@ -292,7 +310,10 @@ export default function Sidebar({ user }: SidebarProps) {
         return item;
       })
       .filter(item => {
-        // Show item if it has a path and user has permission, or if it's a submenu with visible items
+        // Tenants page is super-admin only
+        if (item.path === '/dashboard/admin/tenants') {
+          return userPermissions?.isSuperAdmin;
+        }
         return (
           (item.path && hasPermission(item.path)) ||
           (item.submenu && item.submenu.length > 0)
@@ -343,17 +364,28 @@ export default function Sidebar({ user }: SidebarProps) {
         boxShadow: { xs: 'none', md: '0 1px 8px rgba(0,0,0,0.03)' },
       }}
     >
-      {/* Logo */}
-      <Box sx={{ p: 2, pt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Logo />
-        <Typography
-          variant="h6"
-          fontWeight={700}
-          color="primary.main"
-          sx={{ ml: 1, fontSize: 18 }}
-        >
-          Program Tracker
-        </Typography>
+      {/* Logo & Tenant */}
+      <Box sx={{ p: 2, pt: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Logo />
+          <Typography
+            variant="h6"
+            fontWeight={700}
+            color="primary.main"
+            sx={{ ml: 1, fontSize: 18 }}
+          >
+            Program Tracker
+          </Typography>
+        </Box>
+        {tenant && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ pl: 0.5, mt: 0.5, display: 'block' }}
+          >
+            {tenant.tenant_name}
+          </Typography>
+        )}
       </Box>
       {/* Scrollable Menu Section */}
       <Box

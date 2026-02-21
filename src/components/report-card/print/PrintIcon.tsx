@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Box, SxProps, Theme } from '@mui/material';
+import { SxProps, Theme } from '@mui/material';
+import { styled } from '@mui/material/styles';
 import { getUiIcon, getMsqDomainIcon, getPromisDomainIcon } from '@/lib/utils/pdf-icons';
 
 interface PrintIconProps {
@@ -12,11 +13,19 @@ interface PrintIconProps {
     sx?: SxProps<Theme>;
 }
 
+/**
+ * Styled span that supports the sx prop.
+ * Using a <span> instead of MUI <Box> to avoid rendering a <div>,
+ * which causes hydration errors when PrintIcon is nested inside
+ * <Typography> (renders <p>). <span> is valid inline content inside <p>.
+ */
+const IconSpan = styled('span')({});
+
 export default function PrintIcon({
     type,
     name,
     size = 20,
-    color = 'currentColor', // Default color
+    color = 'currentColor',
     sx
 }: PrintIconProps) {
     let iconHtml = '';
@@ -32,7 +41,7 @@ export default function PrintIcon({
     }
 
     return (
-        <Box
+        <IconSpan
             sx={{
                 display: 'inline-flex',
                 alignItems: 'center',

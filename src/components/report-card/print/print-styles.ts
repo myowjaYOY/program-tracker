@@ -21,17 +21,17 @@ export const printStyles = {
     backgroundColor: '#ffffff',
     color: '#1e293b',
     fontFamily: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    '-webkit-print-color-adjust': 'exact',
-    'print-color-adjust': 'exact',
+    WebkitPrintColorAdjust: 'exact' as const,
+    printColorAdjust: 'exact' as const,
     '@media print': {
       margin: 0,
       padding: '10mm',
-      '-webkit-print-color-adjust': 'exact',
-      'print-color-adjust': 'exact',
+      WebkitPrintColorAdjust: 'exact' as const,
+      printColorAdjust: 'exact' as const,
     },
     '& *': {
-      '-webkit-print-color-adjust': 'exact',
-      'print-color-adjust': 'exact',
+      WebkitPrintColorAdjust: 'exact' as const,
+      printColorAdjust: 'exact' as const,
     }
   },
 

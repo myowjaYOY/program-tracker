@@ -8,6 +8,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { CssBaseline } from '@mui/material';
 import { Toaster } from 'sonner';
 import { theme } from '@/styles/theme';
+import { TenantProvider } from '@/lib/contexts/TenantContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +29,9 @@ export function Providers({ children }: ProvidersProps) {
       <ThemeProvider theme={theme}>
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <CssBaseline />
-          {children}
+          <TenantProvider>
+            {children}
+          </TenantProvider>
           <Toaster position="top-right" duration={4000} theme="dark" />
           <ReactQueryDevtools initialIsOpen={false} />
         </LocalizationProvider>

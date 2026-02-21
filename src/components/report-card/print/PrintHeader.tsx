@@ -21,9 +21,10 @@ export default function PrintHeader({
       {/* Title & Member Info */}
       <Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-          <div
+          {/* Use <span> instead of <div> to avoid nesting block element issues */}
+          <span
             dangerouslySetInnerHTML={{ __html: getUiIcon('report', { size: 36, color: '#ffffff' }) }}
-            style={{ display: 'flex', alignItems: 'center' }}
+            style={{ display: 'inline-flex', alignItems: 'center' }}
           />
           <Typography
             variant="h1"

@@ -18,6 +18,7 @@ export function useUserPermissions() {
     queryKey: ['user-permissions', user?.id], // Include user ID in query key
     queryFn: async (): Promise<{
       isAdmin: boolean;
+      isSuperAdmin: boolean;
       permissions: string[];
       isActive: boolean;
     }> => {
@@ -25,7 +26,7 @@ export function useUserPermissions() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          return { isAdmin: false, permissions: [], isActive: false };
+          return { isAdmin: false, isSuperAdmin: false, permissions: [], isActive: false };
         }
         throw new Error('Failed to fetch user permissions');
       }
@@ -33,6 +34,7 @@ export function useUserPermissions() {
       const data = await response.json();
       return {
         isAdmin: data.isAdmin,
+        isSuperAdmin: data.isSuperAdmin ?? false,
         permissions: data.permissions || [],
         isActive: data.isActive,
       };
