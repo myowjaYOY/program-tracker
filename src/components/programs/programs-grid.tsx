@@ -182,13 +182,17 @@ const memberProgramColumns: GridColDef[] = [
 interface ProgramsGridProps {
   onProgramSelect: (program: MemberPrograms | null) => void;
   selectedProgram: MemberPrograms | null;
+  initialData?: MemberPrograms[];
 }
 
 export default function ProgramsGrid({
   onProgramSelect,
   selectedProgram,
+  initialData,
 }: ProgramsGridProps) {
-  const { data: programs, isLoading, error } = useMemberPrograms();
+  const { data: programs = initialData, isLoading, error } = useMemberPrograms({
+    initialData
+  });
   const deleteProgram = useDeleteMemberProgram();
 
   const handleDelete = (id: string | number) => {

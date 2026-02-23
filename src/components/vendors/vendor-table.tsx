@@ -55,8 +55,14 @@ const vendorColumns: GridColDef[] = [
   commonColumns.updatedBy,
 ];
 
-export default function VendorTable() {
-  const { data: vendors, isLoading, error } = useVendors();
+interface VendorTableProps {
+  initialData?: Vendors[];
+}
+
+export default function VendorTable({ initialData }: VendorTableProps = {}) {
+  const { data: vendors = initialData, isLoading, error } = useVendors({
+    initialData
+  });
   const deleteVendor = useDeleteVendor();
 
   const handleDelete = (id: string | number) => {
@@ -86,15 +92,15 @@ export default function VendorTable() {
     const formData: Partial<VendorFormData> & { vendor_id?: number } =
       initialValues
         ? {
-            vendor_name: initialValues.vendor_name || '',
-            contact_person: initialValues.contact_person || '',
-            phone: initialValues.phone || '',
-            email: initialValues.email || undefined,
-            active_flag: initialValues.active_flag,
-            ...(initialValues.vendor_id && {
-              vendor_id: initialValues.vendor_id,
-            }),
-          }
+          vendor_name: initialValues.vendor_name || '',
+          contact_person: initialValues.contact_person || '',
+          phone: initialValues.phone || '',
+          email: initialValues.email || undefined,
+          active_flag: initialValues.active_flag,
+          ...(initialValues.vendor_id && {
+            vendor_id: initialValues.vendor_id,
+          }),
+        }
         : {};
 
     return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import {
   therapyTaskSchema,
   TherapyTaskFormData,
@@ -7,14 +8,11 @@ import {
 
 export async function GET(_req: NextRequest) {
   // STANDARD: Always join to public.users for created_by/updated_by for all entity APIs
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   // Join therapy_tasks to users, therapies, and program_roles
   const { data, error } = await supabase.from('therapy_tasks').select(`*,
       created_user:users!therapy_tasks_created_by_fkey(id,email,full_name),
@@ -41,14 +39,11 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   let body: TherapyTaskFormData;
   try {
     body = await req.json();

@@ -40,10 +40,10 @@ export default function PillarForm({
   const updatePillar = useUpdatePillar();
 
   const onSubmit = async (values: PillarFormData) => {
-    if (isEdit && initialValues?.pillar_id) {
+    if (isEdit && initialValues?.pillar_id != null) {
       await updatePillar.mutateAsync({
-        ...values,
-        id: String(initialValues.pillar_id),
+        id: initialValues.pillar_id,
+        data: values,
       });
     } else {
       await createPillar.mutateAsync(values);

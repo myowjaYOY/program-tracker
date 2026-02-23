@@ -40,10 +40,10 @@ export default function BucketForm({
   const updateBucket = useUpdateBucket();
 
   const onSubmit = async (values: BucketFormData) => {
-    if (isEdit && initialValues?.bucket_id) {
+    if (isEdit && initialValues?.bucket_id != null) {
       await updateBucket.mutateAsync({
         id: initialValues.bucket_id,
-        data: { ...values, id: initialValues.bucket_id },
+        data: values,
       });
     } else {
       await createBucket.mutateAsync(values);

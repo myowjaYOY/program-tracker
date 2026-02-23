@@ -75,10 +75,10 @@ const onSubmit = async (values: LeadFormData) => {
       active_flag: values.active_flag,
     };
 
-    if (isEdit && initialValues?.lead_id) {
+    if (isEdit && initialValues?.lead_id != null) {
       await updateLead.mutateAsync({
-        ...leadData,
-        id: String(initialValues.lead_id),
+        id: initialValues.lead_id,
+        data: leadData,
       });
     } else {
       await createLead.mutateAsync(leadData);

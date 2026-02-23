@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import { leadUpdateSchema, LeadUpdateData } from '@/lib/validations/lead';
 
 export async function GET(
   req: NextRequest,
   context: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   const { id } = await context.params;
   const { data, error } = await supabase
     .from('leads')
@@ -44,14 +42,11 @@ export async function PUT(
   req: NextRequest,
   context: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   const { id } = await context.params;
   let body: LeadUpdateData;
   try {
@@ -124,14 +119,11 @@ export async function DELETE(
   req: NextRequest,
   context: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   const { id } = await context.params;
   // Add referential integrity checks here if needed
   const { error } = await supabase.from('leads').delete().eq('lead_id', id);

@@ -40,10 +40,10 @@ export default function StatusForm({
   const updateStatus = useUpdateStatus();
 
   const onSubmit = async (values: StatusFormData) => {
-    if (isEdit && initialValues?.status_id) {
+    if (isEdit && initialValues?.status_id != null) {
       await updateStatus.mutateAsync({
-        ...values,
-        id: String(initialValues.status_id),
+        id: initialValues.status_id,
+        data: values,
       });
     } else {
       await createStatus.mutateAsync(values);

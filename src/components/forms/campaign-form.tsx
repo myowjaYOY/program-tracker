@@ -71,10 +71,10 @@ export default function CampaignForm({
       active_flag: values.active_flag,
     };
 
-    if (isEdit && initialValues?.campaign_id) {
+    if (isEdit && initialValues?.campaign_id != null) {
       await updateCampaign.mutateAsync({
-        ...campaignData,
-        id: String(initialValues.campaign_id),
+        id: initialValues.campaign_id,
+        data: campaignData,
       });
     } else {
       await createCampaign.mutateAsync(campaignData);

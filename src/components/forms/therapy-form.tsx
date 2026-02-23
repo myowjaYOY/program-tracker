@@ -95,10 +95,10 @@ export default function TherapyForm({
   }
 
   const onSubmit = async (values: TherapyFormData) => {
-    if (isEdit && initialValues?.therapy_id) {
+    if (isEdit && initialValues?.therapy_id != null) {
       await updateTherapy.mutateAsync({
-        ...values,
-        id: String(initialValues.therapy_id),
+        id: initialValues.therapy_id,
+        data: values,
       });
     } else {
       await createTherapy.mutateAsync(values);

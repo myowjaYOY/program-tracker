@@ -1,67 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import { leadSchema, LeadFormData } from '@/lib/validations/lead';
 
 export async function GET(_req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
-  // Join to users for created_by/updated_by and campaigns/status for names
-  const { data, error } = await supabase.from('leads').select(`*,
+  const { supabase } = auth;
+  
+  // OPTIMIZED: Fetch leads with related data in parallel
+  const [leadsResult, notesResult, followUpNotesResult] = await Promise.all([
+    // Main leads query with joins
+    supabase.from('leads').select(`*,
       created_user:users!leads_created_by_fkey(id,email,full_name),
       updated_user:users!leads_updated_by_fkey(id,email,full_name),
       campaign:campaigns!leads_campaign_id_fkey(campaign_id,campaign_name),
       status:status!leads_status_id_fkey(status_id,status_name)
-    `);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-  // Get note counts for each lead
-  const leadIds = (data || []).map((lead: any) => lead.lead_id).filter(Boolean);
-  let noteCounts: Record<number, number> = {};
-  let lastFollowUpNotes: Record<number, string> = {};
-  
-  if (leadIds.length > 0) {
-    const { data: notesData, error: notesError } = await supabase
+    `),
+    // Fetch all notes for counting (single query instead of per-lead)
+    supabase
       .from('lead_notes')
       .select('lead_id')
-      .in('lead_id', leadIds);
-    
-    if (notesError) {
-      console.error('Error fetching note counts:', notesError);
-    }
-    
-    // Count notes per lead
-    (notesData || []).forEach((note: any) => {
-      noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
-    });
-
-    // Get last Follow-Up note for each lead
-    const { data: followUpNotes, error: followUpError } = await supabase
+      .not('lead_id', 'is', null),
+    // Fetch follow-up notes with ordering (single query, filter in memory)
+    supabase
       .from('lead_notes')
       .select('lead_id, note, created_at')
-      .in('lead_id', leadIds)
       .eq('note_type', 'Follow-Up')
-      .order('created_at', { ascending: false });
-    
-    if (followUpError) {
-      console.error('Error fetching follow-up notes:', followUpError);
-    }
-    
-    // Get the most recent Follow-Up note per lead
-    (followUpNotes || []).forEach((note: any) => {
-      if (!lastFollowUpNotes[note.lead_id]) {
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (leadsResult.error) {
+    return NextResponse.json({ error: leadsResult.error.message }, { status: 500 });
+  }
+
+  const data = leadsResult.data || [];
+  const leadIds = data.map((lead: any) => lead.lead_id).filter(Boolean);
+  
+  // Build note counts map (single pass)
+  const noteCounts: Record<number, number> = {};
+  if (notesResult.data && leadIds.length > 0) {
+    notesResult.data.forEach((note: any) => {
+      if (leadIds.includes(note.lead_id)) {
+        noteCounts[note.lead_id] = (noteCounts[note.lead_id] || 0) + 1;
+      }
+    });
+  }
+
+  // Build last follow-up note map (single pass, most recent first)
+  const lastFollowUpNotes: Record<number, string> = {};
+  if (followUpNotesResult.data && leadIds.length > 0) {
+    followUpNotesResult.data.forEach((note: any) => {
+      if (leadIds.includes(note.lead_id) && !lastFollowUpNotes[note.lead_id]) {
         lastFollowUpNotes[note.lead_id] = note.note;
       }
     });
   }
 
-  const mapped = (data || []).map(lead => ({
+  const mapped = data.map(lead => ({
     ...lead,
     created_by_email: lead.created_user?.email || null,
     created_by_name: lead.created_user?.full_name || null,
@@ -72,18 +69,16 @@ export async function GET(_req: NextRequest) {
     note_count: noteCounts[lead.lead_id] || 0,
     last_followup_note: lastFollowUpNotes[lead.lead_id] || null,
   }));
+  
   return NextResponse.json({ data: mapped }, { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   let body: LeadFormData;
   try {
     body = await req.json();

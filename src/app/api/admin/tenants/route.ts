@@ -1,39 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { verifySuperAdmin } from '@/lib/auth/admin';
 
 /**
  * GET /api/admin/tenants
- * List all tenants (super admin only).
- * Uses service_role to bypass RLS.
+ * List all tenants with user counts and stats. Super admin only.
  */
 export async function GET() {
     try {
-        const supabase = await createClient();
-
-        // Verify the requesting user is authenticated and is a super admin
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
-        if (authError || !session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const auth = await verifySuperAdmin();
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error }, { status: auth.status });
         }
+        const { adminSupabase } = auth;
 
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('is_admin, is_super_admin')
-            .eq('id', session.user.id)
-            .single();
-
-        if (userError || !user?.is_super_admin) {
-            return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
-        }
-
-        // Use service_role to bypass RLS and see all tenants
-        const adminSupabase = createSupabaseClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { auth: { autoRefreshToken: false, persistSession: false } }
-        );
-
+        // Fetch all tenants
         const { data: tenants, error: tenantsError } = await adminSupabase
             .from('tenants')
             .select('*')
@@ -44,17 +24,21 @@ export async function GET() {
             return NextResponse.json({ error: 'Failed to fetch tenants' }, { status: 500 });
         }
 
-        // Enrich with user counts per tenant
-        const enrichedTenants = await Promise.all(
-            (tenants || []).map(async (tenant) => {
-                const { count } = await adminSupabase
-                    .from('users')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('tenant_id', tenant.tenant_id);
+        // Enrich with stats using a single aggregation query instead of N+1
+        const { data: userCounts } = await adminSupabase
+            .from('users')
+            .select('tenant_id')
+            .not('tenant_id', 'is', null);
 
-                return { ...tenant, user_count: count || 0 };
-            })
-        );
+        const countMap: Record<string, number> = {};
+        (userCounts || []).forEach((u: { tenant_id: string }) => {
+            countMap[u.tenant_id] = (countMap[u.tenant_id] || 0) + 1;
+        });
+
+        const enrichedTenants = (tenants || []).map((tenant) => ({
+            ...tenant,
+            user_count: countMap[tenant.tenant_id] || 0,
+        }));
 
         return NextResponse.json({ tenants: enrichedTenants });
     } catch (error) {
@@ -65,27 +49,15 @@ export async function GET() {
 
 /**
  * POST /api/admin/tenants
- * Create a new tenant (super admin only).
+ * Create a new tenant. Super admin only.
  */
 export async function POST(request: NextRequest) {
     try {
-        const supabase = await createClient();
-
-        // Verify admin
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
-        if (authError || !session) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const auth = await verifySuperAdmin();
+        if (!auth.authorized) {
+            return NextResponse.json({ error: auth.error }, { status: auth.status });
         }
-
-        const { data: user, error: userError } = await supabase
-            .from('users')
-            .select('is_admin, is_super_admin')
-            .eq('id', session.user.id)
-            .single();
-
-        if (userError || !user?.is_super_admin) {
-            return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
-        }
+        const { adminSupabase } = auth;
 
         const body = await request.json();
         const {
@@ -105,21 +77,24 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Validate slug format (lowercase alphanumeric + hyphens)
-        if (!/^[a-z0-9-]+$/.test(tenant_slug)) {
+        // Validate slug format
+        if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(tenant_slug) || tenant_slug.length < 2) {
             return NextResponse.json(
-                { error: 'tenant_slug must be lowercase alphanumeric with hyphens only' },
+                { error: 'tenant_slug must be lowercase alphanumeric with hyphens, min 2 chars, no leading/trailing hyphens' },
                 { status: 400 }
             );
         }
 
-        const adminSupabase = createSupabaseClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { auth: { autoRefreshToken: false, persistSession: false } }
-        );
+        // Reserved slugs
+        const reserved = ['admin', 'api', 'app', 'www', 'mail', 'ftp', 'dashboard', 'super-admin', 'platform'];
+        if (reserved.includes(tenant_slug)) {
+            return NextResponse.json(
+                { error: `"${tenant_slug}" is a reserved slug` },
+                { status: 400 }
+            );
+        }
 
-        // Check for slug uniqueness
+        // Check uniqueness
         const { data: existing } = await adminSupabase
             .from('tenants')
             .select('tenant_id')
@@ -152,6 +127,18 @@ export async function POST(request: NextRequest) {
             console.error('Error creating tenant:', createError);
             return NextResponse.json({ error: 'Failed to create tenant' }, { status: 500 });
         }
+
+        // Log the creation
+        await adminSupabase
+            .from('super_admin_audit_log')
+            .insert({
+                admin_user_id: auth.session!.user.id,
+                admin_email: auth.user!.email,
+                action: 'tenant_create',
+                target_tenant_id: newTenant.tenant_id,
+                target_tenant_name: newTenant.tenant_name,
+                details: { subscription_tier, max_users },
+            });
 
         return NextResponse.json({ tenant: newTenant }, { status: 201 });
     } catch (error) {

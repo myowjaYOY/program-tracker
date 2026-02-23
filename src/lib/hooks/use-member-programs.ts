@@ -7,8 +7,8 @@ export const memberProgramKeys = {
   detail: (id: number) => [...memberProgramKeys.all, 'detail', id] as const,
 };
 
-export function useMemberPrograms() {
-  return useQuery({
+export function useMemberPrograms(options?: { initialData?: MemberPrograms[] | undefined }) {
+  return useQuery<MemberPrograms[], Error>({
     queryKey: memberProgramKeys.list(),
     queryFn: async () => {
       const res = await fetch('/api/member-programs', {
@@ -19,6 +19,7 @@ export function useMemberPrograms() {
         throw new Error(json.error || 'Failed to fetch member programs');
       return json.data as MemberPrograms[];
     },
+    ...(options as any),
   });
 }
 

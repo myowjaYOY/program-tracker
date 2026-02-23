@@ -51,9 +51,9 @@ export default function FinancingTypesForm({
 
   const onSubmit = async (data: FinancingTypesFormData) => {
     try {
-      if (isEdit && initialValues?.financing_type_id) {
+      if (isEdit && initialValues?.financing_type_id != null) {
         await updateFinancingTypes.mutateAsync({
-          id: initialValues.financing_type_id.toString(),
+          id: initialValues.financing_type_id,
           data,
         });
       } else {

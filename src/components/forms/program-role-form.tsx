@@ -49,10 +49,10 @@ export default function ProgramRoleForm({
   const updateProgramRole = useUpdateProgramRole();
 
   const onSubmit = async (values: ProgramRolesFormData) => {
-    if (isEdit && initialValues?.program_role_id) {
+    if (isEdit && initialValues?.program_role_id != null) {
       await updateProgramRole.mutateAsync({
-        ...values,
-        id: String(initialValues.program_role_id),
+        id: initialValues.program_role_id,
+        data: values,
       });
     } else {
       await createProgramRole.mutateAsync(values);

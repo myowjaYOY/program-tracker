@@ -49,9 +49,9 @@ export default function PaymentMethodsForm({
 
   const onSubmit = async (data: PaymentMethodsFormData) => {
     try {
-      if (isEdit && initialValues?.payment_method_id) {
+      if (isEdit && initialValues?.payment_method_id != null) {
         await updatePaymentMethods.mutateAsync({
-          id: initialValues.payment_method_id.toString(),
+          id: initialValues.payment_method_id,
           data,
         });
       } else {

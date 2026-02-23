@@ -11,19 +11,15 @@ import { getUserDisplayName } from '@/lib/utils/item-request-status';
 import LeadForm from '@/components/forms/lead-form';
 import { useLeads, useDeleteLead } from '@/lib/hooks/use-leads';
 import { Leads } from '@/types/database.types';
+import { LeadWithMetadata } from '@/lib/data/leads';
 import { LeadFormData } from '@/lib/validations/lead';
 import EditNoteIcon from '@mui/icons-material/EditNote';
 import { LeadNotesModal } from '@/components/notes';
 
-// Extend Leads to satisfy BaseEntity interface
-interface LeadEntity extends Omit<Leads, 'created_at' | 'updated_at'> {
+interface LeadEntity extends Omit<LeadWithMetadata, 'created_at' | 'updated_at'> {
   id: string | number;
   created_at: string;
   updated_at: string;
-  status_name?: string; // Add status name for display
-  campaign_name?: string; // Add campaign name for display
-  note_count?: number; // Add note count for display
-  last_followup_note?: string | null; // Add last Follow-Up note for tooltip
 }
 
 // Lead-specific columns
@@ -38,9 +34,9 @@ const leadColumns: GridColDef[] = [
       const noteCount = row.note_count || 0;
       const leadName = `${row.first_name || ''} ${row.last_name || ''}`.trim() || `Lead #${row.lead_id}`;
       const leadId = row.lead_id;
-      
+
       if (!leadId) return null;
-      
+
       return (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Tooltip title={`View/Add Notes for ${leadName}`}>
@@ -50,9 +46,9 @@ const leadColumns: GridColDef[] = [
                 // This will be handled by the component
                 (window as any).openLeadNotesModal?.(leadId, leadName);
               }}
-              sx={{ 
+              sx={{
                 color: noteCount > 0 ? 'primary.main' : 'text.secondary',
-                '&:hover': { 
+                '&:hover': {
                   backgroundColor: 'primary.50',
                   color: 'primary.main'
                 }
@@ -196,10 +192,15 @@ const leadColumns: GridColDef[] = [
 
 interface LeadTableProps {
   title?: string;
+  initialData?: LeadWithMetadata[]; // Optional initial data from SSR
 }
 
-export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
-  const { data: leads, isLoading, error } = useLeads();
+export default function LeadTable({ title = 'Leads', initialData }: LeadTableProps) {
+  // Use initialData if provided (from SSR), otherwise fetch client-side
+  // React Query will use initialData for immediate render, then refetch in background
+  const { data: leads, isLoading, error } = useLeads(
+    initialData ? { initialData } : undefined
+  );
   const deleteLead = useDeleteLead();
 
   // Notes modal state
@@ -250,16 +251,16 @@ export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
     if (!open) return null;
     const formData: Partial<LeadFormData> & { lead_id?: number } = initialValues
       ? {
-          first_name: initialValues.first_name || '',
-          last_name: initialValues.last_name || '',
-          email: initialValues.email || '',
-          phone: initialValues.phone || '',
-          status_id: initialValues.status_id || 0,
-          campaign_id: initialValues.campaign_id || 0,
-          pmedate: initialValues.pmedate || '',
-          active_flag: initialValues.active_flag ?? true,
-          ...(initialValues.lead_id && { lead_id: initialValues.lead_id }),
-        }
+        first_name: initialValues.first_name || '',
+        last_name: initialValues.last_name || '',
+        email: initialValues.email || '',
+        phone: initialValues.phone || '',
+        status_id: initialValues.status_id || 0,
+        campaign_id: initialValues.campaign_id || 0,
+        pmedate: initialValues.pmedate || '',
+        active_flag: initialValues.active_flag ?? true,
+        ...(initialValues.lead_id && { lead_id: initialValues.lead_id }),
+      }
       : {};
     return (
       <LeadForm initialValues={formData} onSuccess={onClose} mode={mode} />
@@ -271,8 +272,6 @@ export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
     id: lead.lead_id,
     created_at: lead.created_at || new Date().toISOString(),
     updated_at: lead.updated_at || new Date().toISOString(),
-    created_by: (lead as any).created_by_email || '-',
-    updated_by: (lead as any).updated_by_email || '-',
   }));
 
   return (

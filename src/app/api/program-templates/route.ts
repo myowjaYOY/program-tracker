@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase } = auth;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -61,15 +57,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
 
   try {
     const body = await req.json();
@@ -89,8 +81,8 @@ export async function POST(req: NextRequest) {
       total_cost: 0,
       total_charge: 0,
       margin_percentage: 0,
-      created_by: session.user.id,
-      updated_by: session.user.id,
+      created_by: user.id,
+      updated_by: user.id,
     };
 
     const { data, error } = await supabase

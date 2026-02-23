@@ -44,7 +44,7 @@ export default function TenantForm({
         formState: { errors },
         watch,
         setValue,
-    } = useForm<TenantFormData>({
+    } = useForm<any>({
         resolver: zodResolver(tenantSchema),
         defaultValues: {
             tenant_name: initialValues?.tenant_name || '',
@@ -97,7 +97,7 @@ export default function TenantForm({
                                 {...field}
                                 label="Organization Name"
                                 error={!!errors.tenant_name}
-                                helperText={errors.tenant_name?.message}
+                                helperText={errors.tenant_name?.message as string}
                                 fullWidth
                                 required
                             />
@@ -113,7 +113,7 @@ export default function TenantForm({
                                 label="URL Slug"
                                 error={!!errors.tenant_slug}
                                 helperText={
-                                    errors.tenant_slug?.message ||
+                                    (errors.tenant_slug?.message as string) ||
                                     `Access URL: ${field.value || 'slug'}.yourdomain.com`
                                 }
                                 fullWidth
@@ -133,7 +133,7 @@ export default function TenantForm({
                                     value={field.value || ''}
                                     label="Contact Name"
                                     error={!!errors.contact_name}
-                                    helperText={errors.contact_name?.message}
+                                    helperText={errors.contact_name?.message as string}
                                     fullWidth
                                 />
                             )}
@@ -148,7 +148,7 @@ export default function TenantForm({
                                     value={field.value || ''}
                                     label="Contact Email"
                                     error={!!errors.contact_email}
-                                    helperText={errors.contact_email?.message}
+                                    helperText={errors.contact_email?.message as string}
                                     fullWidth
                                 />
                             )}
@@ -165,7 +165,7 @@ export default function TenantForm({
                                     select
                                     label="Subscription Tier"
                                     error={!!errors.subscription_tier}
-                                    helperText={errors.subscription_tier?.message}
+                                    helperText={errors.subscription_tier?.message as string}
                                     fullWidth
                                 >
                                     {SUBSCRIPTION_TIERS.map((tier) => (
@@ -187,7 +187,7 @@ export default function TenantForm({
                                     label="Max Users"
                                     type="number"
                                     error={!!errors.max_users}
-                                    helperText={errors.max_users?.message}
+                                    helperText={errors.max_users?.message as string}
                                     fullWidth
                                     inputProps={{ min: 1, max: 10000 }}
                                 />

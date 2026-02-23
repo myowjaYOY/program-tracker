@@ -57,10 +57,10 @@ export default function VendorForm({
   };
 
   const onSubmit = async (values: VendorFormData) => {
-    if (isEdit && initialValues?.vendor_id) {
+    if (isEdit && initialValues?.vendor_id != null) {
       await updateVendor.mutateAsync({
-        ...values,
-        id: String(initialValues.vendor_id),
+        id: initialValues.vendor_id,
+        data: values,
       });
     } else {
       await createVendor.mutateAsync(values);

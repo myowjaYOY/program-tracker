@@ -76,8 +76,14 @@ const campaignColumns: GridColDef[] = [
   commonColumns.updatedBy,
 ];
 
-export default function CampaignTable() {
-  const { data: campaigns, isLoading, error } = useCampaigns();
+interface CampaignTableProps {
+  initialData?: Campaigns[];
+}
+
+export default function CampaignTable({ initialData }: CampaignTableProps = {}) {
+  const { data: campaigns = initialData, isLoading, error } = useCampaigns({
+    initialData
+  });
   const { data: vendors = [] } = useActiveVendors();
   const deleteCampaign = useDeleteCampaign();
 
@@ -107,18 +113,18 @@ export default function CampaignTable() {
     const formData: Partial<CampaignFormData> & { campaign_id?: number } =
       initialValues
         ? {
-            campaign_name: initialValues.campaign_name || '',
-            campaign_date: initialValues.campaign_date || '',
-            description: initialValues.description || '',
-            confirmed_count: initialValues.confirmed_count || 0,
-            vendor_id: initialValues.vendor_id || 0,
-            ad_spend: initialValues.ad_spend || null,
-            food_cost: initialValues.food_cost || null,
-            active_flag: initialValues.active_flag || true,
-            ...(initialValues.campaign_id && {
-              campaign_id: initialValues.campaign_id,
-            }),
-          }
+          campaign_name: initialValues.campaign_name || '',
+          campaign_date: initialValues.campaign_date || '',
+          description: initialValues.description || '',
+          confirmed_count: initialValues.confirmed_count || 0,
+          vendor_id: initialValues.vendor_id || 0,
+          ad_spend: initialValues.ad_spend || null,
+          food_cost: initialValues.food_cost || null,
+          active_flag: initialValues.active_flag || true,
+          ...(initialValues.campaign_id && {
+            campaign_id: initialValues.campaign_id,
+          }),
+        }
         : {};
 
     return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import {
   financingTypesSchema,
   FinancingTypesFormData,
@@ -7,14 +8,11 @@ import {
 
 export async function GET(_req: NextRequest) {
   // STANDARD: Always join to public.users for created_by/updated_by for all entity APIs
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   // Join financing_types to users for created_by and updated_by
   const { data, error } = await supabase.from('financing_types').select(`*,
       created_user:users!financing_types_created_by_fkey(id,email,full_name),
@@ -35,14 +33,11 @@ export async function GET(_req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (userError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
   let body: FinancingTypesFormData;
   try {
     body = await req.json();

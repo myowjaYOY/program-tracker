@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/metrics
@@ -9,14 +10,11 @@ import { ProgramStatusService } from '@/lib/services/program-status-service';
 // - apptsDueToday: item schedules scheduled today, incomplete, Active programs only
 // - programChangesThisWeek: count from program_changes view (Active programs only)
 export async function GET(_req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
 
   try {
     const today = new Date();

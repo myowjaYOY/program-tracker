@@ -48,10 +48,10 @@ export default function ProgramStatusForm({
   const updateProgramStatus = useUpdateProgramStatus();
 
   const onSubmit = async (values: ProgramStatusFormData) => {
-    if (isEdit && initialValues?.program_status_id) {
+    if (isEdit && initialValues?.program_status_id != null) {
       await updateProgramStatus.mutateAsync({
-        ...values,
-        id: String(initialValues.program_status_id),
+        id: initialValues.program_status_id,
+        data: values,
       });
     } else {
       await createProgramStatus.mutateAsync(values);

@@ -40,10 +40,10 @@ export default function BodyForm({
   const updateBody = useUpdateBody();
 
   const onSubmit = async (values: BodyFormData) => {
-    if (isEdit && initialValues?.body_id) {
+    if (isEdit && initialValues?.body_id != null) {
       await updateBody.mutateAsync({
-        ...values,
-        id: String(initialValues.body_id),
+        id: initialValues.body_id,
+        data: values,
       });
     } else {
       await createBody.mutateAsync(values);

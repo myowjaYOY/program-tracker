@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import { ProgramStatusService } from '@/lib/services/program-status-service';
 
 // GET /api/coordinator/program-changes?range=today|week|month|all|custom&start=&end=&unique_only=true&limit=7
 // Returns rows from vw_audit_member_changes for Active programs only; supports unique grouping and limiting
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user } = auth;
 
   const { searchParams } = new URL(req.url);
   const range = (searchParams.get('range') || 'all').toLowerCase();

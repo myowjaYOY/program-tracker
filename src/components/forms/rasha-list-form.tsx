@@ -41,10 +41,10 @@ export default function RashaListForm({
   const updateRashaList = useUpdateRashaList();
 
   const onSubmit = async (values: RashaListFormData) => {
-    if (isEdit && initialValues?.rasha_list_id) {
+    if (isEdit && initialValues?.rasha_list_id != null) {
       await updateRashaList.mutateAsync({
-        ...values,
-        id: String(initialValues.rasha_list_id),
+        id: initialValues.rasha_list_id,
+        data: values,
       });
     } else {
       await createRashaList.mutateAsync(values);
