@@ -1,14 +1,24 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { TextField, Switch, FormControlLabel, MenuItem } from '@mui/material';
+import {
+  Box,
+  TextField,
+  Switch,
+  FormControlLabel,
+  MenuItem,
+} from '@mui/material';
 import { LeadFormData, leadSchema } from '@/lib/validations/lead';
 import BaseForm from './base-form';
 import { useCreateLead, useUpdateLead } from '@/lib/hooks/use-leads';
 import { useActiveStatus } from '@/lib/hooks/use-status';
 import { useActiveCampaigns } from '@/lib/hooks/use-campaigns';
+import {
+  getAllowedStatusNames,
+  CREATE_MODE_STATUS_NAMES,
+} from '@/lib/lead-status-transitions';
 
 interface LeadFormProps {
   initialValues?: Partial<LeadFormData> & { lead_id?: number };
@@ -48,6 +58,33 @@ export default function LeadForm({
   const updateLead = useUpdateLead();
   const { data: statuses } = useActiveStatus();
   const { data: campaigns } = useActiveCampaigns();
+
+  // In create mode, default status to "Confirmed" when statuses load
+  useEffect(() => {
+    if (!isEdit && statuses?.length) {
+      const confirmed = statuses.find((s) => s.status_name === 'Confirmed');
+      if (confirmed) setValue('status_id', confirmed.status_id);
+    }
+  }, [isEdit, statuses, setValue]);
+
+  // All statuses sorted (full list shown); Set of names that are enabled (not disabled).
+  const sortedStatuses = useMemo(
+    () =>
+      (statuses ?? []).sort((a, b) =>
+        a.status_name.localeCompare(b.status_name)
+      ),
+    [statuses]
+  );
+  const enabledStatusNames = useMemo(() => {
+    if (!isEdit) return new Set(CREATE_MODE_STATUS_NAMES);
+    const currentStatusId = initialValues?.status_id;
+    const currentStatus = currentStatusId
+      ? statuses?.find((s) => s.status_id === currentStatusId)
+      : null;
+    const currentName = currentStatus?.status_name;
+    if (!currentName) return new Set(sortedStatuses.map((s) => s.status_name));
+    return new Set(getAllowedStatusNames(currentName));
+  }, [isEdit, statuses, initialValues?.status_id, sortedStatuses]);
 
   // Phone formatting function
   const formatPhoneNumber = (value: string) => {
@@ -148,17 +185,39 @@ const onSubmit = async (values: LeadFormData) => {
             helperText={errors.status_id?.message}
             value={field.value || ''}
             onChange={e => field.onChange(Number(e.target.value))}
+            SelectProps={{
+              renderValue: (value: unknown) => {
+                const s = statuses?.find((st) => st.status_id === value);
+                return s?.status_name ?? '';
+              },
+            }}
           >
             <MenuItem value="">
               <em>Select a status</em>
             </MenuItem>
-            {statuses
-              ?.sort((a, b) => a.status_name.localeCompare(b.status_name))
-              .map(status => (
-                <MenuItem key={status.status_id} value={status.status_id}>
-                  {status.status_name}
-                </MenuItem>
-              ))}
+            {sortedStatuses.map(status => (
+              <MenuItem
+                key={status.status_id}
+                value={status.status_id}
+                disabled={!enabledStatusNames.has(status.status_name)}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span>{status.status_name}</span>
+                  {status.description && (
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: 'text.secondary',
+                        mt: 0.25,
+                      }}
+                    >
+                      {status.description}
+                    </Box>
+                  )}
+                </Box>
+              </MenuItem>
+            ))}
           </TextField>
         )}
       />

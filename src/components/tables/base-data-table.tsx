@@ -212,6 +212,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   pageSizeOptions?: number[];
   sx?: any;
   additionalHeaderButtons?: React.ReactNode;
+  /** Title shown in add/edit dialog header. Defaults to title if not set. */
+  formTitle?: string;
   onRowClick?: (row: T) => void;
   autoHeight?: boolean;
   selectedRowId?: GridRowId | null;
@@ -255,6 +257,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   pageSizeOptions = [10, 25, 50, 100],
   sx,
   additionalHeaderButtons,
+  formTitle,
   autoHeight = false,
   selectedRowId = null,
   rowClassName,
@@ -540,10 +543,12 @@ export default function BaseDataTable<T extends BaseEntity>({
           mb: 2,
         }}
       >
-        <Typography variant="h5" fontWeight={600} color="text.primary">
-          {title}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        {title ? (
+          <Typography variant="h5" fontWeight={600} color="text.primary">
+            {title}
+          </Typography>
+        ) : null}
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', marginLeft: title ? undefined : 'auto' }}>
           {additionalHeaderButtons}
           {showCreateButton && renderForm && (
             <Button
@@ -710,7 +715,7 @@ export default function BaseDataTable<T extends BaseEntity>({
                 {formMode === 'create' ? 'NEW' : 'EDITING'}
               </Typography>
               <Typography variant="h6" fontWeight="bold">
-                {title}
+                {formTitle ?? title}
               </Typography>
             </Box>
             <IconButton

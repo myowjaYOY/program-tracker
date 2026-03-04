@@ -49,6 +49,7 @@ import {
   List as ListIcon,
   Badge as ProgramRolesIcon,
   Schedule as ScheduleIcon,
+  Flag as TargetsIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -90,6 +91,11 @@ const salesNav = [
 ];
 
 const operationsNav = [
+  {
+    label: 'Targets',
+    icon: <TargetsIcon />,
+    path: '/dashboard/operations/targets',
+  },
   {
     label: 'Inventory Forecast',
     icon: <InventoryForecastIcon />,

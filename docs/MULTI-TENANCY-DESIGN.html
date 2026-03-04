@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Multi-Tenancy Design Document</title>
+  <style>
+    body {
+      font-family: Calibri, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.5;
+      max-width: 8.5in;
+      margin: 1in auto;
+      padding: 0 0.5in;
+    }
+    h1 {
+      font-size: 24pt;
+      color: #1a365d;
+      border-bottom: 2px solid #1a365d;
+      padding-bottom: 10px;
+      margin-top: 0;
+    }
+    h2 {
+      font-size: 16pt;
+      color: #2c5282;
+      margin-top: 24pt;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 5px;
+    }
+    h3 {
+      font-size: 13pt;
+      color: #2d3748;
+      margin-top: 18pt;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12pt 0;
+      font-size: 10pt;
+    }
+    th, td {
+      border: 1px solid #cbd5e0;
+      padding: 8px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background-color: #edf2f7;
+      font-weight: bold;
+      color: #2d3748;
+    }
+    tr:nth-child(even) {
+      background-color: #f7fafc;
+    }
+    .header-info {
+      background-color: #f7fafc;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-left: 4px solid #3182ce;
+    }
+    .header-info p {
+      margin: 5px 0;
+    }
+    .executive-summary {
+      background-color: #ebf8ff;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 15px 0;
+    }
+    .warning {
+      background-color: #fffaf0;
+      border-left: 4px solid #dd6b20;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    .info-box {
+      background-color: #e6fffa;
+      border-left: 4px solid #38a169;
+      padding: 10px 15px;
+      margin: 15px 0;
+    }
+    ul, ol {
+      margin: 10px 0;
+      padding-left: 25px;
+    }
+    li {
+      margin: 5px 0;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 20px 0;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Multi-Tenancy Design Document</h1>
+
+<div class="header-info">
+  <p><strong>Document Version:</strong> 1.0</p>
+  <p><strong>Date:</strong> February 5, 2026</p>
+  <p><strong>Status:</strong> Draft - For Discussion</p>
+  <p><strong>Application:</strong> Program Tracker</p>
+</div>
+
+<hr>
+
+<h2>Executive Summary</h2>
+
+<div class="executive-summary">
+<p>This document outlines the proposed approach to convert the Program Tracker application from a single-tenant system to a multi-tenant SaaS platform. The goal is to enable multiple organizations (tenants) to use the same application while keeping their data completely isolated.</p>
+
+<p><strong>Key Design Decisions:</strong></p>
+<ul>
+  <li>Use a shared database schema with Row Level Security (RLS) for tenant isolation</li>
+  <li>Minimize frontend code changes by handling isolation at the database layer</li>
+  <li>Ensure HIPAA compliance through additional safeguards</li>
+</ul>
+</div>
+
+<hr>
+
+<h2>1. Requirements</h2>
+
+<h3>Functional Requirements</h3>
+<ul>
+  <li>Multiple organizations can use the application independently</li>
+  <li>Each tenant sees only their own data</li>
+  <li>New tenants can be onboarded without code deployment</li>
+  <li>Existing functionality remains unchanged</li>
+</ul>
+
+<h3>Non-Functional Requirements</h3>
+<ul>
+  <li>Minimize changes to the frontend/UI layer</li>
+  <li>Tenant isolation must be enforced at the database level</li>
+  <li>Solution must support HIPAA compliance requirements</li>
+  <li>Reasonable cost at scale (dozens of tenants initially)</li>
+</ul>
+
+<h3>Constraints</h3>
+<ul>
+  <li>Must work with Supabase (current infrastructure)</li>
+  <li>Cannot require significant frontend refactoring</li>
+  <li>Must support existing data migration</li>
+</ul>
+
+<hr>
+
+<h2>2. Recommended Approach: Shared Schema with Row Level Security</h2>
+
+<h3>Overview</h3>
+<p>All tenants share the same database tables. Each table containing tenant-specific data gets a <code>tenant_id</code> column. PostgreSQL Row Level Security (RLS) policies automatically filter queries so users only see their own tenant's data.</p>
+
+<h3>How It Works</h3>
+<ol>
+  <li>A new <strong>tenants</strong> table stores tenant information (name, settings, subscription tier)</li>
+  <li>The <strong>users</strong> table gets a tenant_id column linking each user to their tenant</li>
+  <li>All data tables (leads, programs, therapies, etc.) get a tenant_id column</li>
+  <li>RLS policies on each table filter rows where tenant_id matches the current user's tenant</li>
+  <li>A database trigger automatically sets tenant_id on new records</li>
+</ol>
+
+<h3>Why This Approach</h3>
+<table>
+  <tr><th>Benefit</th><th>Explanation</th></tr>
+  <tr><td>Minimal frontend changes</td><td>RLS is transparent to application code; existing queries work unchanged</td></tr>
+  <tr><td>Automatic isolation</td><td>Database enforces tenant boundaries; cannot be bypassed by application bugs</td></tr>
+  <tr><td>Single codebase</td><td>One deployment serves all tenants</td></tr>
+  <tr><td>Cost-effective</td><td>One database instance for all tenants</td></tr>
+  <tr><td>Supabase native</td><td>RLS is a core Supabase feature with good tooling support</td></tr>
+</table>
+
+<hr class="page-break">
+
+<h2>3. Alternative Approaches Considered</h2>
+
+<h3>Option A: Schema-Per-Tenant</h3>
+<p>Each tenant gets their own PostgreSQL schema within the same database.</p>
+
+<table>
+  <tr><th>Pros</th><th>Cons</th></tr>
+  <tr><td>Complete logical isolation</td><td>Supabase doesn't support this pattern well</td></tr>
+  <tr><td>Per-tenant schema customization</td><td>Schema changes must run on every tenant</td></tr>
+  <tr><td>Easy tenant deletion</td><td>Requires custom connection management</td></tr>
+</table>
+<p><strong>Verdict:</strong> Not recommended due to poor Supabase support.</p>
+
+<h3>Option B: Database-Per-Tenant</h3>
+<p>Each tenant gets their own Supabase project/database.</p>
+
+<table>
+  <tr><th>Pros</th><th>Cons</th></tr>
+  <tr><td>Complete physical isolation</td><td>Expensive ($25+/month per tenant minimum)</td></tr>
+  <tr><td>Best for compliance</td><td>Operational complexity (managing many projects)</td></tr>
+  <tr><td>Independent scaling</td><td>Schema migrations must run on every database</td></tr>
+  <tr><td>No RLS complexity</td><td>Frontend must route to correct database</td></tr>
+</table>
+<p><strong>Verdict:</strong> Consider for enterprise/compliance-required customers as a premium tier. Not recommended as default approach.</p>
+
+<h3>Option C: Hybrid Approach</h3>
+<p>Small tenants share a database (RLS-based); enterprise tenants get dedicated databases.</p>
+
+<table>
+  <tr><th>Pros</th><th>Cons</th></tr>
+  <tr><td>Cost-effective for small tenants</td><td>Two systems to maintain</td></tr>
+  <tr><td>Premium option for enterprise</td><td>Complex testing requirements</td></tr>
+  <tr><td>Compliance flexibility</td><td>Migration path from shared to dedicated</td></tr>
+</table>
+<p><strong>Verdict:</strong> Good future evolution, but adds complexity. Start with shared schema, add dedicated option later if needed.</p>
+
+<hr class="page-break">
+
+<h2>4. Design Overview</h2>
+
+<h3>4.1 New Database Objects</h3>
+<table>
+  <tr><th>Object</th><th>Purpose</th></tr>
+  <tr><td><strong>tenants</strong> table</td><td>Registry of all tenants with name, settings, subscription info</td></tr>
+  <tr><td><strong>get_current_tenant_id()</strong> function</td><td>Helper to retrieve current user's tenant from session</td></tr>
+  <tr><td><strong>set_tenant_id()</strong> trigger function</td><td>Automatically sets tenant_id on new records</td></tr>
+</table>
+
+<h3>4.2 Tables Requiring Modification</h3>
+
+<p><strong>Core Data Tables (44 tables)</strong> - Must add tenant_id column:</p>
+
+<table>
+  <tr><th>Category</th><th>Tables</th></tr>
+  <tr><td>CRM/Sales</td><td>leads, lead_notes, lead_status_transitions, campaigns</td></tr>
+  <tr><td>Member Programs</td><td>member_programs, member_program_items, member_program_item_schedule, member_program_item_tasks, member_program_items_task_schedule, member_program_payments, member_program_finances, member_program_membership_finances, member_program_rasha</td></tr>
+  <tr><td>Templates</td><td>program_template, program_template_items, program_template_rasha</td></tr>
+  <tr><td>Therapy Catalog</td><td>therapies, therapy_tasks, therapies_bodies_pillars</td></tr>
+  <tr><td>Inventory</td><td>inventory_items, inventory_transactions, inventory_count_sessions, inventory_count_details, purchase_orders, purchase_order_items, item_requests</td></tr>
+  <tr><td>Surveys/Analytics</td><td>survey_response_sessions, survey_responses, survey_domain_scores, survey_user_mappings, survey_user_progress, member_analytics_cache, member_individual_insights, member_progress_summary</td></tr>
+  <tr><td>System</td><td>users, user_menu_permissions, notifications, audit_events, audit_event_changes, data_import_jobs, data_import_errors, cron_job_runs, vendors</td></tr>
+  <tr><td>Reference (tenant-specific)</td><td>status, program_roles, financing_types, buckets, therapytype, rasha_list</td></tr>
+</table>
+
+<p><strong>Global Reference Tables (no tenant_id)</strong> - Shared across all tenants:</p>
+
+<table>
+  <tr><th>Tables</th><th>Reasoning</th></tr>
+  <tr><td>program_status</td><td>Standard lifecycle states (Quote, Active, Paused, etc.)</td></tr>
+  <tr><td>payment_status</td><td>Standard payment states (Pending, Paid, Late)</td></tr>
+  <tr><td>payment_methods</td><td>Standard payment types (Cash, Check, Credit Card)</td></tr>
+  <tr><td>bodies, pillars</td><td>Standardized health classifications</td></tr>
+  <tr><td>survey_forms, survey_questions, survey_domains</td><td>Standardized assessments (MSQ-95, PROMIS-29)</td></tr>
+  <tr><td>menu_items</td><td>Application navigation (same for all)</td></tr>
+</table>
+
+<h3>4.3 RLS Policy Pattern</h3>
+<p>Each tenant-specific table will have four RLS policies:</p>
+<table>
+  <tr><th>Policy</th><th>Purpose</th></tr>
+  <tr><td>SELECT</td><td>Users can only read rows matching their tenant_id</td></tr>
+  <tr><td>INSERT</td><td>Users can only insert rows into their tenant</td></tr>
+  <tr><td>UPDATE</td><td>Users can only update rows matching their tenant_id</td></tr>
+  <tr><td>DELETE</td><td>Users can only delete rows matching their tenant_id</td></tr>
+</table>
+
+<h3>4.4 Frontend Changes (Minimal)</h3>
+<table>
+  <tr><th>Change</th><th>Description</th></tr>
+  <tr><td>Tenant identification</td><td>Middleware to identify tenant from subdomain or login</td></tr>
+  <tr><td>No query changes</td><td>Existing queries work unchanged; RLS filters automatically</td></tr>
+  <tr><td>No insert changes</td><td>Trigger automatically sets tenant_id on new records</td></tr>
+</table>
+
+<hr class="page-break">
+
+<h2>5. HIPAA Compliance Considerations</h2>
+
+<h3>Regulatory Context</h3>
+<p>HIPAA does not mandate specific technologies or architectures. The Security Rule (45 CFR §164.312) requires "reasonable and appropriate" safeguards based on risk analysis.</p>
+
+<h3>Shared Schema + RLS: Compliance Assessment</h3>
+<table>
+  <tr><th>HIPAA Requirement</th><th>How RLS Addresses It</th><th>Additional Safeguards Needed</th></tr>
+  <tr><td>Access Control §164.312(a)</td><td>RLS policies restrict access by tenant</td><td>Automated verification that all tables have RLS</td></tr>
+  <tr><td>Audit Controls §164.312(b)</td><td>Audit tables track changes</td><td>Ensure audit tables are also tenant-isolated</td></tr>
+  <tr><td>Integrity §164.312(c)</td><td>RLS prevents unauthorized modification</td><td>Document risk of shared infrastructure</td></tr>
+  <tr><td>Authentication §164.312(d)</td><td>Supabase Auth</td><td>Already compliant</td></tr>
+  <tr><td>Transmission §164.312(e)</td><td>TLS encryption</td><td>Already compliant</td></tr>
+</table>
+
+<h3>Key Risks and Mitigations</h3>
+<table>
+  <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+  <tr><td>Missing RLS policy on new table</td><td>All tenants see that table's data</td><td>Automated CI/CD check that verifies RLS on all tables</td></tr>
+  <tr><td>Bug in tenant identification function</td><td>Wrong tenant sees data</td><td>Automated tenant isolation test suite</td></tr>
+  <tr><td>Service role key exposed</td><td>Full database access</td><td>Never use service role in client-facing code</td></tr>
+  <tr><td>Single database failure</td><td>All tenants affected</td><td>Standard backup/recovery procedures</td></tr>
+</table>
+
+<div class="warning">
+<strong>Mandatory Requirements for HIPAA Compliance:</strong>
+<ol>
+  <li><strong>Business Associate Agreement (BAA)</strong> with Supabase (requires Pro plan or above)</li>
+  <li><strong>Automated RLS verification</strong> in CI/CD pipeline</li>
+  <li><strong>Tenant isolation test suite</strong> covering all PHI tables</li>
+  <li><strong>Audit logging</strong> for all PHI access</li>
+  <li><strong>Documented risk analysis</strong> for compliance audits</li>
+  <li><strong>Incident response procedures</strong> for potential breaches</li>
+</ol>
+</div>
+
+<h3>When Physical Separation May Be Required</h3>
+<p>Some customers may contractually require dedicated databases regardless of HIPAA flexibility:</p>
+<ul>
+  <li>Large healthcare systems with specific security policies</li>
+  <li>Government healthcare (FedRAMP requirements)</li>
+  <li>International customers with data residency requirements (GDPR)</li>
+  <li>Customers who require independent penetration testing</li>
+</ul>
+<p><strong>Recommendation:</strong> Offer database-per-tenant as a premium "Enterprise" tier for these customers.</p>
+
+<hr class="page-break">
+
+<h2>6. Implementation Approach</h2>
+
+<h3>Phase 1: Preparation (No Downtime)</h3>
+<ul>
+  <li>Create tenants table</li>
+  <li>Create helper functions</li>
+  <li>Add tenant_id columns as NULLABLE to all tables</li>
+  <li>Create indexes on tenant_id columns</li>
+</ul>
+
+<h3>Phase 2: Data Migration (No Downtime)</h3>
+<ul>
+  <li>Create initial tenant record for existing data</li>
+  <li>Backfill tenant_id on all existing records</li>
+  <li>Verify data integrity</li>
+</ul>
+
+<h3>Phase 3: Enforcement (Brief Maintenance Window)</h3>
+<ul>
+  <li>Make tenant_id columns NOT NULL</li>
+  <li>Enable RLS on all tables</li>
+  <li>Create RLS policies</li>
+  <li>Create auto-set triggers</li>
+  <li>Deploy frontend changes</li>
+</ul>
+
+<h3>Phase 4: Validation</h3>
+<ul>
+  <li>Run tenant isolation test suite</li>
+  <li>Verify existing functionality</li>
+  <li>Monitor for issues</li>
+</ul>
+
+<hr>
+
+<h2>7. Risks and Trade-offs</h2>
+
+<h3>Advantages of This Approach</h3>
+<table>
+  <tr><th>Advantage</th><th>Business Impact</th></tr>
+  <tr><td>Minimal frontend changes</td><td>Faster implementation, lower risk</td></tr>
+  <tr><td>Automatic isolation</td><td>Reduces security bugs</td></tr>
+  <tr><td>Single deployment</td><td>Simpler operations</td></tr>
+  <tr><td>Cost-effective</td><td>Lower infrastructure costs</td></tr>
+  <tr><td>Future flexibility</td><td>Can add dedicated databases for enterprise later</td></tr>
+</table>
+
+<h3>Disadvantages and Limitations</h3>
+<table>
+  <tr><th>Limitation</th><th>Business Impact</th></tr>
+  <tr><td>Shared infrastructure</td><td>One tenant's heavy usage can affect others</td></tr>
+  <tr><td>No per-tenant customization</td><td>All tenants have same schema/fields</td></tr>
+  <tr><td>Cross-tenant reporting complex</td><td>Admin analytics require bypassing RLS</td></tr>
+  <tr><td>Backup contains all tenants</td><td>Cannot restore single tenant easily</td></tr>
+  <tr><td>RLS overhead</td><td>Small performance impact on queries</td></tr>
+</table>
+
+<h3>Performance Considerations</h3>
+<ul>
+  <li>Adding tenant_id to queries adds minimal overhead with proper indexing</li>
+  <li>Tables with millions of rows may benefit from partitioning by tenant_id</li>
+  <li>Connection pooling is shared across tenants</li>
+</ul>
+
+<hr class="page-break">
+
+<h2>8. Open Questions for Discussion</h2>
+
+<div class="info-box">
+<p>The following questions require decisions before implementation:</p>
+</div>
+
+<ol>
+  <li><strong>Tenant identification method:</strong>
+    <ul>
+      <li>Subdomain-based (acme.yourapp.com)?</li>
+      <li>Login-based (user selects tenant)?</li>
+      <li>Both?</li>
+    </ul>
+  </li>
+  <li><strong>Reference data strategy:</strong>
+    <ul>
+      <li>Which reference tables should tenants be able to customize?</li>
+      <li>Should tenants be able to add custom statuses, therapy types, etc.?</li>
+    </ul>
+  </li>
+  <li><strong>Super admin access:</strong>
+    <ul>
+      <li>How should platform administrators access tenant data for support?</li>
+      <li>What audit trail is needed for admin access?</li>
+    </ul>
+  </li>
+  <li><strong>Tenant onboarding:</strong>
+    <ul>
+      <li>Self-service signup or manual provisioning?</li>
+      <li>Default data seeding for new tenants?</li>
+    </ul>
+  </li>
+  <li><strong>Enterprise tier:</strong>
+    <ul>
+      <li>Should we plan for database-per-tenant as premium option?</li>
+      <li>What price premium would justify the additional complexity?</li>
+    </ul>
+  </li>
+  <li><strong>Existing data:</strong>
+    <ul>
+      <li>How should current production data be handled?</li>
+      <li>Create "Tenant Zero" for existing customer?</li>
+    </ul>
+  </li>
+</ol>
+
+<hr>
+
+<h2>9. Next Steps</h2>
+
+<ol>
+  <li>Review this document and discuss open questions</li>
+  <li>Finalize decisions on reference data and tenant identification</li>
+  <li>Create detailed migration plan with specific SQL scripts</li>
+  <li>Set up development environment for testing</li>
+  <li>Implement Phase 1 (preparation) in development</li>
+  <li>Create tenant isolation test suite</li>
+  <li>Plan production migration timeline</li>
+</ol>
+
+<hr class="page-break">
+
+<h2>Appendix A: Affected Schema Objects Summary</h2>
+
+<table>
+  <tr><th>Category</th><th>Count</th><th>Action</th></tr>
+  <tr><td>New tables</td><td>1</td><td>Create tenants table</td></tr>
+  <tr><td>New functions</td><td>2-3</td><td>Tenant helper functions</td></tr>
+  <tr><td>Tables needing tenant_id</td><td>~44</td><td>Add column, index, RLS policies, trigger</td></tr>
+  <tr><td>Global reference tables</td><td>~12</td><td>No changes needed</td></tr>
+  <tr><td>RLS policies to create</td><td>~180</td><td>4 policies per tenant-specific table</td></tr>
+  <tr><td>Triggers to create</td><td>~44</td><td>Auto-set tenant_id on insert</td></tr>
+</table>
+
+<hr>
+
+<h2>Appendix B: Reference Documents</h2>
+
+<ul>
+  <li>Current database schema: <code>database/SCHEMA.md</code></li>
+  <li>HIPAA Security Rule: 45 CFR Part 164, Subpart C</li>
+  <li>Supabase RLS documentation: <a href="https://supabase.com/docs/guides/auth/row-level-security">https://supabase.com/docs/guides/auth/row-level-security</a></li>
+</ul>
+
+<hr>
+
+<p style="text-align: center; color: #718096; font-style: italic; margin-top: 40px;">
+This document is intended for internal discussion.<br>
+Implementation details and specific SQL scripts will be developed after design approval.
+</p>
+
+</body>
+</html>

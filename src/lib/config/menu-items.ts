@@ -70,7 +70,7 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'Description',
   },
 
-  // Operations
+  // Operations (alphabetical)
   {
     path: '/dashboard/inventory-forecast',
     label: 'Inventory Forecast',
@@ -88,6 +88,12 @@ export const MENU_ITEMS: MenuItem[] = [
     label: 'Item Requests',
     section: 'operations',
     icon: 'Inventory',
+  },
+  {
+    path: '/dashboard/operations/targets',
+    label: 'Performance Targets',
+    section: 'operations',
+    icon: 'Flag',
   },
   {
     path: '/dashboard/program-analytics',

@@ -14,6 +14,7 @@ import {
   People as PeopleIcon,
   EventBusy as EventBusyIcon,
   SpeakerNotesOff as SpeakerNotesOffIcon,
+  EventAvailable as EventAvailableIcon,
 } from '@mui/icons-material';
 import { useLeads } from '@/lib/hooks/use-leads';
 import LeadTable from '@/components/leads/lead-table';
@@ -64,6 +65,22 @@ export default function LeadsPage() {
     return leads.filter(
       (lead: any) => lead.status_id === 11 && !lead.last_followup_note
     ).length;
+  }, [leads]);
+
+  // Card 3: Count of PMEs scheduled in the current month (pmedate in this month)
+  const pmesScheduledThisMonth = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    return leads.filter((lead) => {
+      if (!lead.pmedate) return false;
+      const dateStr = lead.pmedate.split('T')[0]; // YYYY-MM-DD
+      if (!dateStr) return false;
+      const parts = dateStr.split('-').map(Number);
+      const y = parts[0] ?? 0;
+      const m = parts[1] ?? 0;
+      return y === currentYear && m === currentMonth + 1; // month is 1-based in date strings
+    }).length;
   }, [leads]);
 
   return (
@@ -220,14 +237,14 @@ export default function LeadsPage() {
           </Card>
         </Grid>
 
-        {/* Card 3: Placeholder */}
+        {/* Card 3: PMEs Scheduled (current month) */}
         <Grid size={3}>
           <Card
             sx={{
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
-              borderTop: theme => `4px solid ${theme.palette.warning.main}`,
+              borderTop: theme => `4px solid ${theme.palette.info.main}`,
               transition:
                 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
               '&:hover': {
@@ -251,27 +268,31 @@ export default function LeadsPage() {
                     variant="body2"
                     sx={{ fontWeight: 500 }}
                   >
-                    Card 3 Title
+                    PMEs Scheduled
                   </Typography>
                   <Typography
                     variant="h4"
                     component="div"
                     sx={{
                       fontWeight: 'bold',
-                      color: 'warning.main',
+                      color: 'info.main',
                       mt: 1,
                     }}
                   >
-                    0
+                    {leadsLoading ? (
+                      <CircularProgress size={28} />
+                    ) : (
+                      pmesScheduledThisMonth
+                    )}
                   </Typography>
                 </Box>
                 <Box
                   sx={{
-                    color: 'warning.main',
+                    color: 'info.main',
                     opacity: 0.8,
                   }}
                 >
-                  <PeopleIcon sx={{ fontSize: 40 }} />
+                  <EventAvailableIcon sx={{ fontSize: 40 }} />
                 </Box>
               </Box>
               <Typography
@@ -279,7 +300,7 @@ export default function LeadsPage() {
                 color="text.secondary"
                 sx={{ fontSize: '0.875rem' }}
               >
-                Card 3 helper text
+                PMEs scheduled in the current month
               </Typography>
             </CardContent>
           </Card>

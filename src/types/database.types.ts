@@ -81,6 +81,38 @@ export interface Leads {
   pmedate: string | null;
 }
 
+export interface LeadStatusTransitions {
+  transition_id: number;
+  lead_id: number;
+  old_status_id: number | null;
+  new_status_id: number;
+  old_pmedate: string | null;
+  new_pmedate: string | null;
+  transitioned_at: string;
+  transitioned_by: string | null;
+  source: 'manual' | 'import' | 'webhook' | 'system' | 'migration';
+  notes: string | null;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export interface ProgramStatusTransitions {
+  transition_id: number;
+  member_program_id: number;
+  old_status_id: number | null;
+  new_status_id: number;
+  transitioned_at: string;
+  transitioned_by: string | null;
+  source: 'manual' | 'import' | 'webhook' | 'system' | 'migration';
+  notes: string | null;
+  created_at: string | null;
+  created_by: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
 export interface MemberProgramItems {
   member_program_item_id: number;
   member_program_id: number | null;
