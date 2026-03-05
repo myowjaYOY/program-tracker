@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -315,7 +315,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
   // STATE PERSISTENCE - Save state on exit (unmount or browser close)
-  // Inject saved widths directly into columns to prevent flash
+  // useLayoutEffect ensures cleanup runs before children unmount (captures apiRef while grid still mounted)
   const columnsWithSavedWidths = useMemo(() => {
     if (!initialGridState?.columns?.dimensions) return columns;
     
@@ -330,7 +330,7 @@ export default function BaseDataTable<T extends BaseEntity>({
     });
   }, [columns, initialGridState]);
   
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Capture apiRef at effect time, not cleanup time
     const apiRefCurrent = apiRef.current;
     const currentPersistKey = persistStateKey;
@@ -369,7 +369,7 @@ export default function BaseDataTable<T extends BaseEntity>({
     };
   }, [persistStateKey, user?.id, apiRef]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Save on browser close/refresh
     if (!persistStateKey || !user?.id) return;
     
