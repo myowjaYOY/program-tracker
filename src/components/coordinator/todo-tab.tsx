@@ -11,6 +11,7 @@ import {
 } from '@/lib/hooks/use-coordinator';
 import { useQueryClient } from '@tanstack/react-query';
 import EditNoteIcon from '@mui/icons-material/EditNote';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { LeadNotesModal } from '@/components/notes';
 import TaskStatusToggle from '@/components/ui/task-status-toggle';
 import { toast } from 'sonner';
@@ -306,18 +307,46 @@ export default function CoordinatorToDoTab({
     {
       field: 'completed_flag',
       headerName: 'Status',
-      width: 140,
+      width: 180,
       renderCell: params => {
         const row: any = params.row;
         const readOnly =
           (row.program_status_name || '').toLowerCase() !== 'active';
+        const scriptCompleted = row.script_completed_flag;
+        const taskCompleted = row.completed_flag;
+        const scriptResolved = scriptCompleted === true || scriptCompleted === false;
+        const mismatch =
+          scriptResolved && taskCompleted !== scriptCompleted;
+        const mismatchLabel =
+          scriptCompleted === true
+            ? 'Redeemed'
+            : scriptCompleted === false
+              ? 'Missed'
+              : null;
+
         return (
-          <TaskStatusToggle
-            completed_flag={row.completed_flag}
-            onStatusChange={(newValue) => handleStatusChange(row, newValue)}
-            readOnly={readOnly}
-            showLabel={true}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {mismatch && mismatchLabel && (
+              <Tooltip
+                title={`Associated script item was marked ${mismatchLabel}. Consider updating this task to match.`}
+                placement="top"
+              >
+                <InfoOutlinedIcon
+                  fontSize="small"
+                  sx={{
+                    color: 'text.secondary',
+                    cursor: 'help',
+                  }}
+                />
+              </Tooltip>
+            )}
+            <TaskStatusToggle
+              completed_flag={row.completed_flag}
+              onStatusChange={(newValue) => handleStatusChange(row, newValue)}
+              readOnly={readOnly}
+              showLabel={true}
+            />
+          </Box>
         );
       },
     },

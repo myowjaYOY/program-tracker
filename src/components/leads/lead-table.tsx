@@ -287,6 +287,7 @@ export default function LeadTable({ title = 'Leads' }: LeadTableProps) {
         onEdit={handleEdit}
         onDelete={handleDelete}
         renderForm={renderLeadForm}
+        formTitle="Lead"
         persistStateKey="leadsGrid"
         createButtonText="Add Lead"
         editButtonText="Edit Lead"

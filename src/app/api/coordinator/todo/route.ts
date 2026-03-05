@@ -178,6 +178,7 @@ export async function GET(req: NextRequest) {
         member_name: r.member_name,
         instance_number: r.instance_number,
         script_scheduled_date: r.script_scheduled_date,
+        script_completed_flag: r.script_completed_flag ?? null,
         note_count: r.lead_id ? (noteCounts[r.lead_id] || 0) : 0,
         
         // Audit enrichment
