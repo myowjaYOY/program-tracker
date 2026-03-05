@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Box, Container } from '@mui/material';
 import { Logo } from '@/components/ui/Logo';
 
@@ -8,32 +8,35 @@ interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
-// Array of login images from public/logonPics folder
+// Array of login images from public/logonPics folder - must match actual files in public/logonPics
 const LOGIN_IMAGES = [
   '/logonPics/Camilla.jpg',
-  '/logonPics/James%20Bigfoot.jpg',
+  '/logonPics/DNice.jpg',
+  '/logonPics/eva.jpg',
   '/logonPics/james.jpg',
   '/logonPics/Jen.jpg',
   '/logonPics/kami.jpg',
   '/logonPics/Ken.jpg',
+  '/logonPics/Leanora.jpg',
   '/logonPics/Tara.jpg',
 ];
 
-// Function to get a random image
-const getRandomImage = (): string => {
+const FALLBACK_IMAGE = '/logonPics/Camilla.jpg';
+
+function getRandomImage(): string {
   const randomIndex = Math.floor(Math.random() * LOGIN_IMAGES.length);
-  return LOGIN_IMAGES[randomIndex] || '/logonPics/Camilla.jpg'; // Fallback to default
-};
+  return LOGIN_IMAGES[randomIndex] ?? FALLBACK_IMAGE;
+}
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
-  // Start with a default image to avoid hydration mismatch, then switch to random on client
-  const [randomImage, setRandomImage] = useState<string>('/logonPics/Camilla.jpg');
-  const [isClient, setIsClient] = useState(false);
+  const [randomImage, setRandomImage] = useState<string>(FALLBACK_IMAGE);
 
   useEffect(() => {
-    // Only run on client side to avoid SSR/client mismatch
-    setIsClient(true);
     setRandomImage(getRandomImage());
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setRandomImage(FALLBACK_IMAGE);
   }, []);
 
   return (
@@ -59,12 +62,25 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           display: { xs: 'none', md: 'block' },
           position: 'relative',
           overflow: 'hidden',
-          backgroundImage: randomImage ? `url(${randomImage})` : undefined,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
+          backgroundColor: 'grey.200',
+          minHeight: '100%',
         }}
-      />
+      >
+        <img
+          src={randomImage}
+          alt=""
+          onError={handleImageError}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'center',
+          }}
+        />
+      </Box>
     </Box>
   );
 }
