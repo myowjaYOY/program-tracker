@@ -314,20 +314,38 @@ export default function BaseDataTable<T extends BaseEntity>({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<GridRowId | null>(null);
 
-  // STATE PERSISTENCE - Save state on exit (unmount or browser close)
-  // useLayoutEffect ensures cleanup runs before children unmount (captures apiRef while grid still mounted)
+  // STATE PERSISTENCE - Apply saved widths and column order.
+  // When the columns prop reference changes (e.g. parent re-render from checkbox toggle),
+  // MUI Data Grid resets column order from the array order. By reordering columns to match
+  // saved orderedFields, we ensure the grid always receives the correct order.
   const columnsWithSavedWidths = useMemo(() => {
-    if (!initialGridState?.columns?.dimensions) return columns;
+    const savedDimensions = initialGridState?.columns?.dimensions;
+    const orderedFields = initialGridState?.columns?.orderedFields as string[] | undefined;
     
-    const savedDimensions = initialGridState.columns.dimensions;
-    
-    return columns.map(col => {
-      const savedDim = savedDimensions[col.field];
-      if (savedDim?.width) {
-        return { ...col, width: savedDim.width };
+    let result = columns.map(col => {
+      if (savedDimensions?.[col.field]?.width) {
+        return { ...col, width: savedDimensions[col.field].width };
       }
       return col;
     });
+    
+    // Reorder columns to match saved order (prevents reset when columns prop reference changes)
+    if (orderedFields?.length) {
+      const byField = new Map(result.map(c => [c.field, c]));
+      const ordered: GridColDef[] = [];
+      for (const field of orderedFields) {
+        const col = byField.get(field);
+        if (col) {
+          ordered.push(col);
+          byField.delete(field);
+        }
+      }
+      // Append any columns not in saved order (e.g. new columns added later)
+      for (const col of byField.values()) ordered.push(col);
+      result = ordered;
+    }
+    
+    return result;
   }, [columns, initialGridState]);
   
   useLayoutEffect(() => {
