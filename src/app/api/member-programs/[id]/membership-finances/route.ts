@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { 
+import { requireAuth } from '@/lib/auth/api';
+import {
   memberProgramMembershipFinancesSchema,
-  memberProgramMembershipFinancesUpdateSchema 
+  memberProgramMembershipFinancesUpdateSchema
 } from '@/lib/validations/member-program-membership-finances';
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -74,15 +70,11 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -117,8 +109,8 @@ export async function POST(
 
     const insertData = {
       ...validatedData,
-      created_by: session.user.id,
-      updated_by: session.user.id,
+      created_by: authUser.id,
+      updated_by: authUser.id,
     };
 
     const { data, error } = await supabase
@@ -162,15 +154,11 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -203,7 +191,7 @@ export async function PUT(
 
     const updateData = {
       ...validatedData,
-      updated_by: session.user.id,
+      updated_by: authUser.id,
     };
 
     const { data, error } = await supabase

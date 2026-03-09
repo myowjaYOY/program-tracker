@@ -58,15 +58,11 @@ export async function GET(
   req: NextRequest,
   context: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -126,15 +122,11 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -190,13 +182,13 @@ export async function PUT(
             { status: 400 }
           );
         }
-        
+
         console.log('[DEBUG] New status found:', newStatus);
 
         // Validate transition
         const currentStatusName = ((currentProgram as any).program_status?.status_name || '').toLowerCase();
         const newStatusName = (newStatus.status_name || '').toLowerCase();
-        
+
         // Status transition rules (memberships cannot go to Completed)
         const getValidTransitions = (status: string, programType: string): string[] => {
           const isMembership = programType === 'membership';
@@ -204,7 +196,7 @@ export async function PUT(
             case 'quote':
               return ['active', 'cancelled'];
             case 'active':
-              return isMembership 
+              return isMembership
                 ? ['paused', 'cancelled'] // Memberships cannot be "Completed"
                 : ['paused', 'cancelled', 'completed'];
             case 'paused':
@@ -221,12 +213,12 @@ export async function PUT(
 
         const validTransitions = getValidTransitions(currentStatusName, currentProgram.program_type || 'one-time');
         if (!validTransitions.includes(newStatusName)) {
-          const validTransitionsStr = validTransitions.length > 0 
+          const validTransitionsStr = validTransitions.length > 0
             ? validTransitions.join(', ')
             : 'none (final state)';
           return NextResponse.json(
-            { 
-              error: `Invalid status transition: ${currentStatusName} cannot be changed to ${newStatusName}. Valid transitions: ${validTransitionsStr}` 
+            {
+              error: `Invalid status transition: ${currentStatusName} cannot be changed to ${newStatusName}. Valid transitions: ${validTransitionsStr}`
             },
             { status: 400 }
           );
@@ -236,7 +228,7 @@ export async function PUT(
 
     const updateData = {
       ...body,
-      updated_by: session.user.id,
+      updated_by: authUser.id,
     };
 
     // Check if this is an unpause (Paused -> Active)
@@ -252,7 +244,7 @@ export async function PUT(
         .eq('program_status_id', body.program_status_id)
         .single();
       const newStatusNameForUnpause = (newStatusForUnpause?.status_name || '').toLowerCase();
-      
+
       isUnpausing = currentStatusName === 'paused' && newStatusNameForUnpause === 'active';
       if (isUnpausing) {
         console.log('[UNPAUSE] Detected unpause transition for program:', id);
@@ -293,7 +285,7 @@ export async function PUT(
     // ===== MEMBERSHIP ACTIVATION LOGIC =====
     if (isActivatingMembership) {
       console.log('[MEMBERSHIP ACTIVATION] Starting activation for program:', id);
-      
+
       try {
         // 1. Calculate monthly_rate from current items
         const { data: items, error: itemsError } = await supabase
@@ -333,8 +325,8 @@ export async function PUT(
             monthly_discount: monthlyDiscount,
             monthly_tax: monthlyTax,
             billing_frequency: 'monthly',
-            created_by: session.user.id,
-            updated_by: session.user.id,
+            created_by: authUser.id,
+            updated_by: authUser.id,
           });
 
         if (membershipFinancesError) {
@@ -346,9 +338,9 @@ export async function PUT(
         // 4. Update all items with billing_period_month = 1
         const { error: itemsUpdateError } = await supabase
           .from('member_program_items')
-          .update({ 
+          .update({
             billing_period_month: 1,
-            updated_by: session.user.id 
+            updated_by: authUser.id
           })
           .eq('member_program_id', id)
           .eq('active_flag', true);
@@ -368,9 +360,9 @@ export async function PUT(
 
         const { error: nextBillingError } = await supabase
           .from('member_programs')
-          .update({ 
+          .update({
             next_billing_date: nextBillingDate.toISOString().split('T')[0],
-            updated_by: session.user.id 
+            updated_by: authUser.id
           })
           .eq('member_program_id', id);
 
@@ -398,8 +390,8 @@ export async function PUT(
             payment_amount: paymentAmount,
             payment_due_date: paymentDueDate,
             payment_status_id: pendingStatus?.payment_status_id || 1,
-            created_by: session.user.id,
-            updated_by: session.user.id,
+            created_by: authUser.id,
+            updated_by: authUser.id,
           });
 
         if (paymentError) {
@@ -413,7 +405,7 @@ export async function PUT(
         console.error('[MEMBERSHIP ACTIVATION] Activation failed:', activationError);
         // Note: The status update already succeeded. We log the error but don't roll back.
         // In production, you might want to handle this differently (e.g., transaction)
-        return NextResponse.json({ 
+        return NextResponse.json({
           data,
           warning: `Program activated but some membership setup failed: ${activationError.message}`
         });
@@ -425,26 +417,26 @@ export async function PUT(
     // This shifts incomplete items forward by the total pause duration
     if (isUnpausing) {
       console.log('[UNPAUSE] Triggering automatic schedule regeneration for program:', id);
-      
+
       try {
         const { data: scheduleResult, error: scheduleError } = await supabase.rpc(
           'generate_member_program_schedule',
           { p_program_id: Number(id), p_recent_minutes: null }
         );
-        
+
         if (scheduleError) {
           console.error('[UNPAUSE] Schedule regeneration failed:', scheduleError);
           // Don't fail the request, just return with warning
-          return NextResponse.json({ 
+          return NextResponse.json({
             data,
             warning: `Program unpaused but schedule regeneration failed: ${scheduleError.message}`
           });
         }
-        
+
         console.log('[UNPAUSE] Schedule regeneration complete:', scheduleResult);
       } catch (regenError: any) {
         console.error('[UNPAUSE] Schedule regeneration error:', regenError);
-        return NextResponse.json({ 
+        return NextResponse.json({
           data,
           warning: `Program unpaused but schedule regeneration failed: ${regenError.message}`
         });
@@ -465,15 +457,11 @@ export async function DELETE(
   req: NextRequest,
   context: { params: { id: string } }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = context.params;

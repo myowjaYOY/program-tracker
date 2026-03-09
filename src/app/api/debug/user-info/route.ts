@@ -1,27 +1,22 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { session },
-      error: authError,
-    } = await supabase.auth.getSession();
-    if (authError || !session) {
+    const auth = await requireAuth();
+    if (!auth.authorized) {
       return NextResponse.json(
-        { error: 'Unauthorized', authError },
-        { status: 401 }
+        { error: auth.error },
+        { status: auth.status }
       );
     }
+    const { supabase, user: authUser } = auth;
 
     // Get user info from users table
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('id', session.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (userError) {
@@ -30,8 +25,8 @@ export async function GET() {
           error: 'User not found in users table',
           userError,
           sessionUser: {
-            id: session.user.id,
-            email: session.user.email,
+            id: authUser.id,
+            email: authUser.email,
           },
         },
         { status: 404 }
@@ -40,8 +35,8 @@ export async function GET() {
 
     return NextResponse.json({
       sessionUser: {
-        id: session.user.id,
-        email: session.user.email,
+        id: authUser.id,
+        email: authUser.email,
       },
       dbUser: user,
       isAdmin: user.is_admin,

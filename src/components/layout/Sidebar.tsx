@@ -51,6 +51,7 @@ import {
   List as ListIcon,
   Badge as ProgramRolesIcon,
   Schedule as ScheduleIcon,
+  Palette as PaletteIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -121,6 +122,11 @@ const adminNav = [
     label: 'Tenants',
     icon: <BusinessIcon />,
     path: '/dashboard/admin/tenants',
+  },
+  {
+    label: 'Branding',
+    icon: <PaletteIcon />,
+    path: '/dashboard/admin/branding',
   },
   {
     label: 'Audit Report',

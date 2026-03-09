@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { 
-  calculateVariance, 
+import { requireAuth } from '@/lib/auth/api';
+import {
+  calculateVariance,
   validateActiveProgramChanges,
   calculateProjectedPrice,
   calculateProjectedMargin,
@@ -15,15 +15,11 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { session },
-      error: authError,
-    } = await supabase.auth.getSession();
-
-    if (authError || !session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireAuth();
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { supabase, user: authUser } = auth;
 
     const { id } = await context.params;
     const { data, error } = await supabase
@@ -89,15 +85,11 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -138,8 +130,8 @@ export async function POST(
       // Allow override of program_role_id from body, otherwise use therapy's default
       program_role_id: body.program_role_id !== undefined ? body.program_role_id : therapyData.program_role_id,
       active_flag: true,
-      created_by: session.user.id,
-      updated_by: session.user.id,
+      created_by: authUser.id,
+      updated_by: authUser.id,
     };
 
     // Check if this is an Active program and validate against bounds BEFORE inserting the item
@@ -191,8 +183,8 @@ export async function POST(
             description: t.description,
             task_delay: t.task_delay,
             program_role_id: t.program_role_id, // CRITICAL: Copy role from therapy_task
-            created_by: session.user.id,
-            updated_by: session.user.id,
+            created_by: authUser.id,
+            updated_by: authUser.id,
           }));
         if (toInsert.length > 0) {
           await supabase.from('member_program_item_tasks').insert(toInsert);
@@ -274,7 +266,7 @@ async function updateMemberProgramCalculatedFields(
 
       totalCost += cost * quantity;
       totalCharge += charge * quantity;
-      
+
       // Track taxable charge separately
       if (isTaxable) {
         totalTaxableCharge += charge * quantity;
@@ -302,7 +294,7 @@ async function updateMemberProgramCalculatedFields(
       .select('program_status(status_name)')
       .eq('member_program_id', memberProgramId)
       .single();
-    
+
     const isActive = (programStatus?.program_status as any)?.status_name?.toLowerCase() === 'active';
 
     // Calculate and update Program Price and Margin in finances table using shared utility
@@ -327,7 +319,7 @@ async function updateMemberProgramCalculatedFields(
       discounts,
       totalTaxableCharge,
     });
-    
+
     const finalTotal = financialResult.programPrice;
     const margin = financialResult.margin;
     const calculatedTaxes = financialResult.taxes;
@@ -365,13 +357,13 @@ async function updateMemberProgramCalculatedFields(
         taxes: calculatedTaxes,
         updated_by: (await supabase.auth.getUser()).data.user?.id,
       };
-      
+
       // Only update margin and final_total_price for non-Active programs
       if (!isActive) {
         updateData.margin = margin;
         updateData.final_total_price = finalTotal;
       }
-      
+
       const { data: updatedFinances, error: updateFinancesError } =
         await supabase
           .from('member_program_finances')

@@ -11,24 +11,44 @@ export function useAuth() {
   const supabase = createClient();
 
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    // Get initial user/session
+    const getInitialUser = async () => {
+      try {
+        // getUser() is more secure as it fetches the user from the server
+        const { data: { user }, error } = await supabase.auth.getUser();
+
+        if (user) {
+          const { data: { session } } = await supabase.auth.getSession();
+          setUser(user);
+          setSession(session);
+        } else {
+          setUser(null);
+          setSession(null);
+        }
+      } catch (err) {
+        console.error('Error fetching initial user:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    getInitialSession();
+    getInitialUser();
 
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        // Even on state change, we can verify with getUser() if we want ultimate security,
+        // but session.user is generally acceptable here for UI reactivity.
+        // However, to be consistent with the user's request:
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user || session.user);
+        setSession(session);
+      } else {
+        setUser(null);
+        setSession(null);
+      }
       setLoading(false);
     });
 

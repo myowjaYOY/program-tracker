@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import {
   calculateTaxesOnTaxableItems,
   calculateProjectedPrice,
@@ -7,15 +7,11 @@ import {
 } from '@/lib/utils/financial-calculations';
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     // Get all programs with finances
@@ -86,7 +82,7 @@ export async function GET(req: NextRequest) {
       // Calculate what margin SHOULD be
       const financeCharges = Number(finances.finance_charges || 0);
       const discounts = Number(finances.discounts || 0);
-      
+
       const taxes = calculateTaxesOnTaxableItems(totalCharge, totalTaxableCharge, discounts);
       const projectedPrice = calculateProjectedPrice(totalCharge, taxes, financeCharges, discounts);
       const correctMargin = calculateProjectedMargin(projectedPrice, totalCost, financeCharges, taxes);

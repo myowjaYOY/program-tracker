@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 import { memberProgramFinancesSchema } from '@/lib/validations/member-program-finances';
 import { calculateTaxesOnTaxableItems } from '@/lib/utils/financial-calculations';
 
@@ -7,15 +7,11 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -53,15 +49,11 @@ export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -75,8 +67,8 @@ export async function POST(
 
     const insertData = {
       ...validatedData,
-      created_by: session.user.id,
-      updated_by: session.user.id,
+      created_by: authUser.id,
+      updated_by: authUser.id,
     };
 
     const { data, error } = await supabase
@@ -111,15 +103,11 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { id } = await context.params;
@@ -143,7 +131,7 @@ export async function PUT(
     // ========================================
     // Always recalculate taxes from fresh database data to prevent
     // stale client-side cache from causing tax drift (critical bug fix)
-    
+
     // 1. Fetch fresh program items with therapy info to calculate total_taxable_charge
     const { data: programItems, error: itemsError } = await supabase
       .from('member_program_items')
@@ -162,18 +150,18 @@ export async function PUT(
     // 2. Calculate total_charge and total_taxable_charge from items
     let totalCharge = 0;
     let totalTaxableCharge = 0;
-    
-      if (programItems && programItems.length > 0) {
-        for (const item of programItems) {
-          const itemCharge = Number(item.item_charge || 0) * Number(item.quantity || 0);
-          totalCharge += itemCharge;
-          // therapies is returned as array from Supabase, access first element
-          const therapy = Array.isArray(item.therapies) ? item.therapies[0] : item.therapies;
-          if (therapy?.taxable) {
-            totalTaxableCharge += itemCharge;
-          }
+
+    if (programItems && programItems.length > 0) {
+      for (const item of programItems) {
+        const itemCharge = Number(item.item_charge || 0) * Number(item.quantity || 0);
+        totalCharge += itemCharge;
+        // therapies is returned as array from Supabase, access first element
+        const therapy = Array.isArray(item.therapies) ? item.therapies[0] : item.therapies;
+        if (therapy?.taxable) {
+          totalTaxableCharge += itemCharge;
         }
       }
+    }
 
     // 3. Get the discount value (use new value if being updated, otherwise current)
     const discountToUse = (validatedData as any).discounts !== undefined
@@ -201,7 +189,7 @@ export async function PUT(
 
     const updateData = {
       ...validatedData,
-      updated_by: session.user.id,
+      updated_by: authUser.id,
     };
 
     // Determine if changes would require payments regeneration
@@ -209,19 +197,19 @@ export async function PUT(
       (updateData as any).financing_type_id !== undefined &&
       (currentFinances
         ? (updateData as any).financing_type_id !==
-          currentFinances.financing_type_id
+        currentFinances.financing_type_id
         : true);
     const financeChargesChanged =
       (updateData as any).finance_charges !== undefined &&
       (currentFinances
         ? Number((updateData as any).finance_charges) !==
-          Number(currentFinances.finance_charges)
+        Number(currentFinances.finance_charges)
         : true);
     const discountsChanged =
       (updateData as any).discounts !== undefined &&
       (currentFinances
         ? Number((updateData as any).discounts) !==
-          Number(currentFinances.discounts)
+        Number(currentFinances.discounts)
         : true);
     const shouldRegenerate =
       finTypeChanged || financeChargesChanged || discountsChanged;

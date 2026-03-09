@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     // Get all programs
@@ -53,10 +49,10 @@ export async function GET(req: NextRequest) {
           const quantity = item.quantity || 1;
           const cost = item.item_cost || 0;
           const charge = item.item_charge || 0;
-          
+
           calculatedCost += cost * quantity;
           calculatedCharge += charge * quantity;
-          
+
           if (item.therapies?.taxable) {
             calculatedTaxableCharge += charge * quantity;
           }

@@ -1,58 +1,66 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Box,
     Typography,
-    Card,
-    CardContent,
     Button,
-    Chip,
+    Grid,
+    TextField,
     Dialog,
     DialogTitle,
     DialogContent,
     DialogActions,
-    TextField,
-    MenuItem,
-    Grid,
-    Alert,
-    IconButton,
-    Drawer,
-    Divider,
     CircularProgress,
-    Tooltip,
+    IconButton,
+    Chip,
+    Divider,
     Paper,
+    Drawer,
+    Alert,
+    Tooltip,
+    Card,
+    CardContent,
+    Select,
+    MenuItem,
+    SelectChangeEvent,
 } from '@mui/material';
 import {
     Add as AddIcon,
+    Close as CloseIcon,
     Business as BusinessIcon,
     People as PeopleIcon,
-    SwapHoriz as SwapIcon,
-    Close as CloseIcon,
-    Shield as ShieldIcon,
-    History as HistoryIcon,
-    ExitToApp as ExitIcon,
-    Refresh as RefreshIcon,
     Settings as SettingsIcon,
+    SwapHoriz as SwapIcon,
+    Refresh as RefreshIcon,
+    History as HistoryIcon,
+    Shield as ShieldIcon,
+    ExitToApp as ExitIcon,
+    Block as InactiveIcon,
     CheckCircle as ActiveIcon,
-    Cancel as InactiveIcon,
+    Edit as EditIcon,
+    Save as SaveIcon,
 } from '@mui/icons-material';
 import { GridColDef, GridActionsCellItem } from '@mui/x-data-grid-pro';
 import BaseDataTable from '@/components/tables/base-data-table';
 import {
+    tenantAdminKeys,
     useTenants,
     useTenantDetail,
     useCreateTenant,
     useUpdateTenant,
     useSwitchTenantContext,
     useClearTenantContext,
-    useTenantContext,
     useAdminAuditLog,
+    useTenantContext,
     type Tenant,
     type CreateTenantData,
 } from '@/lib/hooks/use-tenant-admin';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useUserPermissions } from '@/lib/hooks/use-user-permissions';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+import { TenantFormData } from '@/lib/validations/tenant';
 
 // ─── Create Tenant Dialog ────────────────────────────────────────────────────
 
@@ -195,6 +203,48 @@ function TenantDetailDrawer({ tenantId, open, onClose }: TenantDetailDrawerProps
     const updateTenant = useUpdateTenant();
     const switchContext = useSwitchTenantContext();
 
+    const [isEditing, setIsEditing] = useState(false);
+    const [editForm, setEditForm] = useState<Partial<TenantFormData>>({});
+
+    // Reset edit state when drawer closes or tenant changes
+    useEffect(() => {
+        if (!open) {
+            setIsEditing(false);
+        }
+    }, [open]);
+
+    useEffect(() => {
+        if (data?.tenant) {
+            setEditForm({
+                tenant_name: data.tenant.tenant_name,
+                contact_name: data.tenant.contact_name,
+                contact_email: data.tenant.contact_email,
+                subscription_tier: data.tenant.subscription_tier as any,
+                max_users: data.tenant.max_users,
+            });
+        }
+    }, [data?.tenant]);
+
+    const handleSave = () => {
+        if (!tenantId) return;
+
+        const updateData: Partial<Tenant> = {};
+        if (editForm.tenant_name !== undefined) updateData.tenant_name = editForm.tenant_name;
+        if (editForm.contact_name !== undefined) updateData.contact_name = editForm.contact_name;
+        if (editForm.contact_email !== undefined) updateData.contact_email = editForm.contact_email;
+        if (editForm.subscription_tier !== undefined) updateData.subscription_tier = editForm.subscription_tier;
+        if (editForm.max_users !== undefined) updateData.max_users = editForm.max_users;
+
+        updateTenant.mutate(
+            { tenantId, data: updateData },
+            {
+                onSuccess: () => {
+                    setIsEditing(false);
+                },
+            }
+        );
+    };
+
     if (!tenantId) return null;
 
     const tenant = data?.tenant;
@@ -222,19 +272,43 @@ function TenantDetailDrawer({ tenantId, open, onClose }: TenantDetailDrawerProps
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {/* Name & Status */}
                         <Box>
-                            <Typography variant="h6" fontWeight={600}>
-                                {tenant.tenant_name}
-                            </Typography>
+                            {isEditing ? (
+                                <TextField
+                                    label="Tenant Name"
+                                    value={editForm.tenant_name || ''}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => setEditForm((prev: Partial<TenantFormData>) => ({ ...prev, tenant_name: e.target.value }))}
+                                    fullWidth
+                                    size="small"
+                                    sx={{ mb: 2 }}
+                                />
+                            ) : (
+                                <Typography variant="h6" fontWeight={600}>
+                                    {tenant.tenant_name}
+                                </Typography>
+                            )}
                             <Typography variant="body2" color="text.secondary">
                                 {tenant.tenant_slug}.yourdomain.com
                             </Typography>
-                            <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                            <Box sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'center' }}>
                                 <Chip
                                     label={tenant.is_active ? 'Active' : 'Inactive'}
                                     color={tenant.is_active ? 'success' : 'default'}
                                     size="small"
                                 />
-                                <Chip label={tenant.subscription_tier} size="small" variant="outlined" />
+                                {isEditing ? (
+                                    <Select
+                                        size="small"
+                                        value={editForm.subscription_tier || 'standard'}
+                                        onChange={(e: SelectChangeEvent<any>) => setEditForm((prev: Partial<TenantFormData>) => ({ ...prev, subscription_tier: e.target.value as any }))}
+                                        sx={{ height: 24, fontSize: '0.75rem' }}
+                                    >
+                                        <MenuItem value="standard">Standard</MenuItem>
+                                        <MenuItem value="professional">Professional</MenuItem>
+                                        <MenuItem value="enterprise">Enterprise</MenuItem>
+                                    </Select>
+                                ) : (
+                                    <Chip label={tenant.subscription_tier} size="small" variant="outlined" />
+                                )}
                             </Box>
                         </Box>
 
@@ -263,17 +337,50 @@ function TenantDetailDrawer({ tenantId, open, onClose }: TenantDetailDrawerProps
                             <Typography variant="subtitle2" color="text.secondary" gutterBottom>
                                 Contact
                             </Typography>
-                            <Typography variant="body2">{tenant.contact_name || '—'}</Typography>
-                            <Typography variant="body2" color="text.secondary">{tenant.contact_email || '—'}</Typography>
+                            {isEditing ? (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                                    <TextField
+                                        label="Contact Name"
+                                        value={editForm.contact_name || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => setEditForm((prev: Partial<TenantFormData>) => ({ ...prev, contact_name: e.target.value }))}
+                                        fullWidth
+                                        size="small"
+                                    />
+                                    <TextField
+                                        label="Contact Email"
+                                        value={editForm.contact_email || ''}
+                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => setEditForm((prev: Partial<TenantFormData>) => ({ ...prev, contact_email: e.target.value }))}
+                                        fullWidth
+                                        size="small"
+                                    />
+                                </Box>
+                            ) : (
+                                <>
+                                    <Typography variant="body2">{tenant.contact_name || '—'}</Typography>
+                                    <Typography variant="body2" color="text.secondary">{tenant.contact_email || '—'}</Typography>
+                                </>
+                            )}
                         </Box>
 
                         <Divider />
 
                         {/* Users */}
                         <Box>
-                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                Users ({users.length} / {tenant.max_users})
-                            </Typography>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                <Typography variant="subtitle2" color="text.secondary">
+                                    Users ({users.length} / {isEditing ? '-' : tenant.max_users})
+                                </Typography>
+                                {isEditing && (
+                                    <TextField
+                                        label="Max Users"
+                                        type="number"
+                                        value={editForm.max_users || 0}
+                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => setEditForm((prev: Partial<TenantFormData>) => ({ ...prev, max_users: parseInt(e.target.value) || 0 }))}
+                                        size="small"
+                                        sx={{ width: 100 }}
+                                    />
+                                )}
+                            </Box>
                             {users.map((user) => (
                                 <Box key={user.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.75 }}>
                                     <Box>
@@ -304,33 +411,65 @@ function TenantDetailDrawer({ tenantId, open, onClose }: TenantDetailDrawerProps
 
                         {/* Actions */}
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <Button
-                                variant="contained"
-                                startIcon={<SwapIcon />}
-                                onClick={() => {
-                                    switchContext.mutate(tenantId);
-                                    onClose();
-                                }}
-                                disabled={switchContext.isPending}
-                                sx={{ borderRadius: 0, fontWeight: 600 }}
-                            >
-                                Switch Into This Tenant
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                color={tenant.is_active ? 'error' : 'success'}
-                                startIcon={tenant.is_active ? <InactiveIcon /> : <ActiveIcon />}
-                                onClick={() => {
-                                    updateTenant.mutate({
-                                        tenantId: tenant.tenant_id,
-                                        data: { is_active: !tenant.is_active },
-                                    });
-                                }}
-                                disabled={updateTenant.isPending}
-                                sx={{ borderRadius: 0 }}
-                            >
-                                {tenant.is_active ? 'Deactivate Tenant' : 'Activate Tenant'}
-                            </Button>
+                            {isEditing ? (
+                                <>
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleSave}
+                                        disabled={updateTenant.isPending}
+                                        startIcon={updateTenant.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
+                                        sx={{ borderRadius: 0, fontWeight: 600 }}
+                                    >
+                                        Save Changes
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        onClick={() => setIsEditing(false)}
+                                        disabled={updateTenant.isPending}
+                                        sx={{ borderRadius: 0 }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <Button
+                                        variant="outlined"
+                                        startIcon={<EditIcon />}
+                                        onClick={() => setIsEditing(true)}
+                                        sx={{ borderRadius: 0, fontWeight: 600 }}
+                                    >
+                                        Edit Details
+                                    </Button>
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<SwapIcon />}
+                                        onClick={() => {
+                                            switchContext.mutate(tenantId);
+                                            onClose();
+                                        }}
+                                        disabled={switchContext.isPending}
+                                        sx={{ borderRadius: 0, fontWeight: 600 }}
+                                    >
+                                        Switch Into This Tenant
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        color={tenant.is_active ? 'error' : 'success'}
+                                        startIcon={tenant.is_active ? <InactiveIcon /> : <ActiveIcon />}
+                                        onClick={() => {
+                                            updateTenant.mutate({
+                                                tenantId: tenant.tenant_id,
+                                                data: { is_active: !tenant.is_active },
+                                            });
+                                        }}
+                                        disabled={updateTenant.isPending}
+                                        sx={{ borderRadius: 0 }}
+                                    >
+                                        {tenant.is_active ? 'Deactivate Tenant' : 'Activate Tenant'}
+                                    </Button>
+                                </>
+                            )}
                         </Box>
                     </Box>
                 ) : (
@@ -394,7 +533,9 @@ function AuditLogDialog({ open, onClose }: { open: boolean; onClose: () => void 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function TenantManagementPage() {
-    const { data: tenants = [], isLoading, error, refetch } = useTenants();
+    const router = useRouter();
+    const { data: permissions, isLoading: permissionsLoading } = useUserPermissions();
+    const { data: tenants = [], isLoading: tenantsLoading, error, refetch } = useTenants();
     const { data: tenantContext } = useTenantContext();
     const clearContext = useClearTenantContext();
     const switchContext = useSwitchTenantContext();
@@ -403,6 +544,35 @@ export default function TenantManagementPage() {
     const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
     const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
     const [auditLogOpen, setAuditLogOpen] = useState(false);
+
+    // ─── Authorization Check ───────────────────────────────────────────────────
+
+    if (permissionsLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    if (!permissions?.isSuperAdmin) {
+        return (
+            <Box sx={{ p: 4, textAlign: 'center' }}>
+                <Alert severity="error" variant="filled" sx={{ maxWidth: 600, mx: 'auto', mt: 8 }}>
+                    <Typography variant="h6">Access Denied</Typography>
+                    <Typography>You do not have the required permissions to view this page. This area is restricted to Super Admins only.</Typography>
+                    <Button
+                        variant="contained"
+                        color="inherit"
+                        sx={{ mt: 2, color: 'error.main' }}
+                        onClick={() => router.push('/dashboard')}
+                    >
+                        Back to Dashboard
+                    </Button>
+                </Alert>
+            </Box>
+        );
+    }
 
     // ─── DataGrid Columns ───────────────────────────────────────────────────────
 
@@ -557,6 +727,14 @@ export default function TenantManagementPage() {
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                     <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => setCreateDialogOpen(true)}
+                        sx={{ borderRadius: 0, fontWeight: 600 }}
+                    >
+                        Add Tenant
+                    </Button>
+                    <Button
                         variant="outlined"
                         startIcon={<HistoryIcon />}
                         onClick={() => setAuditLogOpen(true)}
@@ -631,7 +809,8 @@ export default function TenantManagementPage() {
                 title="Tenants"
                 data={tenants.map(t => ({ ...t, id: t.tenant_id }))}
                 columns={columns}
-                loading={isLoading}
+                loading={tenantsLoading}
+                rowHeight={70}
                 getRowId={(row: any) => row.tenant_id}
                 showCreateButton
                 createButtonText="Add Tenant"

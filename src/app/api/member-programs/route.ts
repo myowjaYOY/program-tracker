@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const { searchParams } = new URL(req.url);
@@ -50,7 +46,7 @@ export async function GET(req: NextRequest) {
       // Get the first finance record (there should only be one per program)
       const financeRecord =
         program.member_program_finances &&
-        program.member_program_finances.length > 0
+          program.member_program_finances.length > 0
           ? program.member_program_finances[0]
           : null;
 
@@ -81,15 +77,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { session },
-    error: authError,
-  } = await supabase.auth.getSession();
-
-  if (authError || !session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.authorized) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+  const { supabase, user: authUser } = auth;
 
   try {
     const body = await req.json();
@@ -155,7 +147,7 @@ export async function POST(req: NextRequest) {
 
     // Build update payload for fields not handled by the database function
     const updatePayload: Record<string, unknown> = {
-      updated_by: session.user.id,
+      updated_by: authUser.id,
     };
 
     // Update program status if provided
@@ -166,7 +158,7 @@ export async function POST(req: NextRequest) {
     // Update program_type if provided (critical for membership programs)
     if (body.program_type && (body.program_type === 'one-time' || body.program_type === 'membership')) {
       updatePayload.program_type = body.program_type;
-      
+
       // For membership programs, set duration to 30 (monthly billing cycle)
       if (body.program_type === 'membership') {
         updatePayload.duration = 30;

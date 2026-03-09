@@ -9,6 +9,7 @@ import { CssBaseline } from '@mui/material';
 import { Toaster } from 'sonner';
 import { theme } from '@/styles/theme';
 import { TenantProvider } from '@/lib/contexts/TenantContext';
+import { DynamicThemeProvider } from './DynamicThemeProvider';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,16 +27,16 @@ interface ProvidersProps {
 export function Providers({ children }: ProvidersProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <CssBaseline />
-          <TenantProvider>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <TenantProvider>
+          <DynamicThemeProvider>
+            <CssBaseline />
             {children}
-          </TenantProvider>
-          <Toaster position="top-right" duration={4000} theme="dark" />
+            <Toaster position="top-right" duration={4000} theme="dark" />
+          </DynamicThemeProvider>
           <ReactQueryDevtools initialIsOpen={false} />
-        </LocalizationProvider>
-      </ThemeProvider>
+        </TenantProvider>
+      </LocalizationProvider>
     </QueryClientProvider>
   );
 }

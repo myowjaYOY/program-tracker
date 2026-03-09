@@ -60,7 +60,7 @@ function CustomAggregationFooter({
   Object.keys(aggregationModel).forEach(field => {
     const aggType = aggregationModel[field];
     const values = data.map(row => Number(row[field]) || 0).filter(v => !isNaN(v));
-    
+
     if (aggType === 'sum') {
       aggregations[field] = values.reduce((sum, val) => sum + val, 0);
     } else if (aggType === 'avg') {
@@ -81,7 +81,7 @@ function CustomAggregationFooter({
           const column = columns.find(col => col.field === field);
           const value = aggregations[field];
           if (value === undefined) return null;
-          
+
           // Format the aggregated value
           let formattedValue: string | number = value;
           if (column?.valueFormatter && typeof column.valueFormatter === 'function') {
@@ -96,7 +96,7 @@ function CustomAggregationFooter({
               formattedValue = value;
             }
           }
-          
+
           return (
             <Typography key={field} variant="body2" fontWeight="bold" sx={{ mr: 3, whiteSpace: 'nowrap' }}>
               {aggregationLabel || 'Total:'} {formattedValue}
@@ -222,6 +222,7 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   getDetailPanelHeight?: (row: T) => number;
   // Custom height override
   gridHeight?: string | number;
+  rowHeight?: number;
   // Initial sort model
   sortModel?: Array<{ field: string; sort: 'asc' | 'desc' }>;
   // Export functionality
@@ -261,6 +262,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   renderDetailPanel,
   getDetailPanelHeight,
   gridHeight,
+  rowHeight = 52,
   sortModel,
   enableExport = false,
   aggregationModel,
@@ -268,13 +270,13 @@ export default function BaseDataTable<T extends BaseEntity>({
   aggregationLabel,
   persistStateKey,
 }: BaseDataTableProps<T>) {
-  
+
   // Get user for per-user state persistence
   const { user } = useAuth();
-  
+
   // Create API reference for state persistence
   const apiRef = useGridApiRef();
-  
+
   // Load saved state from localStorage BEFORE rendering
   // CRITICAL: Must wait for user to be loaded before computing state
   const initialGridState = useMemo(() => {
@@ -282,15 +284,15 @@ export default function BaseDataTable<T extends BaseEntity>({
     if (persistStateKey && !user?.id) {
       return null; // null = waiting for user, undefined = no saved state
     }
-    
+
     // No persistence needed
     if (!persistStateKey || !user?.id) {
       return undefined;
     }
-    
+
     const storageKey = `${persistStateKey}_${user.id}`;
     const savedState = localStorage.getItem(storageKey);
-    
+
     if (savedState) {
       try {
         return JSON.parse(savedState);
@@ -300,7 +302,7 @@ export default function BaseDataTable<T extends BaseEntity>({
         return undefined;
       }
     }
-    
+
     return undefined;
   }, [persistStateKey, user?.id]);
 
@@ -315,9 +317,9 @@ export default function BaseDataTable<T extends BaseEntity>({
   // Inject saved widths directly into columns to prevent flash
   const columnsWithSavedWidths = useMemo(() => {
     if (!initialGridState?.columns?.dimensions) return columns;
-    
+
     const savedDimensions = initialGridState.columns.dimensions;
-    
+
     return columns.map(col => {
       const savedDim = savedDimensions[col.field];
       if (savedDim?.width) {
@@ -326,21 +328,21 @@ export default function BaseDataTable<T extends BaseEntity>({
       return col;
     });
   }, [columns, initialGridState]);
-  
+
   useEffect(() => {
     // Capture apiRef at effect time, not cleanup time
     const apiRefCurrent = apiRef.current;
     const currentPersistKey = persistStateKey;
     const currentUserId = user?.id;
-    
+
     // Save on unmount (SPA navigation)
     return () => {
       if (!currentPersistKey || !currentUserId || !apiRefCurrent) return;
-      
+
       const storageKey = `${currentPersistKey}_${currentUserId}`;
       try {
         const newState = apiRefCurrent.exportState();
-        
+
         // Merge with existing saved dimensions to preserve manually resized columns
         const existingSaved = localStorage.getItem(storageKey);
         if (existingSaved) {
@@ -358,7 +360,7 @@ export default function BaseDataTable<T extends BaseEntity>({
             // Silently ignore merge errors
           }
         }
-        
+
         localStorage.setItem(storageKey, JSON.stringify(newState));
       } catch (error) {
         console.error(`Failed to save grid state for ${currentPersistKey}:`, error);
@@ -369,15 +371,15 @@ export default function BaseDataTable<T extends BaseEntity>({
   useEffect(() => {
     // Save on browser close/refresh
     if (!persistStateKey || !user?.id) return;
-    
+
     const storageKey = `${persistStateKey}_${user.id}`;
     const apiRefCurrent = apiRef.current;
-    
+
     const handleBeforeUnload = () => {
       if (apiRefCurrent) {
         try {
           const newState = apiRefCurrent.exportState();
-          
+
           // Merge with existing saved dimensions
           const existingSaved = localStorage.getItem(storageKey);
           if (existingSaved) {
@@ -394,7 +396,7 @@ export default function BaseDataTable<T extends BaseEntity>({
               // Silently ignore merge errors
             }
           }
-          
+
           localStorage.setItem(storageKey, JSON.stringify(newState));
         } catch (error) {
           console.error(`Failed to save grid state for ${persistStateKey}:`, error);
@@ -416,32 +418,32 @@ export default function BaseDataTable<T extends BaseEntity>({
       getActions: params => [
         ...(onEdit
           ? [
-              <GridActionsCellItem
-                key="edit"
-                icon={
-                  <Tooltip title={editButtonText}>
-                    <EditIcon />
-                  </Tooltip>
-                }
-                label={editButtonText}
-                onClick={() => handleEdit(params.row)}
-                color="primary"
-              />,
-            ]
+            <GridActionsCellItem
+              key="edit"
+              icon={
+                <Tooltip title={editButtonText}>
+                  <EditIcon />
+                </Tooltip>
+              }
+              label={editButtonText}
+              onClick={() => handleEdit(params.row)}
+              color="primary"
+            />,
+          ]
           : []),
         ...(onDelete
           ? [
-              <GridActionsCellItem
-                key="delete"
-                icon={
-                  <Tooltip title={deleteButtonText}>
-                    <DeleteIcon color="error" />
-                  </Tooltip>
-                }
-                label={deleteButtonText}
-                onClick={() => handleDelete(params.id)}
-              />,
-            ]
+            <GridActionsCellItem
+              key="delete"
+              icon={
+                <Tooltip title={deleteButtonText}>
+                  <DeleteIcon color="error" />
+                </Tooltip>
+              }
+              label={deleteButtonText}
+              onClick={() => handleDelete(params.id)}
+            />,
+          ]
           : []),
       ],
     }),
@@ -505,26 +507,26 @@ export default function BaseDataTable<T extends BaseEntity>({
   // Prepare detail panel props conditionally
   const detailPanelProps = renderDetailPanel
     ? {
-        detailPanelExpandedRowIds: expandedRow
-          ? new Set<GridRowId>([expandedRow])
-          : new Set<GridRowId>(),
-        onDetailPanelExpandedRowIdsChange: (
-          newExpandedRowIds: Set<GridRowId>
-        ) => {
-          const expandedArray = Array.from(newExpandedRowIds);
-          // Auto-collapse: only keep the last expanded row (or none if all collapsed)
-          const lastExpandedRow =
-            expandedArray.length > 0
-              ? expandedArray[expandedArray.length - 1]
-              : null;
-          setExpandedRow(lastExpandedRow || null);
-        },
-        getDetailPanelHeight: getDetailPanelHeight
-          ? (params: any) => getDetailPanelHeight(params.row as T)
-          : () => 250,
-        getDetailPanelContent: ({ row }: { row: any }) =>
-          renderDetailPanel(row as T),
-      }
+      detailPanelExpandedRowIds: expandedRow
+        ? new Set<GridRowId>([expandedRow])
+        : new Set<GridRowId>(),
+      onDetailPanelExpandedRowIdsChange: (
+        newExpandedRowIds: Set<GridRowId>
+      ) => {
+        const expandedArray = Array.from(newExpandedRowIds);
+        // Auto-collapse: only keep the last expanded row (or none if all collapsed)
+        const lastExpandedRow =
+          expandedArray.length > 0
+            ? expandedArray[expandedArray.length - 1]
+            : null;
+        setExpandedRow(lastExpandedRow || null);
+      },
+      getDetailPanelHeight: getDetailPanelHeight
+        ? (params: any) => getDetailPanelHeight(params.row as T)
+        : () => 250,
+      getDetailPanelContent: ({ row }: { row: any }) =>
+        renderDetailPanel(row as T),
+    }
     : {};
 
   return (
@@ -592,7 +594,7 @@ export default function BaseDataTable<T extends BaseEntity>({
             rows={data}
             columns={allColumns}
             loading={loading}
-            rowHeight={40}
+            rowHeight={rowHeight}
             autoHeight={autoHeight}
             getRowId={getRowId || (row => row.id)}
             pagination={true}
@@ -605,47 +607,47 @@ export default function BaseDataTable<T extends BaseEntity>({
               // Only apply prop sortModel if no saved state exists
               ...(!initialGridState?.sorting && sortModel && { sorting: { sortModel } }),
             }}
-          {...(!initialGridState?.sorting && sortModel && { initialSortModel: sortModel })}
-          pageSizeOptions={pageSizeOptions}
-          {...(onRowClick && {
-            onRowClick: (params: any) => onRowClick(params.row),
-          })}
-          {...(showAggregationFooter && aggregationModel && {
-            slots: {
-              footer: CustomAggregationFooter as any,
-            },
-            slotProps: {
-              footer: { data, columns: allColumns, aggregationModel, aggregationLabel } as any,
-            },
-          })}
-          getRowClassName={params => {
-            const selected =
-              selectedRowId && params.id === selectedRowId
-                ? 'selected-row'
-                : '';
-            const extra = rowClassName ? rowClassName(params.row as T) : '';
-            return [extra, selected].filter(Boolean).join(' ');
-          }}
-          {...detailPanelProps}
-          sx={{
-            '& .MuiDataGrid-cell:focus': {
-              outline: 'none',
-            },
-            '& .MuiDataGrid-row:hover': {
-              backgroundColor: 'action.hover',
-            },
-            '& .MuiDataGrid-row.selected-row': {
-              backgroundColor: 'primary.light',
-              '&:hover': {
-                backgroundColor: 'primary.main',
+            {...(!initialGridState?.sorting && sortModel && { initialSortModel: sortModel })}
+            pageSizeOptions={pageSizeOptions}
+            {...(onRowClick && {
+              onRowClick: (params: any) => onRowClick(params.row),
+            })}
+            {...(showAggregationFooter && aggregationModel && {
+              slots: {
+                footer: CustomAggregationFooter as any,
               },
-            },
-            // Late row highlighting (past due date)
-            '& .MuiDataGrid-row.row-late, & .MuiDataGrid-row.row-late:hover': {
-              backgroundColor: theme => alpha(theme.palette.error.main, 0.24),
-            },
-          }}
-        />
+              slotProps: {
+                footer: { data, columns: allColumns, aggregationModel, aggregationLabel } as any,
+              },
+            })}
+            getRowClassName={params => {
+              const selected =
+                selectedRowId && params.id === selectedRowId
+                  ? 'selected-row'
+                  : '';
+              const extra = rowClassName ? rowClassName(params.row as T) : '';
+              return [extra, selected].filter(Boolean).join(' ');
+            }}
+            {...detailPanelProps}
+            sx={{
+              '& .MuiDataGrid-cell:focus': {
+                outline: 'none',
+              },
+              '& .MuiDataGrid-row:hover': {
+                backgroundColor: 'action.hover',
+              },
+              '& .MuiDataGrid-row.selected-row': {
+                backgroundColor: 'primary.light',
+                '&:hover': {
+                  backgroundColor: 'primary.main',
+                },
+              },
+              // Late row highlighting (past due date)
+              '& .MuiDataGrid-row.row-late, & .MuiDataGrid-row.row-late:hover': {
+                backgroundColor: theme => alpha(theme.palette.error.main, 0.24),
+              },
+            }}
+          />
         )}
         {loading && (
           <Box

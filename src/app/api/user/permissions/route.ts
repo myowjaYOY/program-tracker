@@ -1,24 +1,19 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { requireAuth } from '@/lib/auth/api';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-
-    // Check authentication
-    const {
-      data: { session },
-      error: authError,
-    } = await supabase.auth.getSession();
-    if (authError || !session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await requireAuth();
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
+    const { supabase, user: authUser } = auth;
 
     // Get user info
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('is_admin, is_active')
-      .eq('id', session.user.id)
+      .select('is_admin, is_super_admin, is_active')
+      .eq('id', authUser.id)
       .single();
 
     if (userError || !user) {
@@ -29,6 +24,7 @@ export async function GET() {
     if (user.is_admin) {
       return NextResponse.json({
         isAdmin: true,
+        isSuperAdmin: user.is_super_admin || false,
         permissions: ['*'], // * means all permissions
         isActive: user.is_active,
       });
@@ -38,7 +34,7 @@ export async function GET() {
     const { data: permissions, error: permissionsError } = await supabase
       .from('user_menu_permissions')
       .select('menu_path')
-      .eq('user_id', session.user.id);
+      .eq('user_id', authUser.id);
 
     if (permissionsError) {
       console.error('Error fetching user permissions:', permissionsError);
@@ -52,6 +48,7 @@ export async function GET() {
 
     return NextResponse.json({
       isAdmin: false,
+      isSuperAdmin: user.is_super_admin || false,
       permissions: permissionPaths,
       isActive: user.is_active,
     });
