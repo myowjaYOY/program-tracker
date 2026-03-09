@@ -146,7 +146,7 @@ export default function MsqTimelineChart({
             <RechartsTooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
-                  const data = payload[0].payload;
+                  const data = payload?.[0]?.payload ?? {};
                   return (
                     <Box
                       sx={{

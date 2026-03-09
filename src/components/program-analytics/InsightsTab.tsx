@@ -9,6 +9,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  TooltipProps,
   Legend,
   ResponsiveContainer,
   ReferenceLine,
@@ -68,9 +69,11 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
     : metrics.compliance_odds_ratio || {};
 
   // Parse PROMIS-29 statistical measures
-  const promisSuccessRates = typeof metrics.promis_success_rates === 'string'
-    ? JSON.parse(metrics.promis_success_rates)
-    : metrics.promis_success_rates || [];
+  const promisSuccessRates = useMemo(() => {
+    return typeof metrics.promis_success_rates === 'string'
+      ? JSON.parse(metrics.promis_success_rates)
+      : metrics.promis_success_rates || [];
+  }, [metrics.promis_success_rates]);
 
   const promisEffectSize = typeof metrics.promis_effect_size === 'string'
     ? JSON.parse(metrics.promis_effect_size)
@@ -223,9 +226,9 @@ export default function InsightsTab({ metrics }: InsightsTabProps) {
                     }}
                     labelStyle={{ fontSize: '12px', fontWeight: 600, marginBottom: '4px' }}
                     itemStyle={{ fontSize: '12px', padding: '2px 0' }}
-                    formatter={(value: any, name: string | undefined, props: any) => {
-                      const count = name === 'MSQ (Symptoms)' ? props.payload.msqCount : props.payload.promisCount;
-                      return [`${value.toFixed(1)}% (${count})`, name ?? ''];
+                    formatter={(value, name) => {
+                      if (value === undefined || value === null) return ['-', String(name)];
+                      return [`${Number(value).toFixed(1)}%`, String(name)];
                     }}
                   />
                   <Legend
