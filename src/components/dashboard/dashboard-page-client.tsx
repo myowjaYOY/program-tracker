@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     Box,
     Card,
@@ -13,38 +13,50 @@ import {
     MenuItem,
     Tabs,
     Tab,
-    IconButton,
-    Menu,
-    ListItemIcon,
-    ListItemText,
 } from '@mui/material';
 import PeopleIcon from '@mui/icons-material/People';
 import SchoolIcon from '@mui/icons-material/School';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import PauseCircleIcon from '@mui/icons-material/PauseCircle';
 import DescriptionIcon from '@mui/icons-material/Description';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import ListIcon from '@mui/icons-material/List';
-import { useDashboardMetrics, DashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useDashboardMetrics } from '@/lib/hooks/use-dashboard-metrics';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
 import PausedProgramsHoverTooltip from '@/components/dashboard/paused-programs-hover-tooltip';
 import { useDashboardMembers, DashboardMember } from '@/lib/hooks/use-dashboard-member-programs';
 import { MemberPrograms } from '@/types/database.types';
-import DashboardProgramInfoTab from '@/components/dashboard/dashboard-program-info-tab';
-import DashboardProgramScriptTab from '@/components/dashboard/dashboard-program-script-tab';
-import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-todo-tab';
-import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
-import DashboardProgramItemsTab from '@/components/dashboard/dashboard-program-items-tab';
-import DashboardProgramNotesTab from '@/components/dashboard/dashboard-program-notes-tab';
-import DashboardProgramRashaTab from '@/components/dashboard/dashboard-program-rasha-tab';
 import ActiveMembersModal from '@/components/dashboard/active-members-modal';
 import { DashboardData } from '@/lib/data/dashboard';
+import MetricCard, { MetricCardColor, MetricCardMenuAction, MetricCardProps } from '@/components/dashboard/MetricCard';
+
+// ============================================
+// DIRECT IMPORTS FOR TAB COMPONENTS
+// ============================================
+// Note: We use direct imports instead of React.lazy() here because:
+// 1. Lazy loading inside an already-hydrated SSR component causes race conditions
+// 2. The tabs are relatively small and the user will likely view most of them
+// 3. This avoids hydration mismatches and intermittent loading issues
+import DashboardProgramInfoTab from '@/components/dashboard/dashboard-program-info-tab';
+import DashboardProgramItemsTab from '@/components/dashboard/dashboard-program-items-tab';
+import DashboardProgramNotesTab from '@/components/dashboard/dashboard-program-notes-tab';
+import DashboardProgramScriptTab from '@/components/dashboard/dashboard-program-script-tab';
+import DashboardProgramToDoTab from '@/components/dashboard/dashboard-program-todo-tab';
+import DashboardProgramRashaTab from '@/components/dashboard/dashboard-program-rasha-tab';
+import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
+
+// Type for metric card configuration (allows optional props to be omitted)
+type MetricCardConfig = Pick<MetricCardProps, 'title' | 'value' | 'color' | 'icon'> &
+    Partial<Pick<MetricCardProps, 'description' | 'menuActions' | 'tooltipWrapper'>>;
+
+// ============================================
+// TAB PANEL COMPONENT
+// ============================================
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -52,9 +64,11 @@ interface TabPanelProps {
     value: number;
 }
 
-function TabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
+/**
+ * TabPanel - Only renders children when selected
+ * Prevents unnecessary rendering of hidden tab content
+ */
+function TabPanel({ children, value, index, ...other }: TabPanelProps) {
     return (
         <div
             role="tabpanel"
@@ -68,477 +82,209 @@ function TabPanel(props: TabPanelProps) {
     );
 }
 
+// ============================================
+// MAIN COMPONENT
+// ============================================
+
 interface DashboardPageClientProps {
     initialData: DashboardData;
 }
 
 export default function DashboardPageClient({ initialData }: DashboardPageClientProps) {
-    // Use React Query with SSR data as initialData
-    const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics();
-    const { data: coordinatorMetrics } = useCoordinatorMetrics();
-    const { data: members = initialData.members, isLoading: membersLoading, error: membersError } = useDashboardMembers();
+    // ============================================
+    // DATA FETCHING WITH SSR HYDRATION
+    // ============================================
 
-    // Use initial data if loading
-    const currentMetrics = metrics || initialData.metrics;
-    const currentCoordinatorMetrics = coordinatorMetrics || initialData.coordinatorMetrics;
+    // IMPORTANT: For hydration safety, we use initialData on first render
+    // and let React Query update in the background. This prevents mismatches
+    // between server-rendered HTML and initial client render.
 
-    // State for member and program selection
-    const [selectedMember, setSelectedMember] = useState<any>(null);
+    const {
+        data: metricsData,
+        isLoading: isMetricsLoading,
+        isFetched: isMetricsFetched
+    } = useDashboardMetrics();
+
+    const {
+        data: coordinatorMetricsData,
+        isFetched: isCoordinatorFetched
+    } = useCoordinatorMetrics();
+
+    const {
+        data: membersData,
+        isLoading: membersLoading,
+        error: membersError
+    } = useDashboardMembers();
+
+    // Use initialData for first render (hydration), then switch to fetched data
+    // This ensures server HTML matches initial client render
+    const currentMetrics = isMetricsFetched ? (metricsData ?? initialData.metrics) : initialData.metrics;
+    const currentCoordinatorMetrics = isCoordinatorFetched ? coordinatorMetricsData : initialData.coordinatorMetrics;
+    const members = membersData ?? initialData.members;
+
+    // ============================================
+    // STATE MANAGEMENT
+    // ============================================
+
+    const [selectedMember, setSelectedMember] = useState<DashboardMember | null>(null);
     const [selectedProgram, setSelectedProgram] = useState<MemberPrograms | null>(null);
     const [tabValue, setTabValue] = useState(0);
 
-    // State for Active Members menu and modal
-    const [activeMembersMenuAnchor, setActiveMembersMenuAnchor] = useState<null | HTMLElement>(null);
-    const activeMembersMenuOpen = Boolean(activeMembersMenuAnchor);
+    // Active Members modal state
     const [activeMembersModalOpen, setActiveMembersModalOpen] = useState(false);
 
-    // Handler functions
-    const handleMemberChange = (event: any, newValue: any) => {
-        setSelectedMember(newValue);
+    // ============================================
+    // MEMOIZED HANDLERS
+    // ============================================
+
+    const handleMemberChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const memberId = Number(event.target.value);
+        const member = members.find((m: DashboardMember) => m.lead_id === memberId) || null;
+        setSelectedMember(member);
+
         // Auto-select first program if member has programs
-        if (newValue && newValue.programs && newValue.programs.length > 0) {
-            setSelectedProgram(newValue.programs[0]);
+        if (member && member.programs && member.programs.length > 0) {
+            setSelectedProgram(member.programs[0] ?? null);
         } else {
             setSelectedProgram(null);
         }
         setTabValue(0); // Reset to first tab
-    };
+    }, [members]);
 
-    const handleProgramChange = (event: any, newValue: any) => {
-        setSelectedProgram(newValue);
+    const handleProgramChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!selectedMember) return;
+        const programId = Number(event.target.value);
+        const program = selectedMember.programs.find(
+            (p: MemberPrograms) => p.member_program_id === programId
+        );
+        setSelectedProgram(program || null);
         setTabValue(0); // Reset to first tab
-    };
+    }, [selectedMember]);
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    const handleTabChange = useCallback((_event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
-    };
+    }, []);
 
-    const handleActiveMembersMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-        setActiveMembersMenuAnchor(event.currentTarget);
-    };
-
-    const handleActiveMembersMenuClose = () => {
-        setActiveMembersMenuAnchor(null);
-    };
-
-    const handleViewActiveMembers = () => {
-        handleActiveMembersMenuClose();
+    const handleViewActiveMembers = useCallback(() => {
         setActiveMembersModalOpen(true);
-    };
+    }, []);
+
+    // ============================================
+    // MEMOIZED METRIC CARDS CONFIGURATION
+    // ============================================
+
+    const metricCardsConfig: MetricCardConfig[] = useMemo(() => [
+        {
+            title: 'Active Members',
+            value: currentMetrics?.activeMembers ?? 0,
+            color: 'success' as MetricCardColor,
+            icon: <PeopleIcon />,
+            description: 'Members on active programs',
+            menuActions: [
+                {
+                    label: 'View All Members',
+                    icon: <VisibilityIcon fontSize="small" />,
+                    onClick: handleViewActiveMembers,
+                },
+            ] as MetricCardMenuAction[],
+        },
+        {
+            title: 'New Programs This Month',
+            value: currentMetrics?.newProgramsThisMonth ?? 0,
+            color: 'info' as MetricCardColor,
+            icon: <SchoolIcon />,
+            description: 'Programs with start dates this month',
+        },
+        {
+            title: 'Completed Programs',
+            value: currentMetrics?.completedPrograms ?? 0,
+            color: 'primary' as MetricCardColor,
+            icon: <CheckCircleIcon />,
+            description: 'Programs completed',
+        },
+        {
+            title: 'Program Changes (This Week)',
+            value: currentCoordinatorMetrics?.programChangesThisWeek ?? 0,
+            color: 'secondary' as MetricCardColor,
+            icon: <AutoGraphIcon />,
+            description: 'Program modifications this week',
+            tooltipWrapper: ProgramChangesHoverTooltip,
+        },
+        {
+            title: 'Paused Programs',
+            value: currentMetrics?.pausedPrograms ?? 0,
+            color: 'error' as MetricCardColor,
+            icon: <PauseCircleIcon />,
+            description: 'Programs currently paused',
+            tooltipWrapper: PausedProgramsHoverTooltip,
+        },
+    ], [currentMetrics, currentCoordinatorMetrics, handleViewActiveMembers]);
+
+    // ============================================
+    // TAB CONFIGURATION
+    // ============================================
+
+    const tabConfig = useMemo(() => [
+        { icon: <InfoOutlinedIcon />, label: 'Info' },
+        { icon: <AssignmentTurnedInIcon />, label: 'Items' },
+        { icon: <DescriptionIcon />, label: 'Notes' },
+        { icon: <AssignmentIcon />, label: 'Script' },
+        { icon: <AssignmentIcon />, label: 'To Do' },
+        { icon: <ListIcon />, label: 'RASHA' },
+        { icon: <AutoGraphIcon />, label: 'Changes' },
+    ], []);
+
+    // ============================================
+    // RENDER
+    // ============================================
 
     return (
         <Box sx={{ p: 0 }}>
-            {/* Metrics Cards */}
+            {/* ============================================ */}
+            {/* METRICS CARDS - Using Reusable MetricCard */}
+            {/* ============================================ */}
             <Grid container spacing={2} sx={{ mb: 4 }}>
-                {/* Card 1: Active Members - Green */}
-                <Grid size={2.4}>
-                    <Card
-                        sx={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            borderTop: theme => `4px solid ${theme.palette.success.main}`,
-                            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                            '&:hover': {
-                                transform: 'translateY(-2px)',
-                                boxShadow: theme => theme.shadows[4],
-                            },
-                        }}
-                    >
-                        <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    justifyContent: 'space-between',
-                                    mb: 2,
-                                }}
-                            >
-                                <Box sx={{ flex: 1 }}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                        <Typography
-                                            color="textSecondary"
-                                            variant="body2"
-                                            sx={{ fontWeight: 500 }}
-                                        >
-                                            Active Members
-                                        </Typography>
-                                        <IconButton
-                                            size="small"
-                                            onClick={handleActiveMembersMenuOpen}
-                                            sx={{
-                                                ml: 'auto',
-                                                color: 'text.secondary',
-                                                '&:hover': {
-                                                    color: 'primary.main',
-                                                },
-                                            }}
-                                        >
-                                            <MoreVertIcon fontSize="small" />
-                                        </IconButton>
-                                    </Box>
-                                    <Typography
-                                        variant="h3"
-                                        component="div"
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            color: 'success.main',
-                                            mt: 1,
-                                        }}
-                                    >
-                                        {!currentMetrics && isMetricsLoading ? (
-                                            <CircularProgress size={32} color="inherit" />
-                                        ) : (
-                                            (currentMetrics?.activeMembers ?? 0).toLocaleString()
-                                        )}
-                                    </Typography>
-                                </Box>
-                                <Box
-                                    sx={{
-                                        color: 'success.main',
-                                        opacity: 0.8,
-                                    }}
-                                >
-                                    <PeopleIcon sx={{ fontSize: 40 }} />
-                                </Box>
-                            </Box>
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontSize: '0.875rem' }}
-                            >
-                                Members on active programs
-                            </Typography>
-                        </CardContent>
-
-                        {/* Active Members Menu */}
-                        <Menu
-                            anchorEl={activeMembersMenuAnchor}
-                            open={activeMembersMenuOpen}
-                            onClose={handleActiveMembersMenuClose}
-                            anchorOrigin={{
-                                vertical: 'bottom',
-                                horizontal: 'right',
-                            }}
-                            transformOrigin={{
-                                vertical: 'top',
-                                horizontal: 'right',
-                            }}
-                        >
-                            <MenuItem onClick={handleViewActiveMembers}>
-                                <ListItemIcon>
-                                    <VisibilityIcon fontSize="small" />
-                                </ListItemIcon>
-                                <ListItemText>View Active Members</ListItemText>
-                            </MenuItem>
-                        </Menu>
-                    </Card>
-                </Grid>
-
-                {/* Card 2: New Programs This Month - Purple */}
-                <Grid size={2.4}>
-                    <Card
-                        sx={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            borderTop: theme => `4px solid ${theme.palette.primary.main}`,
-                            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                            '&:hover': {
-                                transform: 'translateY(-2px)',
-                                boxShadow: theme => theme.shadows[4],
-                            },
-                        }}
-                    >
-                        <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    mb: 2,
-                                }}
-                            >
-                                <Box>
-                                    <Typography
-                                        color="textSecondary"
-                                        variant="body2"
-                                        sx={{ fontWeight: 500 }}
-                                    >
-                                        New Programs This Month
-                                    </Typography>
-                                    <Typography
-                                        variant="h3"
-                                        component="div"
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            color: 'primary.main',
-                                            mt: 1,
-                                        }}
-                                    >
-                                        {!currentMetrics && isMetricsLoading ? (
-                                            <CircularProgress size={32} color="inherit" />
-                                        ) : (
-                                            (currentMetrics?.newProgramsThisMonth ?? 0).toLocaleString()
-                                        )}
-                                    </Typography>
-                                </Box>
-                                <Box
-                                    sx={{
-                                        color: 'primary.main',
-                                        opacity: 0.8,
-                                    }}
-                                >
-                                    <SchoolIcon sx={{ fontSize: 40 }} />
-                                </Box>
-                            </Box>
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontSize: '0.875rem' }}
-                            >
-                                Programs with start dates this month
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                {/* Card 3: Completed Programs - Orange */}
-                <Grid size={2.4}>
-                    <Card
-                        sx={{
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            borderTop: theme => `4px solid ${theme.palette.warning.main}`,
-                            transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                            '&:hover': {
-                                transform: 'translateY(-2px)',
-                                boxShadow: theme => theme.shadows[4],
-                            },
-                        }}
-                    >
-                        <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                            <Box
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    mb: 2,
-                                }}
-                            >
-                                <Box>
-                                    <Typography
-                                        color="textSecondary"
-                                        variant="body2"
-                                        sx={{ fontWeight: 500 }}
-                                    >
-                                        Completed Programs
-                                    </Typography>
-                                    <Typography
-                                        variant="h3"
-                                        component="div"
-                                        sx={{
-                                            fontWeight: 'bold',
-                                            color: 'warning.main',
-                                            mt: 1,
-                                        }}
-                                    >
-                                        {!currentMetrics && isMetricsLoading ? (
-                                            <CircularProgress size={32} color="inherit" />
-                                        ) : (
-                                            (currentMetrics?.completedPrograms ?? 0).toLocaleString()
-                                        )}
-                                    </Typography>
-                                </Box>
-                                <Box
-                                    sx={{
-                                        color: 'warning.main',
-                                        opacity: 0.8,
-                                    }}
-                                >
-                                    <CheckCircleIcon sx={{ fontSize: 40 }} />
-                                </Box>
-                            </Box>
-                            <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                sx={{ fontSize: '0.875rem' }}
-                            >
-                                Programs completed
-                            </Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-
-                {/* Card 4: Program Changes (This Week) - Blue */}
-                <Grid size={2.4}>
-                    <ProgramChangesHoverTooltip>
-                        <Card
-                            sx={{
-                                height: '100%',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                borderTop: theme => `4px solid ${theme.palette.info.main}`,
-                                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                                '&:hover': {
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: theme => theme.shadows[4],
-                                },
-                            }}
-                        >
-                            <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        mb: 2,
-                                    }}
-                                >
-                                    <Box>
-                                        <Typography
-                                            color="textSecondary"
-                                            variant="body2"
-                                            sx={{ fontWeight: 500 }}
-                                        >
-                                            Program Changes (This Week)
-                                        </Typography>
-                                        <Typography
-                                            variant="h3"
-                                            component="div"
-                                            sx={{
-                                                fontWeight: 'bold',
-                                                color: 'info.main',
-                                                mt: 1,
-                                            }}
-                                        >
-                                            {currentCoordinatorMetrics?.programChangesThisWeek ?? 0}
-                                        </Typography>
-                                    </Box>
-                                    <Box
-                                        sx={{
-                                            color: 'info.main',
-                                            opacity: 0.8,
-                                        }}
-                                    >
-                                        <AutoGraphIcon sx={{ fontSize: 40 }} />
-                                    </Box>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{ fontSize: '0.875rem' }}
-                                    >
-                                        Program modifications this week
-                                    </Typography>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </ProgramChangesHoverTooltip>
-                </Grid>
-
-                {/* Card 5: Paused Programs - Red */}
-                <Grid size={2.4}>
-                    <PausedProgramsHoverTooltip>
-                        <Card
-                            sx={{
-                                height: '100%',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                borderTop: theme => `4px solid ${theme.palette.error.main}`,
-                                transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-                                '&:hover': {
-                                    transform: 'translateY(-2px)',
-                                    boxShadow: theme => theme.shadows[4],
-                                },
-                            }}
-                        >
-                            <CardContent sx={{ flexGrow: 1, p: 3 }}>
-                                <Box
-                                    sx={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        mb: 2,
-                                    }}
-                                >
-                                    <Box>
-                                        <Typography
-                                            color="textSecondary"
-                                            variant="body2"
-                                            sx={{ fontWeight: 500 }}
-                                        >
-                                            Paused Programs
-                                        </Typography>
-                                        <Typography
-                                            variant="h3"
-                                            component="div"
-                                            sx={{
-                                                fontWeight: 'bold',
-                                                color: 'error.main',
-                                                mt: 1,
-                                            }}
-                                        >
-                                            {!currentMetrics && isMetricsLoading ? (
-                                                <CircularProgress size={32} color="inherit" />
-                                            ) : (
-                                                (currentMetrics?.pausedPrograms ?? 0).toLocaleString()
-                                            )}
-                                        </Typography>
-                                    </Box>
-                                    <Box
-                                        sx={{
-                                            color: 'error.main',
-                                            opacity: 0.8,
-                                        }}
-                                    >
-                                        <PauseCircleIcon sx={{ fontSize: 40 }} />
-                                    </Box>
-                                </Box>
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <InfoOutlinedIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{ fontSize: '0.875rem' }}
-                                    >
-                                        Programs currently paused
-                                    </Typography>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </PausedProgramsHoverTooltip>
-                </Grid>
+                {metricCardsConfig.map((config, index) => (
+                    <Grid key={index} size={{ xs: 6, sm: 4, md: 2.4 }}>
+                        <MetricCard
+                            title={config.title}
+                            value={config.value}
+                            color={config.color}
+                            icon={config.icon}
+                            isLoading={!currentMetrics && isMetricsLoading}
+                            {...(config.description !== undefined && { description: config.description })}
+                            {...(config.menuActions !== undefined && { menuActions: config.menuActions })}
+                            {...(config.tooltipWrapper !== undefined && { tooltipWrapper: config.tooltipWrapper })}
+                            testId={`metric-card-${config.title.toLowerCase().replace(/\s+/g, '-')}`}
+                        />
+                    </Grid>
+                ))}
             </Grid>
 
-            {/* Member Program Viewer */}
-            <Card sx={{ mt: 3 }}>
-                <CardContent sx={{ p: 3 }}>
-                    {/* Member Selection */}
+            {/* ============================================ */}
+            {/* MEMBER/PROGRAM SELECTION & TABS */}
+            {/* ============================================ */}
+            <Card>
+                <CardContent>
+                    {/* Member Selection Dropdown */}
                     <Box sx={{ mb: 3 }}>
                         <TextField
                             select
                             label="Select Member"
-                            size="small"
-                            sx={{ minWidth: 220 }}
+                            fullWidth
                             value={selectedMember?.lead_id || ''}
-                            onChange={(e) => {
-                                const memberId = Number(e.target.value);
-                                const member = members.find(m => m.lead_id === memberId);
-                                handleMemberChange(null, member);
-                            }}
+                            onChange={handleMemberChange}
                             disabled={membersLoading}
                             InputProps={{
-                                endAdornment: membersLoading ? <CircularProgress color="inherit" size={20} /> : null,
+                                endAdornment: membersLoading ? (
+                                    <CircularProgress color="inherit" size={20} />
+                                ) : null,
                             }}
                         >
                             <MenuItem value="">
                                 <em>Choose a member...</em>
                             </MenuItem>
-                            {members.map((member) => (
+                            {members.map((member: DashboardMember) => (
                                 <MenuItem key={member.lead_id} value={member.lead_id}>
                                     {member.lead_name}
                                 </MenuItem>
@@ -554,23 +300,22 @@ export default function DashboardPageClient({ initialData }: DashboardPageClient
                                 label="Select Program"
                                 fullWidth
                                 value={selectedProgram?.member_program_id || ''}
-                                onChange={(e) => {
-                                    const programId = Number(e.target.value);
-                                    const program = selectedMember.programs.find((p: MemberPrograms) => p.member_program_id === programId);
-                                    handleProgramChange(null, program);
-                                }}
+                                onChange={handleProgramChange}
                             >
                                 <MenuItem value="">
                                     <em>Choose a program...</em>
                                 </MenuItem>
                                 {selectedMember.programs.map((program: MemberPrograms) => (
-                                    <MenuItem key={program.member_program_id} value={program.member_program_id}>
+                                    <MenuItem
+                                        key={program.member_program_id}
+                                        value={program.member_program_id}
+                                    >
                                         <Box>
                                             <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                                                {program.program_template_name || 'Unnamed Program'}
+                                                {(program as any).template_name || 'Unnamed Program'}
                                             </Typography>
                                             <Typography variant="body2" color="text.secondary">
-                                                Status: {program.status_name || 'Unknown'}
+                                                Status: {(program as any).status_name || 'Unknown'}
                                             </Typography>
                                         </Box>
                                     </MenuItem>
@@ -586,60 +331,38 @@ export default function DashboardPageClient({ initialData }: DashboardPageClient
                         </Alert>
                     )}
 
-                    {/* Program Details Tabs */}
+                    {/* ============================================ */}
+                    {/* PROGRAM DETAILS TABS */}
+                    {/* ============================================ */}
                     {selectedProgram && (
                         <Box sx={{ mt: 3 }}>
                             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                                 <Tabs
                                     value={tabValue}
                                     onChange={handleTabChange}
-                                    aria-label="program details tabs"
+                                    variant="scrollable"
+                                    scrollButtons="auto"
+                                    allowScrollButtonsMobile
+                                    aria-label="Program details tabs"
                                     sx={{
                                         '& .MuiTab-root': {
-                                            minHeight: 44,
-                                            paddingX: 4,
-                                            marginX: 1,
+                                            minWidth: { xs: 'auto', sm: 120 },
+                                            px: { xs: 1, sm: 2 },
                                         },
                                     }}
                                 >
-                                    <Tab
-                                        icon={<DescriptionIcon />}
-                                        label="PROGRAM"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<AssignmentIcon />}
-                                        label="Items"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<AssignmentIcon />}
-                                        label="Notes"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<AssignmentTurnedInIcon />}
-                                        label="Script"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<AssignmentIcon />}
-                                        label="To Do"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<ListIcon />}
-                                        label="RASHA"
-                                        iconPosition="start"
-                                    />
-                                    <Tab
-                                        icon={<AutoGraphIcon />}
-                                        label="Changes"
-                                        iconPosition="start"
-                                    />
+                                    {tabConfig.map((tab, index) => (
+                                        <Tab
+                                            key={index}
+                                            icon={tab.icon}
+                                            label={tab.label}
+                                            iconPosition="start"
+                                        />
+                                    ))}
                                 </Tabs>
                             </Box>
 
+                            {/* Tab Panels */}
                             <TabPanel value={tabValue} index={0}>
                                 <DashboardProgramInfoTab program={selectedProgram} />
                             </TabPanel>

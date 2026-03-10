@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { ThemeProvider } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -26,17 +27,20 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <TenantProvider>
-          <DynamicThemeProvider>
-            <CssBaseline />
-            {children}
-            <Toaster position="top-right" duration={4000} theme="dark" />
-          </DynamicThemeProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
-        </TenantProvider>
-      </LocalizationProvider>
-    </QueryClientProvider>
+    <AppRouterCacheProvider options={{ enableCssLayer: false }}>
+
+      <QueryClientProvider client={queryClient}>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <TenantProvider>
+            <DynamicThemeProvider>
+              <CssBaseline />
+              {children}
+              <Toaster position="top-right" duration={4000} theme="dark" />
+            </DynamicThemeProvider>
+            <ReactQueryDevtools initialIsOpen={false} />
+          </TenantProvider>
+        </LocalizationProvider>
+      </QueryClientProvider>
+    </AppRouterCacheProvider>
   );
 }

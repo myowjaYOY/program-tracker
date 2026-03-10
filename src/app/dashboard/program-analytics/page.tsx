@@ -73,8 +73,8 @@ export default function ProgramAnalyticsPage() {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs 
-          value={tabValue} 
+        <Tabs
+          value={tabValue}
           onChange={handleTabChange}
           sx={{
             '& .MuiTab-root': {
@@ -110,4 +110,3 @@ export default function ProgramAnalyticsPage() {
     </Box>
   );
 }
-
