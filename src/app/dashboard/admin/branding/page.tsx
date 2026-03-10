@@ -26,10 +26,16 @@ export default function BrandingPage() {
     const { data: settingsData, isLoading } = useTenantSettings();
     const updateSettings = useUpdateTenantSettings();
     const [primaryColor, setPrimaryColor] = useState('#8e24ff');
+    const [loginImageUrl, setLoginImageUrl] = useState('');
 
     useEffect(() => {
-        if (settingsData?.settings?.branding?.primary_color) {
-            setPrimaryColor(settingsData.settings.branding.primary_color);
+        if (settingsData?.settings?.branding) {
+            if (settingsData.settings.branding.primary_color) {
+                setPrimaryColor(settingsData.settings.branding.primary_color);
+            }
+            if (settingsData.settings.branding.login_image_url) {
+                setLoginImageUrl(settingsData.settings.branding.login_image_url);
+            }
         }
     }, [settingsData]);
 
@@ -37,12 +43,14 @@ export default function BrandingPage() {
         updateSettings.mutate({
             branding: {
                 primary_color: primaryColor,
+                login_image_url: loginImageUrl,
             },
         });
     };
 
     const handleReset = () => {
         setPrimaryColor('#8e24ff'); // Default Purple Heart 600
+        setLoginImageUrl('');
     };
 
     if (isLoading) {
@@ -179,8 +187,43 @@ export default function BrandingPage() {
                             </CardContent>
                         </Card>
 
+                        {/* Login Image */}
+                        <Card variant="outlined" sx={{ borderRadius: 0, border: '1px solid', borderColor: 'divider' }}>
+                            <CardContent sx={{ p: 4 }}>
+                                <Typography variant="h6" fontWeight={600} gutterBottom>
+                                    Login Screen Background
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                                    Set a custom background image for your organization&apos;s login page. Leave empty to use the default rotating images.
+                                </Typography>
+                                <TextField
+                                    label="Image URL"
+                                    value={loginImageUrl}
+                                    onChange={(e) => setLoginImageUrl(e.target.value)}
+                                    fullWidth
+                                    size="small"
+                                    placeholder="https://example.com/image.jpg"
+                                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 0 } }}
+                                />
+                                {loginImageUrl && (
+                                    <Box
+                                        sx={{
+                                            mt: 2,
+                                            height: 120,
+                                            borderRadius: 0,
+                                            backgroundImage: `url('${loginImageUrl}')`,
+                                            backgroundSize: 'cover',
+                                            backgroundPosition: 'center',
+                                            border: '1px solid',
+                                            borderColor: 'divider',
+                                        }}
+                                    />
+                                )}
+                            </CardContent>
+                        </Card>
+
                         <Alert severity="info" sx={{ borderRadius: 0 }}>
-                            Changes will be applied immediately across your organization's platform once saved.
+                            Changes will be applied immediately across your organization&apos;s platform once saved.
                         </Alert>
                     </Box>
                 </Grid>

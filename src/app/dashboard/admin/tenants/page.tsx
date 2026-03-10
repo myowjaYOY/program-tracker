@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import TenantUsersTable from '@/components/admin/tenant-users-table';
 import {
     Box,
     Typography,
@@ -365,6 +366,10 @@ function TenantDetailDrawer({ tenantId, open, onClose }: TenantDetailDrawerProps
                         <Divider />
 
                         {/* Users */}
+                        <TenantUsersTable
+                            tenantId={tenantId}
+                            tenantName={tenant.tenant_name}
+                        />
                         <Box>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                 <Typography variant="subtitle2" color="text.secondary">
@@ -827,6 +832,7 @@ export default function TenantManagementPage() {
             {/* Dialogs */}
             <CreateTenantDialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} />
             <TenantDetailDrawer tenantId={selectedTenantId} open={detailDrawerOpen} onClose={() => setDetailDrawerOpen(false)} />
+
             <AuditLogDialog open={auditLogOpen} onClose={() => setAuditLogOpen(false)} />
         </Box>
     );

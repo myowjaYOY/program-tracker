@@ -22,6 +22,7 @@ export interface TenantSettings {
         logo_url?: string;
         primary_color?: string;
         company_name?: string;
+        login_image_url?: string;
     };
     features?: {
         inventory_enabled?: boolean;

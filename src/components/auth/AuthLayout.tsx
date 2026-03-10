@@ -1,4 +1,7 @@
 import { Box, Container } from '@mui/material';
+import { headers } from 'next/headers';
+import { getAdminSupabase } from '@/lib/auth/admin';
+import { Alert, Typography } from '@mui/material';
 
 interface AuthLayoutProps {
   children: React.ReactNode;
@@ -22,6 +25,28 @@ function getRandomImage(): string {
 }
 
 /**
+ * Fetch tenant based on hostname (uses admin client to bypass RLS)
+ */
+async function getTenantByHost(host: string) {
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'localhost';
+  const hostWithoutPort = host.split(':')[0] ?? '';
+
+  if (!hostWithoutPort.endsWith(baseDomain)) return null;
+
+  const subdomain = hostWithoutPort.replace(`.${baseDomain}`, '');
+  if (!subdomain || subdomain === 'www' || subdomain === hostWithoutPort) return null;
+
+  const supabase = getAdminSupabase();
+  const { data } = await supabase
+    .from('tenants')
+    .select('tenant_name, tenant_slug, is_active, settings')
+    .eq('tenant_slug', subdomain)
+    .single();
+
+  return data;
+}
+
+/**
  * AuthLayout - Server Component
  * 
  * Renders the authentication page layout with a random background image.
@@ -33,9 +58,47 @@ function getRandomImage(): string {
  * - ~1KB JS bundle reduction
  * - No hydration flicker
  */
-export default function AuthLayout({ children }: AuthLayoutProps) {
+export default async function AuthLayout({ children }: AuthLayoutProps) {
   // Image is selected once per page render on the server
-  const randomImage = getRandomImage();
+  let bgImage = getRandomImage();
+
+  const headersList = await headers();
+  const host = headersList.get('host') || '';
+  const tenant = await getTenantByHost(host);
+
+  if (tenant && tenant.settings?.branding?.login_image_url) {
+    bgImage = tenant.settings.branding.login_image_url;
+  }
+
+  let content = children;
+
+  // If we're on a subdomain, check tenant status
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'localhost';
+  const hostWithoutPort = host.split(':')[0] ?? '';
+  const hasSubdomain = hostWithoutPort.endsWith(baseDomain) &&
+    hostWithoutPort !== baseDomain &&
+    hostWithoutPort.replace(`.${baseDomain}`, '') !== 'www';
+
+  if (hasSubdomain && !tenant) {
+    // Subdomain doesn't match any tenant
+    content = (
+      <Box sx={{ p: 4, textAlign: 'center', width: '100%' }}>
+        <Alert severity="warning" variant="filled" sx={{ mx: 'auto', mt: 4 }}>
+          <Typography variant="h6">Organization Not Found</Typography>
+          <Typography>No organization exists at this address. Please check the URL and try again.</Typography>
+        </Alert>
+      </Box>
+    );
+  } else if (tenant && !tenant.is_active) {
+    content = (
+      <Box sx={{ p: 4, textAlign: 'center', width: '100%' }}>
+        <Alert severity="error" variant="filled" sx={{ mx: 'auto', mt: 4 }}>
+          <Typography variant="h6">Tenant Deactivated</Typography>
+          <Typography>This organization&apos;s account has been deactivated. Please contact support.</Typography>
+        </Alert>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', display: 'flex' }}>
@@ -50,7 +113,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           p: 3,
         }}
       >
-        <Container maxWidth="sm">{children}</Container>
+        <Container maxWidth="sm">{content}</Container>
       </Box>
 
       {/* Right side - Random Image */}
@@ -60,7 +123,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           display: { xs: 'none', md: 'block' },
           position: 'relative',
           overflow: 'hidden',
-          backgroundImage: `url(${randomImage})`,
+          backgroundImage: `url('${bgImage}')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
