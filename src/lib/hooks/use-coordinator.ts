@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { CoordinatorMetrics } from '@/lib/data/coordinator';
 
 export const coordinatorKeys = {
   all: ['coordinator'] as const,
@@ -10,7 +11,11 @@ export const coordinatorKeys = {
     [...coordinatorKeys.all, 'program-changes', params] as const,
 };
 
-export function useCoordinatorMetrics() {
+interface UseCoordinatorMetricsOptions {
+  initialData?: CoordinatorMetrics;
+}
+
+export function useCoordinatorMetrics(options?: UseCoordinatorMetricsOptions) {
   return useQuery({
     queryKey: coordinatorKeys.metrics(),
     queryFn: async () => {
@@ -20,16 +25,12 @@ export function useCoordinatorMetrics() {
       const json = await res.json();
       if (!res.ok)
         throw new Error(json.error || 'Failed to fetch coordinator metrics');
-      return json.data as {
-        lateTasks: number;
-        tasksDueToday: number;
-        apptsDueToday: number;
-        programChangesThisWeek: number;
-      };
+      return json.data as CoordinatorMetrics;
     },
-    staleTime: 30 * 1000, // 30 seconds - shorter cache for metrics
+    initialData: options?.initialData,
+    staleTime: 30 * 1000, // 30 seconds
     gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -51,7 +52,7 @@ export function useCoordinatorScript(params: {
   const qs = sp.toString();
   const url = `/api/coordinator/script${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.script(qs);
-  
+
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -60,9 +61,9 @@ export function useCoordinatorScript(params: {
       if (!res.ok) throw new Error(json.error || 'Failed to fetch script');
       return json.data || [];
     },
-    staleTime: 30 * 1000, // 30 seconds - shorter cache for note counts
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -84,7 +85,7 @@ export function useCoordinatorToDo(params: {
   const qs = sp.toString();
   const url = `/api/coordinator/todo${qs ? `?${qs}` : ''}`;
   const queryKey = coordinatorKeys.todo(qs);
-  
+
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -93,9 +94,9 @@ export function useCoordinatorToDo(params: {
       if (!res.ok) throw new Error(json.error || 'Failed to fetch todo');
       return json.data || [];
     },
-    staleTime: 30 * 1000, // 30 seconds - shorter cache for note counts
-    gcTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 30 * 1000,
+    gcTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -112,6 +113,7 @@ export function useCoordinatorProgramChanges(params: {
   if (params.end) sp.set('end', params.end);
   const qs = sp.toString();
   const url = `/api/coordinator/program-changes${qs ? `?${qs}` : ''}`;
+
   return useQuery({
     queryKey: coordinatorKeys.programChanges(qs),
     queryFn: async () => {

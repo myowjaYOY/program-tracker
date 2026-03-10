@@ -41,7 +41,6 @@ export default function LoginForm() {
   });
 
   const onSubmit = async (data: LoginFormData) => {
-    console.log('Form submitted with data:', data);
     setIsLoading(true);
     try {
       const { error } = await signIn(data.email, data.password);
@@ -49,7 +48,6 @@ export default function LoginForm() {
         console.error('Sign in error:', error);
         toast.error(error.message);
       } else {
-        console.log('Sign in successful');
         toast.success('Successfully signed in!');
         router.push('/dashboard');
       }
