@@ -33,7 +33,8 @@ import { useDashboardMembers, DashboardMember } from '@/lib/hooks/use-dashboard-
 import { MemberPrograms } from '@/types/database.types';
 import ActiveMembersModal from '@/components/dashboard/active-members-modal';
 import { DashboardData } from '@/lib/data/dashboard';
-import MetricCard, { MetricCardColor, MetricCardMenuAction, MetricCardProps } from '@/components/dashboard/MetricCard';
+import MetricCard, { MetricCardColor, MetricCardMenuAction, MetricCardProps } from '@/components/ui/MetricCard';
+import TabPanel, { a11yProps } from '@/components/ui/TabPanel';
 
 // ============================================
 // DIRECT IMPORTS FOR TAB COMPONENTS
@@ -53,34 +54,6 @@ import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
 // Type for metric card configuration (allows optional props to be omitted)
 type MetricCardConfig = Pick<MetricCardProps, 'title' | 'value' | 'color' | 'icon'> &
     Partial<Pick<MetricCardProps, 'description' | 'menuActions' | 'tooltipWrapper'>>;
-
-// ============================================
-// TAB PANEL COMPONENT
-// ============================================
-
-interface TabPanelProps {
-    children?: React.ReactNode;
-    index: number;
-    value: number;
-}
-
-/**
- * TabPanel - Only renders children when selected
- * Prevents unnecessary rendering of hidden tab content
- */
-function TabPanel({ children, value, index, ...other }: TabPanelProps) {
-    return (
-        <div
-            role="tabpanel"
-            hidden={value !== index}
-            id={`dashboard-tabpanel-${index}`}
-            aria-labelledby={`dashboard-tab-${index}`}
-            {...other}
-        >
-            {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-        </div>
-    );
-}
 
 // ============================================
 // MAIN COMPONENT
@@ -357,41 +330,60 @@ export default function DashboardPageClient({ initialData }: DashboardPageClient
                                             icon={tab.icon}
                                             label={tab.label}
                                             iconPosition="start"
+                                            {...a11yProps('dashboard', index)}
                                         />
                                     ))}
                                 </Tabs>
                             </Box>
 
                             {/* Tab Panels */}
-                            <TabPanel value={tabValue} index={0}>
-                                <DashboardProgramInfoTab program={selectedProgram} />
+                            {/* Key props ensure clean remount when program changes, preventing stale state */}
+                            <TabPanel value={tabValue} index={0} idPrefix="dashboard">
+                                <DashboardProgramInfoTab
+                                    key={`info-${selectedProgram.member_program_id}`}
+                                    program={selectedProgram}
+                                />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={1}>
-                                <DashboardProgramItemsTab program={selectedProgram} />
+                            <TabPanel value={tabValue} index={1} idPrefix="dashboard">
+                                <DashboardProgramItemsTab
+                                    key={`items-${selectedProgram.member_program_id}`}
+                                    program={selectedProgram}
+                                />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={2}>
+                            <TabPanel value={tabValue} index={2} idPrefix="dashboard">
                                 <DashboardProgramNotesTab
+                                    key={`notes-${selectedProgram.member_program_id}`}
                                     program={selectedProgram}
                                     memberId={selectedMember?.lead_id ?? null}
                                 />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={3}>
-                                <DashboardProgramScriptTab program={selectedProgram} />
+                            <TabPanel value={tabValue} index={3} idPrefix="dashboard">
+                                <DashboardProgramScriptTab
+                                    key={`script-${selectedProgram.member_program_id}`}
+                                    program={selectedProgram}
+                                />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={4}>
-                                <DashboardProgramToDoTab program={selectedProgram} />
+                            <TabPanel value={tabValue} index={4} idPrefix="dashboard">
+                                <DashboardProgramToDoTab
+                                    key={`todo-${selectedProgram.member_program_id}`}
+                                    program={selectedProgram}
+                                />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={5}>
-                                <DashboardProgramRashaTab program={selectedProgram} />
+                            <TabPanel value={tabValue} index={5} idPrefix="dashboard">
+                                <DashboardProgramRashaTab
+                                    key={`rasha-${selectedProgram.member_program_id}`}
+                                    program={selectedProgram}
+                                />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={6}>
+                            <TabPanel value={tabValue} index={6} idPrefix="dashboard">
                                 <ProgramChangesTab
+                                    key={`changes-${selectedMember?.lead_id ?? 'none'}`}
                                     memberId={selectedMember?.lead_id ?? null}
                                     range="all"
                                     showMemberColumn={false}

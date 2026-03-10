@@ -1,21 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
+/**
+ * Auth hook for client components.
+ * 
+ * Fixed issues:
+ * 1. Supabase client is now a singleton (won't cause re-renders)
+ * 2. useEffect has no dependencies that change on every render
+ * 3. Callbacks are memoized to prevent unnecessary re-renders
+ */
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+
+  // Get singleton client - stable reference
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial user/session
     const getInitialUser = async () => {
       try {
-        // getUser() is more secure as it fetches the user from the server
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!mounted) return;
 
         if (user) {
           const { data: { session } } = await supabase.auth.getSession();
@@ -27,8 +40,14 @@ export function useAuth() {
         }
       } catch (err) {
         console.error('Error fetching initial user:', err);
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -37,14 +56,14 @@ export function useAuth() {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        // Even on state change, we can verify with getUser() if we want ultimate security,
-        // but session.user is generally acceptable here for UI reactivity.
-        // However, to be consistent with the user's request:
-        const { data: { user } } = await supabase.auth.getUser();
-        setUser(user || session.user);
-        setSession(session);
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!mounted) return;
+
+      if (newSession) {
+        // Use session.user directly for faster UI update
+        // The session is already validated by Supabase
+        setUser(newSession.user);
+        setSession(newSession);
       } else {
         setUser(null);
         setSession(null);
@@ -52,21 +71,24 @@ export function useAuth() {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
-  }, [supabase.auth]);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]); // supabase is now stable (singleton)
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
     return { data, error };
-  };
+  }, [supabase]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
     return { error };
-  };
+  }, [supabase]);
 
   return {
     user,

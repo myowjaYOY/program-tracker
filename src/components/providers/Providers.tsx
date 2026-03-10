@@ -2,7 +2,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { ThemeProvider } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -15,8 +14,10 @@ import { DynamicThemeProvider } from './DynamicThemeProvider';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 60 * 1000, // 1 minute
+      staleTime: 30 * 1000, // 30 seconds
+      gcTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
+      retry: 1
     },
   },
 });
@@ -27,20 +28,17 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <AppRouterCacheProvider options={{ enableCssLayer: false }}>
-
-      <QueryClientProvider client={queryClient}>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <TenantProvider>
-            <DynamicThemeProvider>
-              <CssBaseline />
-              {children}
-              <Toaster position="top-right" duration={4000} theme="dark" />
-            </DynamicThemeProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-          </TenantProvider>
-        </LocalizationProvider>
-      </QueryClientProvider>
-    </AppRouterCacheProvider>
+    <QueryClientProvider client={queryClient}>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
+        <TenantProvider>
+          <DynamicThemeProvider>
+            <CssBaseline />
+            {children}
+            <Toaster position="top-right" duration={4000} theme="dark" />
+          </DynamicThemeProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </TenantProvider>
+      </LocalizationProvider>
+    </QueryClientProvider>
   );
 }

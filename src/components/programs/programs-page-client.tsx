@@ -31,30 +31,9 @@ import ProgramToDoTab from '@/components/programs/program-todo-tab';
 import ProgramScriptTab from '@/components/programs/program-script-tab';
 import ProgramPaymentsTab from '@/components/programs/program-payments-tab';
 import MemberProgramRashaTab from '@/components/programs/member-program-rasha-tab';
+import TabPanel, { a11yProps } from '@/components/ui/TabPanel';
 import { MemberPrograms } from '@/types/database.types';
 import { useUpdateMemberProgram } from '@/lib/hooks/use-member-programs';
-
-interface TabPanelProps {
-    children?: React.ReactNode;
-    index: number;
-    value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
-    return (
-        <div
-            role="tabpanel"
-            hidden={value !== index}
-            id={`program-tabpanel-${index}`}
-            aria-labelledby={`program-tab-${index}`}
-            {...other}
-        >
-            {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-        </div>
-    );
-}
 
 interface ProgramsPageClientProps {
     initialPrograms: MemberPrograms[];
@@ -73,7 +52,7 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
         setTabValue(0);
     };
 
-    const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
         if (hasUnsavedChanges) {
             setPendingTabChange(newValue);
             setShowUnsavedWarning(true);
@@ -136,6 +115,8 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
                                     value={tabValue}
                                     onChange={handleTabChange}
                                     aria-label="program tabs"
+                                    variant="scrollable"
+                                    scrollButtons="auto"
                                     sx={{
                                         '& .MuiTab-root': {
                                             minHeight: 44,
@@ -144,18 +125,18 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
                                         },
                                     }}
                                 >
-                                    <Tab icon={<DescriptionIcon />} label="PROGRAM" iconPosition="start" />
-                                    <Tab icon={<AttachMoneyIcon />} label="Financials" iconPosition="start" />
-                                    <Tab icon={<PaymentIcon />} label="Payments" iconPosition="start" />
-                                    <Tab icon={<InventoryIcon />} label="Items" iconPosition="start" />
-                                    <Tab icon={<AssignmentIcon />} label="Tasks" iconPosition="start" />
-                                    <Tab icon={<AssignmentTurnedInIcon />} label="Script" iconPosition="start" />
-                                    <Tab icon={<AssignmentIcon />} label="To Do" iconPosition="start" />
-                                    <Tab icon={<ListIcon />} label="RASHA" iconPosition="start" />
+                                    <Tab icon={<DescriptionIcon />} label="PROGRAM" iconPosition="start" {...a11yProps('program', 0)} />
+                                    <Tab icon={<AttachMoneyIcon />} label="Financials" iconPosition="start" {...a11yProps('program', 1)} />
+                                    <Tab icon={<PaymentIcon />} label="Payments" iconPosition="start" {...a11yProps('program', 2)} />
+                                    <Tab icon={<InventoryIcon />} label="Items" iconPosition="start" {...a11yProps('program', 3)} />
+                                    <Tab icon={<AssignmentIcon />} label="Tasks" iconPosition="start" {...a11yProps('program', 4)} />
+                                    <Tab icon={<AssignmentTurnedInIcon />} label="Script" iconPosition="start" {...a11yProps('program', 5)} />
+                                    <Tab icon={<AssignmentIcon />} label="To Do" iconPosition="start" {...a11yProps('program', 6)} />
+                                    <Tab icon={<ListIcon />} label="RASHA" iconPosition="start" {...a11yProps('program', 7)} />
                                 </Tabs>
                             </Box>
 
-                            <TabPanel value={tabValue} index={0}>
+                            <TabPanel value={tabValue} index={0} idPrefix="program">
                                 <ProgramInfoTab
                                     program={selectedProgram}
                                     onProgramUpdate={handleProgramUpdate}
@@ -163,7 +144,7 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
                                 />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={1}>
+                            <TabPanel value={tabValue} index={1} idPrefix="program">
                                 <ProgramFinancialsTab
                                     program={selectedProgram}
                                     onFinancesUpdate={() => { }}
@@ -171,11 +152,11 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
                                 />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={2}>
+                            <TabPanel value={tabValue} index={2} idPrefix="program">
                                 <ProgramPaymentsTab program={selectedProgram} />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={3}>
+                            <TabPanel value={tabValue} index={3} idPrefix="program">
                                 <ProgramItemsTab
                                     program={selectedProgram}
                                     onProgramUpdate={setSelectedProgram}
@@ -183,16 +164,19 @@ export default function ProgramsPageClient({ initialPrograms }: ProgramsPageClie
                                 />
                             </TabPanel>
 
-                            <TabPanel value={tabValue} index={4}>
+                            <TabPanel value={tabValue} index={4} idPrefix="program">
                                 <ProgramTasksTab program={selectedProgram} />
                             </TabPanel>
-                            <TabPanel value={tabValue} index={5}>
+
+                            <TabPanel value={tabValue} index={5} idPrefix="program">
                                 <ProgramScriptTab program={selectedProgram} />
                             </TabPanel>
-                            <TabPanel value={tabValue} index={6}>
+
+                            <TabPanel value={tabValue} index={6} idPrefix="program">
                                 <ProgramToDoTab program={selectedProgram} />
                             </TabPanel>
-                            <TabPanel value={tabValue} index={7}>
+
+                            <TabPanel value={tabValue} index={7} idPrefix="program">
                                 <MemberProgramRashaTab program={selectedProgram} />
                             </TabPanel>
                         </CardContent>

@@ -26,9 +26,10 @@ import CoordinatorScriptTab from '@/components/coordinator/script-tab';
 import CoordinatorToDoTab from '@/components/coordinator/todo-tab';
 import ProgramChangesTab from '@/components/coordinator/program-changes-tab';
 import ProgramChangesHoverTooltip from '@/components/coordinator/program-changes-hover-tooltip';
-import MetricCard from '@/components/dashboard/MetricCard';
+import MetricCard from '@/components/ui/MetricCard';
+import TabPanel, { a11yProps } from '@/components/ui/TabPanel';
 import { useCoordinatorMetrics } from '@/lib/hooks/use-coordinator';
-import type { CoordinatorData, CoordinatorMetrics, MemberOption } from '@/lib/data/coordinator';
+import type { CoordinatorData } from '@/lib/data/coordinator';
 
 interface CoordinatorPageClientProps {
     initialData: CoordinatorData;
@@ -247,17 +248,38 @@ export default function CoordinatorPageClient({ initialData }: CoordinatorPageCl
                             '& .MuiTabs-flexContainer': { gap: { xs: 1, md: 4 } },
                         }}
                     >
-                        <Tab icon={<ListAltIcon />} iconPosition="start" label="Script" />
-                        <Tab icon={<AssignmentTurnedInIcon />} iconPosition="start" label="To Do" />
-                        <Tab icon={<AutoGraphIcon />} iconPosition="start" label="Program Changes" />
+                        <Tab
+                            icon={<ListAltIcon />}
+                            iconPosition="start"
+                            label="Script"
+                            {...a11yProps('coordinator', 0)}
+                        />
+                        <Tab
+                            icon={<AssignmentTurnedInIcon />}
+                            iconPosition="start"
+                            label="To Do"
+                            {...a11yProps('coordinator', 1)}
+                        />
+                        <Tab
+                            icon={<AutoGraphIcon />}
+                            iconPosition="start"
+                            label="Program Changes"
+                            {...a11yProps('coordinator', 2)}
+                        />
                     </Tabs>
 
                     {/* Tab Content */}
-                    <Box sx={{ mt: 2 }}>
-                        {tab === 0 && <CoordinatorScriptTab {...filterProps} />}
-                        {tab === 1 && <CoordinatorToDoTab {...filterProps} />}
-                        {tab === 2 && <ProgramChangesTab {...programChangesFilterProps} />}
-                    </Box>
+                    <TabPanel value={tab} index={0} idPrefix="coordinator">
+                        <CoordinatorScriptTab {...filterProps} />
+                    </TabPanel>
+
+                    <TabPanel value={tab} index={1} idPrefix="coordinator">
+                        <CoordinatorToDoTab {...filterProps} />
+                    </TabPanel>
+
+                    <TabPanel value={tab} index={2} idPrefix="coordinator">
+                        <ProgramChangesTab {...programChangesFilterProps} />
+                    </TabPanel>
                 </CardContent>
             </Card>
         </Box>
