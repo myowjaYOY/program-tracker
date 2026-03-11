@@ -2,13 +2,9 @@
 
 import React from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
   Box,
   Typography,
   Chip,
-  IconButton,
   Table,
   TableBody,
   TableCell,
@@ -19,8 +15,8 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
 import { useAuditLogsForRecord } from '@/lib/hooks/use-audit-logs';
+import BaseModal from '@/components/ui/base-modal';
 
 interface AuditHistoryDialogProps {
   open: boolean;
@@ -71,21 +67,13 @@ export default function AuditHistoryDialog({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <Typography variant="h6">Audit History</Typography>
-        <IconButton onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent>
+    <BaseModal
+      title="Audit History"
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      dividers
+    >
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
             <CircularProgress />
@@ -160,7 +148,6 @@ export default function AuditHistoryDialog({
             </Table>
           </TableContainer>
         )}
-      </DialogContent>
-    </Dialog>
+    </BaseModal>
   );
 }

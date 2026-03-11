@@ -25,7 +25,7 @@ import {
   Checkbox,
   ListItemText,
 } from '@mui/material';
-import { Close as CloseIcon } from '@mui/icons-material';
+import BaseModal from '@/components/ui/base-modal';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { startCountSessionSchema, type StartCountSessionData } from '@/lib/validations/inventory-count';
@@ -92,28 +92,27 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Start New Physical Count
-        <IconButton
-          onClick={handleClose}
+    <BaseModal
+      title="Start New Physical Count"
+      subtitle="Create a new inventory count session"
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      dividers
+      actions={
+        <Button
+          type="submit" // Need to trigger form from outside if actions are here, OR move form wrapping outside BaseModal
+          variant="contained"
           disabled={startMutation.isPending}
-          sx={{
-            position: 'absolute',
-            right: 8,
-            top: 8,
-          }}
+          sx={{ borderRadius: 0, fontWeight: 600 }}
+          onClick={handleSubmit(onSubmit)}
         >
-          <CloseIcon />
-        </IconButton>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Create a new inventory count session
-        </Typography>
-      </DialogTitle>
-
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <DialogContent dividers>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {startMutation.isPending ? 'Starting...' : 'Start Count Session'}
+        </Button>
+      }
+    >
+      <form id="start-count-form" onSubmit={handleSubmit(onSubmit)}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Count Type */}
             <FormControl component="fieldset" error={!!errors.count_type}>
               <FormLabel component="legend" sx={{ fontWeight: 600, mb: 1 }}>
@@ -270,20 +269,8 @@ export default function StartCountModal({ open, onClose }: StartCountModalProps)
                 : 'A new count session will be created with all active inventory items. You can then enter physical counts for each item.'}
             </Alert>
           </Box>
-        </DialogContent>
-
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={startMutation.isPending}
-            sx={{ borderRadius: 0, fontWeight: 600 }}
-          >
-            {startMutation.isPending ? 'Starting...' : 'Start Count Session'}
-          </Button>
-        </DialogActions>
       </form>
-    </Dialog>
+    </BaseModal>
   );
 }
 

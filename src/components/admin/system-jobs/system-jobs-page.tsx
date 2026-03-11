@@ -17,6 +17,9 @@ import {
 import ScheduledJobsTab from './scheduled-jobs-tab';
 import ImportJobsTab from './import-jobs-tab';
 
+import PageContainer from '@/components/layout/page-container';
+import PageHeader from '@/components/layout/page-header';
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -47,24 +50,11 @@ export default function SystemJobsPage() {
   };
 
   return (
-    <Box
-      sx={{
-        p: { xs: 2, md: 3 },
-        height: '100vh',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Header */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          System Jobs
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Monitor scheduled tasks and data import jobs. Data refreshes automatically every 30 seconds.
-        </Typography>
-      </Box>
+    <PageContainer>
+      <PageHeader
+        title="System Jobs"
+        subtitle="Monitor scheduled tasks and data import jobs. Data refreshes automatically every 30 seconds."
+      />
 
       {/* Main Content */}
       <Card sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -128,7 +118,7 @@ export default function SystemJobsPage() {
           </Box>
         </CardContent>
       </Card>
-    </Box>
+    </PageContainer>
   );
 }
 
