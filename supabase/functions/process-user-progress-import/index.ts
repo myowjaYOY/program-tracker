@@ -458,7 +458,7 @@ async function updateJobStatus(
   };
 
   if (errorMessage) {
-    updateData.error_message = errorMessage;
+    updateData.error_summary = errorMessage;
   }
 
   if (result) {

@@ -24,7 +24,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from('metric_definitions')
-    .select('id, metric_key, label, value_type, period_types, display_order, active_flag')
+    .select('id, metric_key, label, value_type, period_types, display_order, active_flag, dashboard_section, visual_type, show_on_executive_dashboard')
     .eq('active_flag', true)
     .order('display_order', { ascending: true })
     .order('metric_key', { ascending: true });

@@ -1,6 +1,6 @@
 # Program Pricing & Workflow Guide
 
-**Last Updated**: October 23, 2025  
+**Last Updated**: March 12, 2026  
 **For**: Program Coordinators, Sales Team, and Administrative Staff
 
 ---
@@ -544,6 +544,75 @@ Variance: $0 (no credit left)
 
 ---
 
+### Why Adding Items Can Be Blocked Even With Credit Available
+
+There are **two independent guards** the system checks before allowing an item to be added to an Active program. Both must pass:
+
+| Guard | What it protects | Error message |
+|-------|-----------------|---------------|
+| **Price ceiling** | Customer cannot owe more than they contracted to pay | "Cannot add item: Cost $X exceeds available credit of $Y" |
+| **Margin floor** | Business profitability cannot drop below the contracted level | "Cannot reduce margin below contracted X%" |
+
+**Credit (variance) only satisfies the price ceiling.** Having credit available does NOT guarantee the margin floor will pass. These are separate checks.
+
+#### Why This Happens: The "Credit vs. Margin Paradox"
+
+When items are removed from an Active program:
+- **Total Charge decreases** → Projected price drops → Credit (variance) grows
+- **Total Cost decreases** → Margin improves slightly
+
+But here's the catch: **margin is calculated against the locked price, not the charges.** So when you later try to add a new item:
+- The new item's **charge** is irrelevant to margin (locked price is the revenue)
+- The new item's **cost** directly reduces margin
+- If the margin is already close to the contracted level, even a small cost increase can push it below the floor
+
+This creates a situation where the UI shows significant credit (e.g., $2,000+) but the system won't let you add items because the margin headroom is only a few dollars.
+
+#### How the Math Works
+
+For Active programs, margin is calculated as:
+
+```
+Pre-Tax Revenue = Locked Price − Taxes
+Adjusted Cost = Total Cost + |Finance Charges| (if negative) or Total Cost − Finance Charges (if positive)
+Margin % = ((Pre-Tax Revenue − Adjusted Cost) / Pre-Tax Revenue) × 100
+```
+
+The key insight: **charges from items don't appear in this formula at all** (locked price replaces them). Only **cost** and **taxes** change when items are added. So:
+- Adding a high-charge, low-cost item uses credit efficiently but still consumes margin based on its cost
+- Adding a low-charge, high-cost item uses little credit but consumes more margin
+- In both cases, the margin impact depends entirely on the item's **cost**, not its charge
+
+#### Calculating Your Margin Headroom
+
+To find how much additional cost you can add before hitting the margin floor:
+
+```
+Max Additional Cost = Pre-Tax Revenue × (Current Margin% − Contracted Margin%) / 100
+```
+
+Example:
+```
+Pre-Tax Revenue: $13,181.83
+Current Margin: 78.33%
+Contracted Margin: 78.27%
+Headroom: $13,181.83 × (78.33 − 78.27) / 100 = $13,181.83 × 0.0006 = ~$7.91
+```
+
+In this example, only ~$7.91 of additional item cost can be added — far less than the $2,045 credit shown in the UI.
+
+#### What To Do When This Happens
+
+1. **Check the margin headroom first** — Look at current margin vs. contracted margin on the Financials tab. If they're nearly equal, adding items will be difficult regardless of credit.
+
+2. **Swap instead of add** — Remove a higher-cost item you no longer need, then add the new one. Removing an item frees up both credit AND margin headroom.
+
+3. **Find lower-cost alternatives** — If the new therapy has a cost within the margin headroom, it will pass.
+
+4. **Escalate for business decision** — If the item is clinically necessary but margin won't allow it, this requires a business decision about whether to adjust the contracted margin or renegotiate with the customer.
+
+---
+
 ### Removing Items
 
 **When you remove items** from an Active program:
@@ -813,6 +882,11 @@ Think of variance as a "credit pool" that tracks how much buffer you have to add
 
 ---
 
+### Q: I have credit available but the system won't let me add items. Why?
+**A**: The system enforces **two independent checks**: a price ceiling (credit) and a margin floor (profitability). Having credit only satisfies the price check. If your current margin is very close to the contracted margin, even a small item cost will push it below the floor and block the addition. See the section "Why Adding Items Can Be Blocked Even With Credit Available" above for full details and what to do about it.
+
+---
+
 ### Q: How do I handle price adjustments for financial hardship?
 **A**: 
 - **Before Active**: Simply increase the discount in Finances tab
@@ -939,7 +1013,7 @@ This ensures taxes are always correct and proportional.
 
 ---
 
-**Document Version**: 1.0  
+**Document Version**: 1.1  
 **Maintained By**: Development Team  
-**Last Review**: October 23, 2025
+**Last Review**: March 12, 2026
 

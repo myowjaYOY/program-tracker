@@ -18,6 +18,7 @@ const LOGIN_IMAGES = [
   '/logonPics/kami.jpg',
   '/logonPics/Ken.jpg',
   '/logonPics/Leanora.jpg',
+  '/logonPics/Manuel.jpg',
   '/logonPics/Tara.jpg',
 ];
 

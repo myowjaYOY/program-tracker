@@ -79,16 +79,24 @@ export default function ProgramInfoTab({
   const isReadOnly = isProgramReadOnly(currentStatus?.status_name);
   const readOnlyMessage = getReadOnlyMessage(currentStatus?.status_name);
 
-  // Status transition validation rules
-  const getValidStatusTransitions = (currentStatusName: string): string[] => {
+  // Status transition validation rules (must match API: memberships cannot go to Completed)
+  const getValidStatusTransitions = (
+    currentStatusName: string,
+    programType?: string
+  ): string[] => {
     const status = currentStatusName.toLowerCase();
+    const isMembership = programType === 'membership';
     switch (status) {
       case 'quote':
         return ['active', 'cancelled'];
       case 'active':
-        return ['paused', 'cancelled', 'completed'];
+        return isMembership
+          ? ['paused', 'cancelled']
+          : ['paused', 'cancelled', 'completed'];
       case 'paused':
-        return ['active', 'cancelled', 'completed'];
+        return isMembership
+          ? ['active', 'cancelled']
+          : ['active', 'cancelled', 'completed'];
       case 'completed':
       case 'cancelled':
         return []; // Final states - no transitions allowed
@@ -220,7 +228,10 @@ export default function ProgramInfoTab({
 
     // 0) Validate status transitions
     if (prevStatus && currentStatus && currentStatus !== prevStatus) {
-      const validTransitions = getValidStatusTransitions(prevStatus);
+      const validTransitions = getValidStatusTransitions(
+        prevStatus,
+        program.program_type
+      );
       if (!validTransitions.includes(currentStatus)) {
         const validTransitionsStr = validTransitions.length > 0 
           ? validTransitions.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(', ')
@@ -636,8 +647,11 @@ export default function ProgramInfoTab({
                     );
                     const currentStatusName = currentStatus?.status_name || '';
                     
-                    // Check if this transition is valid
-                    const validTransitions = getValidStatusTransitions(currentStatusName);
+                    // Check if this transition is valid (memberships cannot use Completed)
+                    const validTransitions = getValidStatusTransitions(
+                      currentStatusName,
+                      program.program_type
+                    );
                     const targetStatusName = (status.status_name || '').toLowerCase();
                     const isCurrentStatus = status.program_status_id === program.program_status_id;
                     const isValidTransition = isCurrentStatus || validTransitions.includes(targetStatusName);

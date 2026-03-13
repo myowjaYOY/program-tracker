@@ -104,7 +104,7 @@ export default function ProgramsPage() {
       setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Failed to update program:', error);
-      // You could add toast notification here for user feedback
+      throw error; // Rethrow so ProgramInfoTab can show error toast (otherwise it shows success)
     }
   };
 
