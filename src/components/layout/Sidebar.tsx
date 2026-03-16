@@ -92,6 +92,11 @@ const salesNav = [
 
 const operationsNav = [
   {
+    label: 'Executive Dashboard',
+    icon: <DashboardIcon />,
+    path: '/dashboard/operations/executive',
+  },
+  {
     label: 'Performance Targets',
     icon: <TargetsIcon />,
     path: '/dashboard/operations/targets',

@@ -411,6 +411,22 @@ export async function GET(req: NextRequest) {
     const avgMargin = summaryTotalRevenue > 0 ? (summaryTotalMarginWeighted / summaryTotalRevenue) : 0;
     const conversionRate = summaryTotalPmeScheduled > 0 ? (summaryTotalProgramsWon / summaryTotalPmeScheduled) * 100 : 0;
 
+    const dailyRevenueMap = new Map<string, number>();
+    for (const program of filteredPrograms) {
+      if (program.program_status_id !== activeStatusId && program.program_status_id !== completedStatusId) continue;
+      const day = (program.start_date || '').split('T')[0];
+      if (!day) continue;
+      const price = program.member_program_finances?.[0]?.final_total_price || 0;
+      dailyRevenueMap.set(day, (dailyRevenueMap.get(day) || 0) + price);
+    }
+    const sortedDays = Array.from(dailyRevenueMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const revenueTrend: number[] = [];
+    let cumulative = 0;
+    for (const [, dayTotal] of sortedDays) {
+      cumulative += dayTotal;
+      revenueTrend.push(Math.round(cumulative));
+    }
+
     return NextResponse.json({
       data: {
         summary: {
@@ -419,6 +435,7 @@ export async function GET(req: NextRequest) {
           avgProgramValue,
           avgMargin,
           conversionRate,
+          revenueTrend,
         },
         revenueByCampaign: campaignMetrics,
       }

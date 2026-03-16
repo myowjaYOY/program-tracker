@@ -23,6 +23,7 @@ export interface ExecutiveDashboardSummary {
   avgProgramValue: number;
   avgMargin: number;
   conversionRate: number;
+  revenueTrend: number[];
 }
 
 export interface CampaignMetrics {
