@@ -1,0 +1,265 @@
+Object Name,Object Type,Action
+audit_event_changes,Table,Add Provider
+audit_events,Table,Add Provider
+campaigns,Table,Add Provider
+data_import_errors,Table,Add Provider
+data_import_jobs,Table,Add Provider
+lead_notes,Table,Add Provider
+lead_status_transitions,Table,Add Provider
+leads,Table,Add Provider
+member_analytics_cache,Table,Add Provider
+member_individual_insights,Table,Add Provider
+member_program_finances,Table,Add Provider
+member_program_item_schedule,Table,Add Provider
+member_program_item_tasks,Table,Add Provider
+member_program_items,Table,Add Provider
+member_program_items_task_schedule,Table,Add Provider
+member_program_membership_finances,Table,Add Provider
+member_program_payments,Table,Add Provider
+member_program_rasha,Table,Add Provider
+member_programs,Table,Add Provider
+member_progress_summary,Table,Add Provider
+metric_targets,Table,Add Provider
+notifications,Table,Add Provider
+program_status_transitions,Table,Add Provider
+program_template,Table,Add Provider
+program_template_items,Table,Add Provider
+program_template_rasha,Table,Add Provider
+survey_response_sessions,Table,Add Provider
+survey_responses,Table,Add Provider
+survey_session_program_context,Table,Add Provider
+survey_user_mappings,Table,Add Provider
+survey_user_progress,Table,Add Provider
+therapies,Table,Add Provider
+therapy_tasks,Table,Add Provider
+user_menu_permissions,Table,Add Provider
+users,Table,Add Provider
+vendors,Table,Add Provider
+bodies,Table,Drop
+member_program_finances_backup_active_tax_fix,Table,Drop
+pillars,Table,Drop
+therapies_bodies_pillars,Table,Drop
+buckets,Table,Global
+cron_job_runs,Table,Global
+financing_types,Table,Global
+inventory_count_details,Table,Global
+inventory_count_sessions,Table,Global
+inventory_items,Table,Global
+inventory_transactions,Table,Global
+item_requests,Table,Global
+menu_items,Table,Global
+metric_definitions,Table,Global
+metric_target_templates,Table,Global
+payment_methods,Table,Global
+payment_status,Table,Global
+program_roles,Table,Global
+program_status,Table,Global
+purchase_order_items,Table,Global
+purchase_orders,Table,Global
+rasha_list,Table,Global
+status,Table,Global
+survey_domain_scores,Table,Global
+survey_domains,Table,Global
+survey_form_question_domain,Table,Global
+survey_forms,Table,Global
+survey_modules,Table,Global
+survey_programs,Table,Global
+survey_questions,Table,Global
+therapytype,Table,Global
+vw_audit_member_items,View,
+vw_coordinator_item_schedule,View,
+vw_coordinator_task_schedule,View,
+vw_member_audit_events,View,
+vw_purchase_order_audit_history,View,
+adjust_date_for_weekend,Function,
+adjust_future_schedule_instances,Function,
+apply_member_program_items_changes,Function,
+audit_and_fix_margins,Function,
+audit_lead_status_transition,Function,"Captures lead status AND pmedate changes. Always records status (old/new), plus pmedate when it changes."
+audit_member_item_schedule,Function,
+audit_member_item_task_schedule,Function,
+audit_member_program_finances,Function,
+audit_member_program_item_tasks,Function,
+audit_member_program_items,Function,
+audit_member_program_membership_finances,Function,
+audit_member_program_payments,Function,
+audit_member_programs,Function,
+audit_program_status_transition,Function,Captures program status changes and writes them to program_status_transitions table.
+audit_support_trigger,Function,
+bytea_to_text,Function,
+calculate_analytics_metrics,Function,Calculates all analytics metrics including MSQ and PROMIS-29 for research-grade dashboard.
+calculate_po_totals,Function,
+compute_pause_days_since_date,Function,
+compute_program_total_pause_days,Function,
+convert_promis_text_to_numeric,Function,
+copy_program_template,Function,Creates a complete copy of a program template including all active items. The new template is created as inactive and requires review before activation.
+copy_program_template_exact,Function,Creates a complete copy of a program template with format: [Original Name] - Copy (timestamp). Copies all items and RASHA entries.
+create_member_program_from_template,Function,
+example_create_member_program,Function,
+generate_count_session_number,Function,
+generate_member_program_schedule,Function,
+generate_po_number,Function,
+get_latest_analytics_cache,Function,Returns the most recent analytics cache entry. Used by API endpoints.
+get_latest_import_status,Function,
+get_monthly_compliance_trends,Function,
+get_responses_with_domains,Function,
+handle_new_user,Function,
+http,Function,
+http_delete,Function,
+http_get,Function,
+http_head,Function,
+http_header,Function,
+http_list_curlopt,Function,
+http_patch,Function,
+http_post,Function,
+http_put,Function,
+http_reset_curlopt,Function,
+http_set_curlopt,Function,
+lock_contracted_margin,Function,
+pause_member_program,Function,
+pgaudit_ddl_command_end,Function,
+pgaudit_sql_drop,Function,
+recalculate_templates_on_therapy_change,Function,
+regen_member_program_task_schedule,Function,
+regenerate_member_program_payments,Function,
+set_count_session_number,Function,
+text_to_bytea,Function,
+trigger_survey_import,Function,
+update_count_session_stats,Function,
+update_inventory_on_po_receive,Function,
+update_inventory_on_schedule_change,Function,
+update_timestamp_function,Function,
+urlencode,Function,
+write_audit_change,Function,
+write_audit_event,Function,
+calculate_po_totals_trigger,Trigger,
+generate_po_number_trigger,Trigger,
+inventory_update_on_po_receive_trigger,Trigger,
+inventory_update_on_schedule_change_trigger,Trigger,
+tr_audit_lead_status_transition,Trigger,
+tr_audit_member_item_schedule,Trigger,
+tr_audit_member_item_task_schedule,Trigger,
+tr_audit_member_program_finances,Trigger,
+tr_audit_member_program_item_tasks,Trigger,
+tr_audit_member_program_items,Trigger,
+tr_audit_member_program_membership_finances,Trigger,
+tr_audit_member_program_payments,Trigger,
+tr_audit_member_programs,Trigger,
+tr_audit_program_status_transition,Trigger,
+tr_audit_support_bodies,Trigger,
+tr_audit_support_buckets,Trigger,
+tr_audit_support_inventory_items,Trigger,
+tr_audit_support_inventory_transactions,Trigger,
+tr_audit_support_member_program_rasha,Trigger,
+tr_audit_support_payment_methods,Trigger,
+tr_audit_support_payment_status,Trigger,
+tr_audit_support_program_template_rasha,Trigger,
+tr_audit_support_purchase_order_items,Trigger,
+tr_audit_support_purchase_orders,Trigger,
+tr_audit_support_therapies,Trigger,
+tr_audit_support_therapytype,Trigger,
+tr_lock_contracted_margin,Trigger,
+tr_recalculate_templates_on_therapy_change,Trigger,Triggers template recalculation when therapy cost or charge is updated
+trigger_set_count_session_number,Trigger,
+trigger_update_count_session_stats,Trigger,
+update_bodies_timestamp,Trigger,
+update_buckets_timestamp,Trigger,
+update_campaigns_timestamp,Trigger,
+update_count_sessions_timestamp,Trigger,
+update_financing_types_timestamp,Trigger,
+update_inventory_items_timestamp,Trigger,
+update_inventory_transactions_timestamp,Trigger,
+update_lead_status_transitions_timestamp,Trigger,
+update_leads_timestamp,Trigger,
+update_member_program_finances_timestamp,Trigger,
+update_member_program_item_schedule_timestamp,Trigger,
+update_member_program_item_tasks_timestamp,Trigger,
+update_member_program_items_task_schedule_timestamp,Trigger,
+update_member_program_items_timestamp,Trigger,
+update_member_program_membership_finances_timestamp,Trigger,
+update_member_program_payments_timestamp,Trigger,
+update_member_program_rasha_timestamp,Trigger,
+update_member_programs_timestamp,Trigger,
+update_payment_methods_timestamp,Trigger,
+update_payment_status_timestamp,Trigger,
+update_pillars_timestamp,Trigger,
+update_program_roles_timestamp,Trigger,
+update_program_status_timestamp,Trigger,
+update_program_status_transitions_timestamp,Trigger,
+update_program_template_items_timestamp,Trigger,
+update_program_template_rasha_timestamp,Trigger,
+update_program_template_timestamp,Trigger,
+update_purchase_order_items_timestamp,Trigger,
+update_purchase_orders_timestamp,Trigger,
+update_rasha_list_timestamp,Trigger,
+update_status_timestamp,Trigger,
+update_therapies_bodies_pillars_timestamp,Trigger,
+update_therapies_timestamp,Trigger,
+update_therapy_tasks_timestamp,Trigger,
+update_therapy_type_timestamp,Trigger,
+update_vendors_timestamp,Trigger,
+audit_events_event_id_seq,Sequence,
+bodies_body_id_seq,Sequence,
+buckets_bucket_id_seq,Sequence,
+campaigns_campaign_id_seq,Sequence,
+cron_job_runs_run_id_seq,Sequence,
+data_import_batches_import_batch_id_seq,Sequence,
+data_import_errors_import_error_id_seq,Sequence,
+financing_types_financing_type_id_seq,Sequence,
+inventory_count_details_count_detail_id_seq,Sequence,
+inventory_count_sessions_count_session_id_seq,Sequence,
+inventory_items_inventory_item_id_seq,Sequence,
+inventory_transactions_transaction_id_seq,Sequence,
+item_requests_item_request_id_seq,Sequence,
+lead_notes_note_id_seq,Sequence,
+lead_status_transitions_transition_id_seq,Sequence,
+leads_lead_id_seq,Sequence,
+member_analytics_cache_cache_id_seq,Sequence,
+member_individual_insights_insight_id_seq,Sequence,
+member_program_finances_member_program_finance_id_seq,Sequence,
+member_program_item_schedule_member_program_item_schedule_id_se,Sequence,
+member_program_item_tasks_member_program_item_task_id_seq,Sequence,
+member_program_items_member_program_item_id_seq,Sequence,
+member_program_items_task_schedule_member_program_item_task_sch,Sequence,
+member_program_membership_finances_membership_finance_id_seq,Sequence,
+member_program_payments_member_program_payment_id_seq,Sequence,
+member_program_rasha_member_program_rasha_id_seq,Sequence,
+member_programs_member_program_id_seq,Sequence,
+menu_items_id_seq,Sequence,
+metric_definitions_id_seq,Sequence,
+metric_target_templates_id_seq,Sequence,
+metric_targets_id_seq,Sequence,
+notifications_notification_id_seq,Sequence,
+payment_methods_payment_method_id_seq,Sequence,
+payment_status_payment_status_id_seq,Sequence,
+pillars_pillar_id_seq,Sequence,
+program_items_program_item_id_seq,Sequence,
+program_roles_program_role_id_seq,Sequence,
+program_status_program_status_id_seq,Sequence,
+program_status_transitions_transition_id_seq,Sequence,
+program_template_items_program_template_items_id_seq,Sequence,
+program_template_program_template_id_seq,Sequence,
+program_template_rasha_program_template_rasha_id_seq,Sequence,
+programs_program_id_seq,Sequence,
+purchase_order_items_po_item_id_seq,Sequence,
+purchase_orders_po_id_seq,Sequence,
+rasha_list_rasha_list_id_seq,Sequence,
+status_status_id_seq,Sequence,
+survey_domain_scores_domain_score_id_seq,Sequence,
+survey_forms_form_id_seq,Sequence,
+survey_modules_module_id_seq,Sequence,
+survey_programs_program_id_seq,Sequence,
+survey_questions_question_id_seq,Sequence,
+survey_response_sessions_session_id_seq,Sequence,
+survey_responses_response_id_seq,Sequence,
+survey_session_program_context_context_id_seq,Sequence,
+survey_user_mappings_mapping_id_seq,Sequence,
+survey_user_progress_progress_id_seq,Sequence,
+therapies_therapy_id_seq,Sequence,
+therapy_tasks_task_id_seq,Sequence,
+therapy_type_therapy_type_id_seq,Sequence,
+user_menu_permissions_id_seq,Sequence,
+vendors_vendor_id_seq,Sequence,
+financing_source_enum,Enum Type,Global
+content_type,Domain,
+http_method,Domain,

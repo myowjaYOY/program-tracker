@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box } from '@mui/material';
+import { Gauge, gaugeClasses } from '@mui/x-charts/Gauge';
 
 interface GaugeVisualProps {
   /** 0–1 ratio of actual / target */
@@ -7,49 +8,35 @@ interface GaugeVisualProps {
   color: string;
 }
 
-const SIZE = 80;
-const STROKE = 8;
-const RADIUS = (SIZE - STROKE) / 2;
-const CENTER = SIZE / 2;
-const CIRCUMFERENCE = Math.PI * RADIUS;
-
 export default function GaugeVisual({ progress, color }: GaugeVisualProps) {
-  const clamped = Math.min(Math.max(progress, 0), 1);
-  const filledLength = clamped * CIRCUMFERENCE;
-  const gapLength = CIRCUMFERENCE - filledLength;
+  const pct = Math.round(Math.min(Math.max(progress, 0), 1) * 100);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <svg
-        width={SIZE}
-        height={SIZE / 2 + 4}
-        viewBox={`0 0 ${SIZE} ${SIZE / 2 + 4}`}
-      >
-        {/* Background track */}
-        <path
-          d={`M ${STROKE / 2} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${SIZE - STROKE / 2} ${CENTER}`}
-          fill="none"
-          stroke="#e0e0e0"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-        />
-        {/* Foreground arc */}
-        <path
-          d={`M ${STROKE / 2} ${CENTER} A ${RADIUS} ${RADIUS} 0 0 1 ${SIZE - STROKE / 2} ${CENTER}`}
-          fill="none"
-          stroke={color}
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-          strokeDasharray={`${filledLength} ${gapLength}`}
-        />
-      </svg>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ mt: -0.5, fontSize: '0.65rem' }}
-      >
-        Pace
-      </Typography>
+    <Box sx={{ width: 120, height: 80 }}>
+      <Gauge
+        value={pct}
+        valueMin={0}
+        valueMax={100}
+        startAngle={-110}
+        endAngle={110}
+        innerRadius="72%"
+        outerRadius="100%"
+        cornerRadius={4}
+        text={`${pct}%`}
+        sx={{
+          [`& .${gaugeClasses.valueArc}`]: {
+            fill: color,
+          },
+          [`& .${gaugeClasses.referenceArc}`]: {
+            fill: '#e8e8e8',
+          },
+          [`& .${gaugeClasses.valueText}`]: {
+            fontSize: 14,
+            fontWeight: 700,
+            fill: color,
+          },
+        }}
+      />
     </Box>
   );
 }

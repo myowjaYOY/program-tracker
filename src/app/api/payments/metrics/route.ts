@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
           membersWithPaymentsDue: 0,
           latePaymentsBreakdown: [],
           cancelledPaymentsBreakdown: [],
+          membershipRevenuePct: 0,
         }
       });
     }
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest) {
         member_program_id,
         lead_id,
         program_status_id,
+        program_type,
         lead:leads!fk_member_programs_lead(lead_id, first_name, last_name)
       `)
       .in('member_program_id', allProgramIds);
@@ -225,6 +227,13 @@ export async function GET(req: NextRequest) {
         .filter(id => id != null)
     ).size;
 
+    const membershipPaidThisMonth = paidThisMonthPayments
+      .filter((p: any) => allProgramMap.get(p.member_program_id)?.program_type === 'membership')
+      .reduce((sum: number, p: any) => sum + (Number(p.payment_amount) || 0), 0);
+
+    const membershipRevenuePct =
+      totalAmountDue > 0 ? parseFloat(((membershipPaidThisMonth / totalAmountDue) * 100).toFixed(2)) : 0;
+
     const metrics = {
       totalAmountOwed,
       totalAmountDue,
@@ -235,6 +244,7 @@ export async function GET(req: NextRequest) {
       membersWithPaymentsDue,
       latePaymentsBreakdown,
       cancelledPaymentsBreakdown,
+      membershipRevenuePct,
     };
 
     return NextResponse.json({ data: metrics });

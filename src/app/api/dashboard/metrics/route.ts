@@ -102,6 +102,27 @@ export async function GET(_req: NextRequest) {
     // 5. Members on Memberships (Placeholder)
     const membersOnMemberships = 0; // Placeholder for now
 
+    // 6. Cancelled (Dropout) Programs This Month
+    const cancelledStatusId = statuses?.find(
+      s => s.status_name?.toLowerCase() === 'cancelled'
+    )?.program_status_id;
+
+    let cancelledThisMonth = 0;
+    if (cancelledStatusId) {
+      const { count, error: cancelledErr } = await supabase
+        .from('program_status_transitions')
+        .select('*', { count: 'exact', head: true })
+        .eq('new_status_id', cancelledStatusId)
+        .gte('transitioned_at', startOfMonth.toISOString())
+        .lte('transitioned_at', endOfMonth.toISOString());
+
+      if (cancelledErr) {
+        console.error('Error fetching cancelled programs:', cancelledErr);
+      } else {
+        cancelledThisMonth = count || 0;
+      }
+    }
+
     return NextResponse.json({
       data: {
         activeMembers,
@@ -109,6 +130,7 @@ export async function GET(_req: NextRequest) {
         completedPrograms,
         pausedPrograms,
         membersOnMemberships,
+        cancelledThisMonth,
       },
     });
   } catch (e: any) {

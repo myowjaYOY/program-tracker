@@ -3,6 +3,9 @@ import { Box, Card, CardContent, Chip, Typography } from '@mui/material';
 import type { MetricDefinition, MetricValueType, VisualType } from '@/lib/hooks/use-metric-definitions';
 import GaugeVisual from './GaugeVisual';
 import SparkVisual from './SparkVisual';
+import StarVisual from './StarVisual';
+import SliderVisual from './SliderVisual';
+import ProgressBarVisual from './ProgressBarVisual';
 
 export type MetricStatus = 'behind' | 'watch' | 'on_track';
 
@@ -104,31 +107,31 @@ export default function MetricCard({ metric, data }: MetricCardProps) {
 
         {/* Visual + stats */}
         <Box sx={{ mt: 2 }}>
-          {visualType === 'GAUGE' ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {visualType === 'GAUGE' && (
               <GaugeVisual progress={progress} color={accentColor} />
-              <Box>
-                <Typography variant="overline" sx={{ fontSize: '0.6rem', color: 'text.secondary', letterSpacing: 0.8 }}>
-                  Expected by Today
-                </Typography>
-                <Typography variant="body2" fontWeight={600}>
-                  {expectedDisplay}
-                </Typography>
-              </Box>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            )}
+            {visualType === 'SPARK' && (
               <SparkVisual trend={trend ?? []} color={accentColor} />
-              <Box>
-                <Typography variant="overline" sx={{ fontSize: '0.6rem', color: 'text.secondary', letterSpacing: 0.8 }}>
-                  Expected by Today
-                </Typography>
-                <Typography variant="body2" fontWeight={600}>
-                  {expectedDisplay}
-                </Typography>
-              </Box>
+            )}
+            {visualType === 'STAR' && (
+              <StarVisual value={actual} color={accentColor} />
+            )}
+            {visualType === 'SLIDER' && (
+              <SliderVisual progress={progress} color={accentColor} />
+            )}
+            {visualType === 'PROGRESS_BAR' && (
+              <ProgressBarVisual progress={progress} color={accentColor} />
+            )}
+            <Box>
+              <Typography variant="overline" sx={{ fontSize: '0.6rem', color: 'text.secondary', letterSpacing: 0.8 }}>
+                Expected by Today
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {expectedDisplay}
+              </Typography>
             </Box>
-          )}
+          </Box>
         </Box>
       </CardContent>
     </Card>

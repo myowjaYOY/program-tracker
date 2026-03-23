@@ -29,70 +29,80 @@ export async function POST() {
       );
     }
 
-    // Sync menu items
-    let syncedCount = 0;
-    let newItemsCount = 0;
+    const validPaths = MENU_ITEMS.map(item => item.path);
 
-    for (const item of MENU_ITEMS) {
-      const { data: existingItem } = await supabase
-        .from('menu_items')
-        .select('id')
-        .eq('path', item.path)
-        .single();
+    // Clean up permissions for paths no longer in MENU_ITEMS
+    const { data: allPermissions } = await supabase
+      .from('user_menu_permissions')
+      .select('menu_path');
 
-      if (existingItem) {
-        // Update existing item
+    if (allPermissions) {
+      const stalePermPaths = [
+        ...new Set(allPermissions.map(p => p.menu_path)),
+      ].filter(path => !validPaths.includes(path));
+
+      if (stalePermPaths.length > 0) {
         await supabase
-          .from('menu_items')
-          .update({
-            label: item.label,
-            section: item.section,
-            icon: item.icon,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('path', item.path);
-        syncedCount++;
-      } else {
-        // Insert new item
-        await supabase.from('menu_items').insert({
-          path: item.path,
-          label: item.label,
-          section: item.section,
-          icon: item.icon,
-        });
-        newItemsCount++;
-        syncedCount++;
+          .from('user_menu_permissions')
+          .delete()
+          .in('menu_path', stalePermPaths);
       }
     }
 
-    // Auto-assign new menu items to admin users
-    if (newItemsCount > 0) {
-      const { data: adminUsers } = await supabase
-        .from('users')
-        .select('id')
-        .eq('is_admin', true);
+    // Clear and rebuild menu_items table
+    const { error: clearError } = await supabase
+      .from('menu_items')
+      .delete()
+      .neq('id', 0);
 
-      if (adminUsers && adminUsers.length > 0) {
-        const newMenuPaths = MENU_ITEMS.map(item => item.path);
+    if (clearError) {
+      console.error('Error clearing menu items:', clearError);
+      return NextResponse.json(
+        { error: 'Failed to clear menu items' },
+        { status: 500 }
+      );
+    }
 
-        for (const admin of adminUsers) {
-          for (const path of newMenuPaths) {
-            // Check if admin already has this permission
-            const { data: existingPermission } = await supabase
-              .from('user_menu_permissions')
-              .select('id')
-              .eq('user_id', admin.id)
-              .eq('menu_path', path)
-              .single();
+    // Insert all current menu items
+    const { error: insertError } = await supabase.from('menu_items').insert(
+      MENU_ITEMS.map(item => ({
+        path: item.path,
+        label: item.label,
+        section: item.section,
+        icon: item.icon,
+      }))
+    );
 
-            if (!existingPermission) {
-              // Grant permission to admin
-              await supabase.from('user_menu_permissions').insert({
-                user_id: admin.id,
-                menu_path: path,
-                granted_by: session.user.id,
-              });
-            }
+    if (insertError) {
+      console.error('Error inserting menu items:', insertError);
+      return NextResponse.json(
+        { error: 'Failed to insert menu items' },
+        { status: 500 }
+      );
+    }
+
+    // Auto-assign menu items to admin users
+    const { data: adminUsers } = await supabase
+      .from('users')
+      .select('id')
+      .eq('is_admin', true);
+
+    if (adminUsers && adminUsers.length > 0) {
+      for (const admin of adminUsers) {
+        for (const path of validPaths) {
+          const { data: existingPermission } = await supabase
+            .from('user_menu_permissions')
+            .select('id')
+            .eq('user_id', admin.id)
+            .eq('menu_path', path)
+            .single();
+
+          if (!existingPermission) {
+            await supabase.from('user_menu_permissions').insert({
+              user_id: admin.id,
+              menu_path: path,
+              granted_by: session.user.id,
+            });
           }
         }
       }
@@ -100,8 +110,6 @@ export async function POST() {
 
     return NextResponse.json({
       message: 'Menu items synced successfully',
-      synced: syncedCount,
-      new: newItemsCount,
       total: MENU_ITEMS.length,
     });
   } catch (error) {

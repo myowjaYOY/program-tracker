@@ -6,6 +6,7 @@ export interface DashboardMetrics {
   completedPrograms: number;
   pausedPrograms: number;
   membersOnMemberships: number;
+  cancelledThisMonth: number;
 }
 
 export function useDashboardMetrics() {

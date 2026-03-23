@@ -1,0 +1,15 @@
+---
+description: Always prefer existing library components over custom implementations
+alwaysApply: true
+---
+
+# Prefer Existing Components Over Custom
+
+When suggesting UI controls, visualizations, or components:
+
+1. **Always check MUI (Material UI) and MUI X first** for an existing component before proposing a custom implementation.
+2. **Propose the existing component as the first option.** Only suggest building custom if no suitable library component exists.
+3. This applies to all UI elements: charts, gauges, ratings, sliders, progress indicators, data display, inputs, etc.
+4. When presenting options, lead with the library component and explain its configuration/customization options.
+
+This project uses MUI Material UI and MUI X (including Charts, Data Grid). Check their documentation for available components before writing custom SVG, canvas, or other hand-rolled visuals.

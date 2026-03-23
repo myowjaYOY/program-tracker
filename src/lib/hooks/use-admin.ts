@@ -261,11 +261,7 @@ export function useSyncMenuItems() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (): Promise<{
-      synced: number;
-      new: number;
-      total: number;
-    }> => {
+    mutationFn: async (): Promise<{ total: number }> => {
       const response = await fetch('/api/admin/menu-items/sync', {
         method: 'POST',
       });
@@ -276,15 +272,15 @@ export function useSyncMenuItems() {
       }
 
       const data = await response.json();
-      return {
-        synced: data.synced,
-        new: data.new,
-        total: data.total,
-      };
+      return { total: data.total };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      toast.success(`Menu items synced (${data.total} items)`);
       queryClient.invalidateQueries({ queryKey: adminKeys.menuItems() });
       queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to sync menu items');
     },
   });
 }

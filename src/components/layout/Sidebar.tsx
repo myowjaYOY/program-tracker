@@ -117,6 +117,11 @@ const operationsNav = [
     path: '/dashboard/item-requests',
   },
   {
+    label: 'Payments Tracking',
+    icon: <PaymentMethodsIcon />,
+    path: '/dashboard/payments',
+  },
+  {
     label: 'Program Analytics',
     icon: <ReportsIcon />,
     path: '/dashboard/program-analytics',
@@ -134,11 +139,6 @@ const adminNav = [
     label: 'Dashboard Analytics',
     icon: <DashboardIcon />,
     path: '/dashboard/admin/analytics',
-  },
-  {
-    label: 'Payments',
-    icon: <PaymentMethodsIcon />,
-    path: '/dashboard/payments',
   },
   {
     label: 'Program Audit',
@@ -372,8 +372,6 @@ export default function Sidebar({ user }: SidebarProps) {
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
         }}
       >
         {/* Main Nav */}
@@ -420,6 +418,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {filteredNav.marketing.length > 0 && (
           <ListSubheader
             sx={{
+              position: 'static',
               color: 'text.secondary',
               fontWeight: 600,
               fontSize: 13,
@@ -492,6 +491,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {filteredNav.operations.length > 0 && (
           <ListSubheader
             sx={{
+              position: 'static',
               color: 'text.secondary',
               fontWeight: 600,
               fontSize: 13,
@@ -562,6 +562,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {filteredNav.sales.length > 0 && (
           <ListSubheader
             sx={{
+              position: 'static',
               color: 'text.secondary',
               fontWeight: 600,
               fontSize: 13,
@@ -632,6 +633,7 @@ export default function Sidebar({ user }: SidebarProps) {
         {filteredNav.admin.length > 0 && (
           <ListSubheader
             sx={{
+              position: 'static',
               color: 'text.secondary',
               fontWeight: 600,
               fontSize: 13,

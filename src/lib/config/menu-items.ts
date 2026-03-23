@@ -72,6 +72,12 @@ export const MENU_ITEMS: MenuItem[] = [
 
   // Operations (alphabetical)
   {
+    path: '/dashboard/operations/executive',
+    label: 'Executive Dashboard',
+    section: 'operations',
+    icon: 'Dashboard',
+  },
+  {
     path: '/dashboard/inventory-forecast',
     label: 'Inventory Forecast',
     section: 'operations',
@@ -88,6 +94,12 @@ export const MENU_ITEMS: MenuItem[] = [
     label: 'Item Requests',
     section: 'operations',
     icon: 'Inventory',
+  },
+  {
+    path: '/dashboard/payments',
+    label: 'Payments Tracking',
+    section: 'operations',
+    icon: 'Payment',
   },
   {
     path: '/dashboard/operations/targets',
@@ -108,12 +120,6 @@ export const MENU_ITEMS: MenuItem[] = [
     label: 'Audit Report',
     section: 'admin',
     icon: 'History',
-  },
-  {
-    path: '/dashboard/payments',
-    label: 'Payments',
-    section: 'admin',
-    icon: 'Payment',
   },
   {
     path: '/dashboard/admin/program-audit',

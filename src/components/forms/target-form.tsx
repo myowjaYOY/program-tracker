@@ -223,11 +223,17 @@ export default function TargetForm({
             <MenuItem value="">
               <em>Select a metric</em>
             </MenuItem>
-            {metricsToPick.map((key) => (
-              <MenuItem key={key} value={key}>
-                {metrics.find((m) => m.metric_key === key)?.label ?? key}
-              </MenuItem>
-            ))}
+            {[...metricsToPick]
+              .sort((a, b) => {
+                const labelA = metrics.find((m) => m.metric_key === a)?.label ?? a;
+                const labelB = metrics.find((m) => m.metric_key === b)?.label ?? b;
+                return labelA.localeCompare(labelB);
+              })
+              .map((key) => (
+                <MenuItem key={key} value={key}>
+                  {metrics.find((m) => m.metric_key === key)?.label ?? key}
+                </MenuItem>
+              ))}
           </TextField>
         )}
       />
@@ -370,7 +376,7 @@ export default function TargetForm({
             inputProps={{
               min: 0,
               max: isPercent ? 100 : undefined,
-              step: isPercent ? 1 : undefined,
+              step: 'any',
             }}
             {...(isCurrency && {
               InputProps: { startAdornment: <InputAdornment position="start">$</InputAdornment> },

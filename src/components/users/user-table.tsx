@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { GridColDef } from '@mui/x-data-grid';
-import { Box, Chip, Button, Typography, CircularProgress } from '@mui/material';
+import { Box, Chip, Button, CircularProgress } from '@mui/material';
 import {
   AdminPanelSettings as AdminIcon,
   Person as PersonIcon,
@@ -21,22 +21,13 @@ interface UserEntity extends User {
   id: string;
 }
 
-// Props for sync menu items functionality
 interface SyncMenuItemsProps {
   onSync: () => void;
   isPending: boolean;
 }
 
-// Props for clear menu items functionality
-interface ClearMenuItemsProps {
-  onClear: () => void;
-  isPending: boolean;
-}
-
-// UserTable props
 interface UserTableProps {
   syncMenuItemsProps?: SyncMenuItemsProps;
-  clearMenuItemsProps?: ClearMenuItemsProps;
 }
 
 // User-specific columns
@@ -110,7 +101,6 @@ const userColumns: GridColDef[] = [
 
 export default function UserTable({
   syncMenuItemsProps,
-  clearMenuItemsProps,
 }: UserTableProps = {}) {
   const { data: users, isLoading, error } = useUsers();
   const deleteUser = useDeleteUser();
@@ -163,7 +153,6 @@ export default function UserTable({
     id: user.id,
   }));
 
-  // Create sync button component
   const syncButton = syncMenuItemsProps ? (
     <Button
       variant="outlined"
@@ -171,35 +160,14 @@ export default function UserTable({
       onClick={syncMenuItemsProps.onSync}
       disabled={syncMenuItemsProps.isPending}
       sx={{
-        borderRadius: 0, // Square corners
+        borderRadius: 0,
         fontWeight: 600,
-        mr: 1,
       }}
     >
       {syncMenuItemsProps.isPending ? (
         <CircularProgress size={20} />
       ) : (
         'Sync Menu Items'
-      )}
-    </Button>
-  ) : null;
-
-  // Create clear button component
-  const clearButton = clearMenuItemsProps ? (
-    <Button
-      variant="outlined"
-      color="error"
-      onClick={clearMenuItemsProps.onClear}
-      disabled={clearMenuItemsProps.isPending}
-      sx={{
-        borderRadius: 0, // Square corners
-        fontWeight: 600,
-      }}
-    >
-      {clearMenuItemsProps.isPending ? (
-        <CircularProgress size={20} />
-      ) : (
-        'Clear Menu Items'
       )}
     </Button>
   ) : null;
@@ -222,12 +190,7 @@ export default function UserTable({
       deleteConfirmMessage="Are you sure you want to delete this user? This action cannot be undone."
       pageSize={25}
       pageSizeOptions={[10, 25, 50, 100]}
-      additionalHeaderButtons={
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {syncButton}
-          {clearButton}
-        </Box>
-      }
+      additionalHeaderButtons={syncButton}
     />
   );
 }

@@ -8,8 +8,9 @@ export type DashboardSection =
   | 'FINANCIAL_HEALTH'
   | 'MARKETING_ENGINE'
   | 'SALES_PERFORMANCE'
-  | 'CLIENT_MODEL_STRENGTH';
-export type VisualType = 'GAUGE' | 'SPARK';
+  | 'DELIVERY_MODEL_STRENGTH';
+export type VisualType = 'GAUGE' | 'SPARK' | 'STAR' | 'SLIDER' | 'PROGRESS_BAR';
+export type TargetDirection = 'higher_is_better' | 'lower_is_better';
 
 export interface MetricDefinition {
   id: number;
@@ -22,6 +23,7 @@ export interface MetricDefinition {
   dashboard_section: DashboardSection | null;
   visual_type: VisualType | null;
   show_on_executive_dashboard: boolean;
+  target_direction: TargetDirection;
 }
 
 export function useMetricDefinitions() {

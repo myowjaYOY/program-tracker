@@ -38,7 +38,7 @@ const SECTION_LABELS: Record<string, string> = {
   FINANCIAL_HEALTH: 'Financial Health',
   MARKETING_ENGINE: 'Marketing Engine',
   SALES_PERFORMANCE: 'Sales Performance',
-  CLIENT_MODEL_STRENGTH: 'Client Model Strength',
+  DELIVERY_MODEL_STRENGTH: 'Delivery Model Strength',
 };
 
 interface TemplateRow {

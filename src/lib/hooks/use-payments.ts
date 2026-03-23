@@ -24,6 +24,7 @@ export interface PaymentMetrics {
     memberName: string;
     amount: number;
   }>;
+  membershipRevenuePct: number;
 }
 
 export function usePayments(params?: {

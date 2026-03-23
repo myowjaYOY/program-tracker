@@ -10,10 +10,16 @@ import { startOfWeek } from 'date-fns';
  * inline the same auth logic.
  */
 
-/** Ensure period_start is first day of month. */
-function normalizeMonthStart(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
+/** Ensure period_start is first day of month. Parses YYYY-MM-DD string directly to avoid timezone shifts. */
+function normalizeMonthStart(input: Date | string): string {
+  if (typeof input === 'string') {
+    const parts = input.split('-').map(Number);
+    const y = parts[0] ?? new Date().getFullYear();
+    const m = String(parts[1] ?? 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  }
+  const y = input.getUTCFullYear();
+  const m = String(input.getUTCMonth() + 1).padStart(2, '0');
   return `${y}-${m}-01`;
 }
 
@@ -101,8 +107,7 @@ export async function GET(req: NextRequest) {
     }
     let periodStart = parsed.data.periodStart;
     if (parsed.data.periodType === 'MONTH') {
-      const d = new Date(periodStart);
-      periodStart = normalizeMonthStart(d);
+      periodStart = normalizeMonthStart(periodStart);
     } else {
       const parts = periodStart.split('-').map(Number);
       const y = parts[0] ?? new Date().getFullYear();
@@ -158,8 +163,7 @@ export async function POST(req: NextRequest) {
   let periodStart: string;
 
   if (periodType === 'MONTH') {
-    const d = new Date(rawStart);
-    periodStart = normalizeMonthStart(d);
+    periodStart = normalizeMonthStart(rawStart);
   } else {
     const parts = rawStart.split('-').map(Number);
     const y = parts[0] ?? new Date().getFullYear();
@@ -279,7 +283,7 @@ export async function DELETE(req: NextRequest) {
     }
     let periodStart = keyData.periodStart;
     if (keyData.periodType === 'MONTH') {
-      periodStart = normalizeMonthStart(new Date(periodStart));
+      periodStart = normalizeMonthStart(periodStart);
     } else {
       const parts = periodStart.split('-').map(Number);
       const y = parts[0] ?? new Date().getFullYear();

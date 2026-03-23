@@ -1,0 +1,24 @@
+---
+description: Always inspect database schema before writing any SQL queries or database-related code
+alwaysApply: true
+---
+
+# Schema First, Queries Second
+
+Before writing ANY SQL query, Supabase query, or database-related code:
+
+1. **Inspect the schema first.** Use MCP `execute_sql` or equivalent to examine:
+   - Tables involved (`\dt` or `SELECT table_name FROM information_schema.tables`)
+   - Column names and types on the target tables
+   - Foreign key relationships (`information_schema.key_column_usage` or `\d table_name`)
+   - Related tables that might have similar names (e.g., `status` vs `program_status`)
+
+2. **Never assume:**
+   - Which table a foreign key references — verify it
+   - Which column holds the "right" value (e.g., `total_cost` vs `final_total_price`) — check related tables
+   - Which date column to filter on (`created_at` vs `start_date` vs other) — verify the schema and existing usage
+   - That a status value in one table means the same thing in another table
+
+3. **If existing code already queries the same data**, read that code first and replicate its joins, filters, and field selections rather than writing from scratch.
+
+This rule exists because making assumptions about schema relationships, column names, and foreign keys leads to silently wrong results that look plausible but are completely incorrect.
