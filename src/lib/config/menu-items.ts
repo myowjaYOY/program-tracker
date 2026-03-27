@@ -158,6 +158,12 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: 'Assignment',
   },
   {
+    path: '/dashboard/admin/thrive-radio-users',
+    label: 'Thrive Radio Users',
+    section: 'admin',
+    icon: 'Radio',
+  },
+  {
     path: '/dashboard/admin/users',
     label: 'User Management',
     section: 'admin',

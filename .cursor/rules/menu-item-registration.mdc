@@ -1,0 +1,19 @@
+---
+description: Checklist for adding new menu items to the sidebar
+alwaysApply: true
+---
+
+# Adding Menu Items — Required Steps
+
+When adding a new page/route to the sidebar navigation, you MUST update ALL THREE locations:
+
+1. **`src/lib/config/menu-items.ts`** — Add entry to the `MENU_ITEMS` array with `path`, `label`, `section`, and `icon`. This is the permissions registry. Without this, non-admin users can never be granted access to the page.
+
+2. **`src/components/layout/Sidebar.tsx`** — Add the nav entry to the appropriate array (`mainNav`, `marketingNav`, `salesNav`, `operationsNav`, or `adminNav`) with `label`, `icon` (JSX), and `path`. This controls what appears in the sidebar.
+
+3. **After deployment, remind the user** to click "Sync Menu Items" on the User Management screen (or call `POST /api/admin/menu-items/sync`). This pushes the updated `MENU_ITEMS` config into the `menu_items` database table and auto-assigns new paths to admin users.
+
+If any of these steps are skipped:
+- Missing from `menu-items.ts` → non-admin users can never see the page (no permission entry exists to grant)
+- Missing from `Sidebar.tsx` → nobody sees the link (even admins)
+- Sync not run → the `menu_items` DB table is stale and the User Management form won't show the new item for permission assignment

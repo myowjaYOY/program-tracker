@@ -1,0 +1,173 @@
+You are a senior full-stack engineer and technical writer. I need you to produce comprehensive documentation for a single UI screen in this application. Do this ONLY for the screen I specify — do not document other screens.
+
+**TARGET SCREEN:** [Operations/Executive Dashboard]
+Create the output as a Markdown file at: docs/help/Operations-Executive Dashboard.md
+If the docs/help/ directory doesn't exist, create it.
+
+Analyze every file involved in rendering and supporting this screen — frontend components, API routes, server actions, hooks, utilities, middleware, database queries, and schema — then produce a single structured document covering ALL of the sections below.
+
+---
+
+### 1. SCREEN OVERVIEW
+- Screen name, route/URL pattern, and purpose
+- User role(s) that access this screen and any permission/auth gating
+- Where this screen fits in the overall user workflow (what comes before, what comes after)
+- Screenshot-ready description of the layout (describe the visual sections top to bottom, left to right)
+
+### 2. COMPONENT ARCHITECTURE
+- Component tree / hierarchy (parent → children) for this screen
+- For EACH component:
+  - File path
+  - Props accepted (name, type, required/optional, default value)
+  - Local state (useState, useReducer — variable name, type, initial value, what it controls)
+  - Context or global state consumed (Zustand, Redux, React Context, etc.)
+  - Key refs (useRef) and what they reference
+  - Side effects (useEffect — trigger dependencies, what it does)
+  - Event handlers (name, trigger element, what it does)
+  - Conditional rendering logic (what conditions show/hide which UI sections)
+
+### 3. DATA FLOW
+- Complete data lifecycle for this screen:
+  - How data enters (API call, server component fetch, props from parent route, URL params, cached data)
+  - Transformations applied before display
+  - How user input is captured, validated, and submitted
+  - Optimistic updates, loading states, error states
+- Data flow diagram in Mermaid syntax
+
+### 4. API / SERVER LAYER
+- Every API endpoint or server action this screen calls:
+  - Method, route/path, or server action function name and file path
+  - Request payload / parameters (name, type, required/optional, validation rules)
+  - Response shape (TypeScript type or documented structure)
+  - Authentication/authorization requirements
+  - Rate limiting, caching headers, or middleware applied
+  - Error responses and HTTP status codes returned
+
+### 5. DATABASE LAYER
+- Every database table/model touched by this screen:
+  - Table name, schema/model file path
+  - Relevant columns (name, type, nullable, default, constraints)
+  - Indexes that support queries on this screen
+  - Foreign key relationships relevant to this screen
+- Every query executed:
+  - Raw SQL or ORM query (Prisma, Drizzle, Supabase client call, etc.)
+  - Whether it is a read or write
+  - Where in the code it lives (file path + function name)
+  - Performance notes (does it use an index? is it N+1? could it be batched?)
+
+### 6. BUSINESS RULES & LOGIC
+- Every business rule enforced on this screen:
+  - Rule description in plain English
+  - Where it is enforced (frontend validation, API validation, database constraint, or multiple)
+  - What happens when the rule is violated (error message, blocked action, fallback behavior)
+- Calculations or derived values shown on screen (formulas, aggregation logic)
+- Any feature flags or environment-specific behavior affecting this screen
+
+### 7. FORM & VALIDATION DETAILS (if applicable)
+- Every form field:
+  - Field name/label, input type, bound state variable
+  - Validation rules (required, min/max, regex, custom validators)
+  - Client-side vs server-side validation distinction
+  - Error message displayed for each validation failure
+- Form submission flow (what happens on submit, step by step)
+- Dirty state tracking, unsaved changes warnings
+
+### 8. STATE MANAGEMENT
+- All state relevant to this screen:
+  - Local component state
+  - Shared/global state (store name, slice, relevant keys)
+  - URL state (query params, route params)
+  - Cached/persisted state (localStorage, sessionStorage, cookies, React Query cache)
+- State transitions: what user actions or events cause which state changes
+
+### 9. NAVIGATION & ROUTING
+- How the user arrives at this screen (all inbound routes/links)
+- Outbound navigation (where can the user go from here, and what triggers it)
+- Route guards or redirects (auth checks, role checks, feature flag checks)
+- Dynamic route segments and how they are resolved
+- Deep linking support and URL shareability
+
+### 10. ERROR HANDLING & EDGE CASES
+- Every error state this screen can display:
+  - What triggers it
+  - UI treatment (toast, inline error, error boundary, full-page error)
+  - Recovery path (retry button, redirect, manual instruction)
+- Empty states (no data scenarios — what is shown)
+- Loading states (skeletons, spinners, progressive loading)
+- Timeout handling
+- Offline behavior (if applicable)
+
+### 11. ACCESSIBILITY
+- ARIA roles and labels used
+- Keyboard navigation flow (tab order, keyboard shortcuts)
+- Screen reader considerations
+- Color contrast and visual indicator compliance
+- Focus management (where does focus go after modal open, form submit, errors)
+
+### 12. PERFORMANCE CONSIDERATIONS
+- Identified or potential performance concerns:
+  - Large lists (is virtualization used?)
+  - Heavy re-renders (are components memoized appropriately?)
+  - Image/asset loading strategy (lazy loading, CDN, optimization)
+  - Bundle size impact of this screen's dependencies
+  - Database query performance (see Section 5)
+- Caching strategy (client-side caching, server caching, CDN caching)
+
+### 13. THIRD-PARTY INTEGRATIONS
+- External services, APIs, or SDKs this screen interacts with:
+  - Service name, purpose, SDK/package used
+  - Configuration required (env vars, API keys — do NOT output actual secrets)
+  - Failure modes and fallback behavior
+
+### 14. SECURITY CONSIDERATIONS
+- Input sanitization (XSS prevention)
+- CSRF protection
+- Authorization checks (are they enforced server-side, not just hidden in UI?)
+- Sensitive data handling (PII, PHI/HIPAA considerations, encryption at rest/in transit)
+- SQL injection prevention
+- File upload security (if applicable)
+
+### 15. TESTING COVERAGE
+- Existing tests covering this screen (file paths, what they test)
+- Gaps: what is NOT tested that should be
+- Suggested test cases:
+  - Unit tests (component rendering, utility functions)
+  - Integration tests (API calls, database interactions)
+  - E2E tests (critical user paths through this screen)
+
+### 16. CODE REVIEW FINDINGS
+Perform a code review of ALL files involved in this screen. Flag:
+- **Bugs:** Actual defects (null reference risks, race conditions, unhandled promise rejections, incorrect logic)
+- **Security issues:** Missing auth checks, unsanitized inputs, exposed secrets, HIPAA compliance gaps
+- **Performance issues:** Unnecessary re-renders, missing memoization, N+1 queries, unbounded queries, missing pagination
+- **Code quality:** Dead code, duplicated logic, overly complex functions, missing TypeScript types, inconsistent naming
+- **Missing error handling:** Uncaught exceptions, missing try/catch, missing user-facing error states
+- **Architectural concerns:** Tight coupling, business logic in components that belongs in services, violation of project patterns
+- For each finding: severity (Critical / High / Medium / Low), file path, line number or function, description, and suggested fix
+
+### 17. TECH DEBT & IMPROVEMENT OPPORTUNITIES
+- Refactoring opportunities
+- Missing abstractions or utilities that could be extracted
+- Deprecated dependencies or patterns in use
+- Suggestions for improving maintainability, readability, or scalability
+
+### 18. END-USER DOCUMENTATION DRAFT
+Write a section suitable for end-user help documentation:
+- **Page title and one-line description**
+- **What this page is for** (in non-technical language)
+- **Step-by-step instructions** for the primary task(s) on this page
+- **Field descriptions** (what each input means, in user-friendly terms)
+- **Tips and notes** (best practices, common mistakes, "did you know" items)
+- **FAQ** (3–5 anticipated questions a user might have about this screen)
+- **Troubleshooting** (common issues and how to resolve them)
+
+---
+
+## OUTPUT FORMAT
+- Use Markdown with clear heading hierarchy
+- Use tables for structured data (component props, database columns, form fields, API parameters)
+- Use Mermaid diagrams for data flow and component trees
+- Use code blocks with file paths for code references
+- For code review findings, use a summary table: | Severity | File | Issue | Suggested Fix |
+- Be thorough but concise — no filler prose
+- If a section is not applicable to this screen, write "N/A — [brief reason]" instead of omitting it

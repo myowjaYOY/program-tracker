@@ -1,0 +1,141 @@
+# Prompt: Generate End-User Training Document from Per-Screen Documentation
+
+---
+
+## Instructions
+
+You are a technical writer creating a comprehensive, professional end-user training document (Word .docx format) for an application called **YOY Program Tracker**. You will be provided with a series of Markdown documentation files — one per screen — that all share the same 18-section structure. Your job is to extract the end-user-relevant content from each file and compile it into a single, polished training manual.
+
+---
+
+## Source File Format
+
+Each input file follows this structure:
+
+```
+## 1. SCREEN OVERVIEW
+## 2. COMPONENT ARCHITECTURE
+## 3. DATA FLOW
+## 4. API / SERVER LAYER
+## 5. DATABASE LAYER
+## 6. BUSINESS RULES & LOGIC
+## 7. FORM & VALIDATION DETAILS
+## 8. STATE MANAGEMENT
+## 9. NAVIGATION & ROUTING
+## 10. ERROR HANDLING & EDGE CASES
+## 11. ACCESSIBILITY
+## 12. PERFORMANCE CONSIDERATIONS
+## 13. THIRD-PARTY INTEGRATIONS
+## 14. SECURITY CONSIDERATIONS
+## 15. TESTING COVERAGE
+## 16. CODE REVIEW FINDINGS
+## 17. TECH DEBT & IMPROVEMENT OPPORTUNITIES
+## 18. END-USER DOCUMENTATION DRAFT
+```
+
+**Sections 2–17 are developer-facing and should NOT appear in the training document.**
+
+For each screen file, extract content from these sections only:
+
+| Section | What to Extract |
+|---------|----------------|
+| **1. SCREEN OVERVIEW** | Screen name, purpose, workflow position, and layout description. Use purpose to write a plain-language intro. Use the layout description to help users orient themselves on the page. |
+| **6. BUSINESS RULES & LOGIC** | Any rules that affect what users see or can do (e.g., status restrictions, visibility conditions, date logic). Translate these into user-friendly "good to know" notes or callout boxes. |
+| **7. FORM & VALIDATION DETAILS** | Required fields, character limits, dropdown options, validation error messages — anything the user encounters when filling out forms. |
+| **10. ERROR HANDLING & EDGE CASES** | User-visible error messages, toast notifications, and what to do when something goes wrong. Feed these into the Troubleshooting section. |
+| **18. END-USER DOCUMENTATION DRAFT** | This is the primary content source. It contains: What This Page Is For, Step-by-Step Instructions, Field Descriptions, Tips and Notes, FAQ, and Troubleshooting. Use this as the foundation for each screen's chapter, enriched and cross-referenced with the sections above. |
+
+---
+
+## Output Document Structure
+
+Produce a single Word document (.docx) organized as follows:
+
+### Front Matter
+1. **Cover Page** — Title: "YOY Program Tracker — User Training Guide", subtitle: "End-User Reference Manual", date, version 1.0.
+2. **Table of Contents** — Auto-generated from heading styles.
+3. **About This Guide** — A brief paragraph explaining who this guide is for, how it's organized (one chapter per screen), and how to use it (e.g., read end-to-end for onboarding or jump to a specific screen as a reference).
+
+### Per-Screen Chapters (one chapter per input file, in logical workflow order)
+
+For each screen, create a chapter with these subsections:
+
+#### [Chapter Number]. [Screen Name]
+
+**A. Overview**
+- 2–3 sentences describing what this screen is for and when you'd use it.
+- A "Where to Find It" note (navigation path from the sidebar or prior screen).
+- A "What You'll See" summary describing the page layout in plain language (derived from the Layout Description in Section 1).
+
+**B. Step-by-Step Instructions**
+- Pulled directly from Section 18, but edited for:
+  - Consistent voice (second person, present tense, imperative mood: "Click…", "Select…", "Review…").
+  - Numbered steps for sequential tasks.
+  - Sub-tasks grouped under descriptive sub-headings.
+  - Callout boxes for warnings, tips, or important notes (use a consistent format like **⚠ Note:** or **💡 Tip:**).
+
+**C. Field Reference**
+- A table listing every field the user interacts with on this screen.
+- Columns: Field Name | Description | Required? | Notes (validation rules, character limits, default values).
+- Sourced from Section 18's "Field Descriptions" table, enriched with details from Sections 7 and 6.
+
+**D. Tips & Best Practices**
+- Pulled from Section 18's "Tips and Notes."
+- Add any keyboard shortcuts, power-user tricks, or workflow efficiency notes found in Sections 6 or 7.
+
+**E. Frequently Asked Questions**
+- Pulled from Section 18's FAQ.
+- Rewrite Q&A pairs so the questions sound like real user questions (not developer paraphrases).
+- If Sections 6 or 10 reveal additional edge cases that users would ask about, add them here.
+
+**F. Troubleshooting**
+- A table format: Problem | Likely Cause | What To Do.
+- Sourced from Section 18's Troubleshooting table, enriched with user-visible error messages from Section 10.
+
+### Back Matter
+1. **Glossary** — Define key application terms used across chapters (e.g., "Program," "Lead," "Script Schedule," "Redeemed," "Instance," "Therapy Type"). Build this from terms that appear across multiple screen files.
+2. **Quick Reference Card** — A 1-page summary table: Screen Name | Purpose | Key Actions (2–3 bullet points each). Useful as a printable cheat sheet.
+
+---
+
+## Writing Style & Tone Guidelines
+
+- **Audience:** Non-technical clinic staff (coordinators, front desk, coaches, practitioners). Assume no software development knowledge.
+- **Tone:** Friendly, professional, and encouraging. Avoid jargon. When a technical term is unavoidable, define it on first use and add it to the glossary.
+- **Voice:** Second person ("you"), active voice, imperative mood for instructions.
+- **Consistency:** Use the same term for the same concept throughout (e.g., always "member" not sometimes "patient" and sometimes "client" — unless the source files use a specific term).
+- **Length:** Be thorough but not verbose. Every sentence should help the user accomplish a task or understand a concept. No filler.
+
+---
+
+## Formatting Requirements
+
+- **Heading 1:** Chapter titles (screen names).
+- **Heading 2:** Subsections within a chapter (Overview, Step-by-Step, etc.).
+- **Heading 3:** Sub-tasks or grouped instructions within Step-by-Step.
+- **Tables:** Use for Field Reference and Troubleshooting sections. Include header row with light shading.
+- **Numbered lists:** For sequential steps.
+- **Bulleted lists:** For non-sequential items (tips, notes).
+- **Callout formatting:** Bold prefix for callout type (e.g., **⚠ Note:**, **💡 Tip:**, **⚠ Warning:**) followed by the callout text.
+- **Consistent page headers/footers:** Document title in header, page numbers in footer.
+
+---
+
+## Processing Rules
+
+1. **Do NOT include** any developer-facing content: component trees, API routes, database schemas, code snippets, TypeScript types, hook names, file paths, or tech debt notes.
+2. **Do NOT invent features.** Only document what is described in the source files. If a source file is ambiguous about whether a feature is user-facing, omit it.
+3. **Cross-reference between screens** where relevant. Example: "For details on how script schedules work across all members, see Chapter 3: Coordinator."
+4. **Resolve conflicts.** If two screen files describe the same feature differently, use the version from the screen where the feature is the primary focus.
+5. **Preserve all FAQ and Troubleshooting entries** from the source files — do not drop any.
+6. **Order chapters** by the natural user workflow: Dashboard first (landing page after login), then Coordinator, then subsequent screens in the order a user would typically encounter them.
+
+---
+
+## Input
+
+The following screen documentation files are attached:
+
+Look in the directory called /doc/help with the extension md
+
+Please process all files and produce the complete training document.

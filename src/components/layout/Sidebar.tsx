@@ -50,6 +50,7 @@ import {
   Badge as ProgramRolesIcon,
   Schedule as ScheduleIcon,
   Flag as TargetsIcon,
+  Radio as RadioIcon,
 } from '@mui/icons-material';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
@@ -160,6 +161,11 @@ const adminNav = [
     label: 'Therapy Tasks',
     icon: <TherapyTaskIcon />,
     path: '/dashboard/therapy-tasks',
+  },
+  {
+    label: 'Thrive Radio Users',
+    icon: <RadioIcon />,
+    path: '/dashboard/admin/thrive-radio-users',
   },
   {
     label: 'User Management',

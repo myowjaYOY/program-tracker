@@ -1,0 +1,195 @@
+# Prompt: Business Rules Extraction, Consolidation & Assessment
+
+---
+
+## Role
+
+You are a senior business analyst and systems architect reviewing the business rules of an application called **YOY Program Tracker** — a clinic management platform used by an integrative medicine center. You will be provided with a set of Markdown documentation files (one per screen), each following an 18-section structure. Your job is to extract every business rule from every file, consolidate them into a single organized inventory, and then perform a thorough critical assessment.
+
+---
+
+## Source Files
+
+You will receive 12 Markdown files, one per application screen. Each file contains these sections (among others):
+
+```
+## 1. SCREEN OVERVIEW
+## 6. BUSINESS RULES & LOGIC
+## 7. FORM & VALIDATION DETAILS
+## 10. ERROR HANDLING & EDGE CASES
+```
+
+**Primary extraction source:** Section 6 (Business Rules & Logic) is the richest source. But rules also live in:
+- **Section 1** — workflow position, role gating, access control
+- **Section 7** — validation constraints, required fields, data type enforcement, form submission flows
+- **Section 10** — error-triggered behaviors, guard rails, fallback logic
+
+Extract from ALL four sections. Do not limit yourself to Section 6 alone.
+
+---
+
+## Phase 1: Extraction
+
+For each screen file, extract every discrete business rule. A "business rule" is any statement that:
+- Constrains what data can be entered (validation, required fields, ranges)
+- Constrains what actions can be taken (status transitions, delete guards, edit locks)
+- Defines how a value is calculated (formulas, derived metrics, aggregations)
+- Controls visibility or access (role gating, permission filtering, conditional display)
+- Triggers side effects (auto-generation, cascade updates, audit logging)
+- Defines a threshold or classification (color coding, severity levels, status derivation)
+
+For each rule, capture:
+| Attribute | Description |
+|-----------|-------------|
+| **Rule ID** | A unique identifier (e.g., `PROG-001`, `LEAD-005`, `PAY-012`) using a screen prefix |
+| **Screen** | Which screen(s) this rule applies to |
+| **Rule Statement** | A clear, plain-language statement of the rule |
+| **Category** | One of: Validation, Status Transition, Calculation, Access Control, Side Effect, Display Logic, Data Integrity, Workflow Constraint |
+| **Enforcement Point** | Where it's enforced: Frontend only, API only, Database only, Frontend + API, Frontend + API + Database |
+| **Violation Behavior** | What happens when the rule is violated (error message, toast, disabled control, silent exclusion, etc.) |
+| **Cross-Screen Impact** | Does this rule affect data or behavior on other screens? If yes, which ones? |
+
+---
+
+## Phase 2: Consolidation
+
+After extracting rules from all files, consolidate them into a **Master Business Rules Inventory** organized by domain (not by screen). Use these domain groupings:
+
+### Domain Categories
+
+1. **Program Lifecycle** — Status transitions, activation prerequisites, pause/unpause behavior, completion, cancellation, read-only states
+2. **Financial Rules** — Pricing calculations, tax logic, margin formulas, payment generation, payment editing, auto-adjustment, financial locks
+3. **Scheduling & Fulfillment** — Script schedule generation, redemption/missed logic, date changes, cascade adjustments, task status syncing
+4. **Lead & Sales Pipeline** — Lead status transitions, duplicate detection, campaign associations, conversion tracking
+5. **Marketing & Campaign Management** — Campaign CRUD constraints, vendor requirements, cost tracking, delete guards
+6. **Metrics & Calculations** — All derived values, KPIs, dashboard metrics, report calculations, compliance scores, health scores
+7. **Access Control & Permissions** — Authentication, role gating, permission filtering, API-level authorization (or lack thereof)
+8. **Data Display & UX Logic** — Conditional visibility, color coding, sorting defaults, empty states, tooltip behavior, grid state persistence
+9. **Document Generation** — Contract, Plan Summary, PDF export prerequisites and behavior
+10. **AI & Analytics** — AI insight generation, analytics caching, refresh triggers, Theory of Constraints logic
+
+Within each domain, list the rules in a table with all the attributes from Phase 1. If the same rule appears in multiple screen files, merge them into a single entry and note all screens where it applies.
+
+---
+
+## Phase 3: Assessment
+
+Now perform a critical assessment of the consolidated rules. Organize your findings into the following sections:
+
+### 3A. Conflict Detection
+
+Identify any rules that contradict each other. Specifically look for:
+
+- **Same metric, different formula** — Is the same value calculated differently on different screens? (Example: "Active Members" counted one way on the Dashboard and differently in Reports)
+- **Inconsistent status logic** — Are status transition rules defined differently across screens?
+- **Contradictory validation** — Is a field required on one screen but optional on another for the same entity?
+- **Conflicting access control** — Does one screen claim role-based restrictions while another screen for the same data does not?
+- **Overlapping date logic** — Do different reports use different date fields (start_date vs. created_at vs. pmedate) for what appears to be the same metric?
+
+For each conflict found, provide:
+| Conflict ID | Rules Involved | Nature of Conflict | Severity (High/Medium/Low) | Recommended Resolution |
+
+### 3B. Enforcement Gap Analysis
+
+Identify rules that are under-enforced:
+
+- **Frontend-only enforcement** — Rules that should also be enforced at the API or database level but aren't. These represent data integrity risks (a savvy user or integration could bypass the frontend).
+- **Missing server-side validation** — Form validation that exists client-side but has no corresponding API check.
+- **No database constraints** — Business rules that rely entirely on application code with no safety net at the database level.
+- **Inconsistent enforcement depth** — The same type of rule enforced at different depths across screens (e.g., one screen uses DB constraint, another only uses frontend for the same rule pattern).
+
+For each gap, provide:
+| Gap ID | Rule(s) Affected | Current Enforcement | Risk | Recommended Enhancement |
+
+### 3C. Completeness Assessment
+
+Identify areas where business rules appear to be missing or incomplete:
+
+- **Undefined transitions** — Status values with no documented allowed transitions (terminal states that should allow recovery, or missing paths)
+- **Unhandled edge cases** — Scenarios mentioned in error handling (Section 10) that have no corresponding business rule
+- **Placeholder features** — Features flagged as "hardcoded to 0", "planned for future", or "not yet implemented" that may create confusion
+- **Missing cross-screen validation** — Actions on one screen that should validate against data on another screen but don't appear to
+- **Orphaned rules** — Rules referenced on one screen but not enforced anywhere
+
+### 3D. Redundancy & Simplification Opportunities
+
+Identify rules that:
+- Are duplicated across screens and could be centralized
+- Could be combined into a single, more general rule
+- Represent unnecessary complexity (overly specific rules that could be simplified)
+
+### 3E. Cross-Screen Dependency Map
+
+Create a dependency analysis showing:
+- Which screens produce data that other screens consume
+- Which rules on Screen A create preconditions for rules on Screen B
+- Where a rule change on one screen would cascade to others
+- Any circular dependencies
+
+Present this as a structured list or matrix showing: **Screen A** → (produces) → **Data/State** → (consumed by) → **Screen B** → (rule affected)
+
+### 3F. Risk-Ranked Improvement Recommendations
+
+Synthesize all findings into a prioritized list of recommended improvements, ranked by:
+1. **Critical** — Data integrity risks, security gaps, rules that could cause financial errors
+2. **High** — Conflicts that cause inconsistent user experience or incorrect reporting
+3. **Medium** — Enforcement gaps that represent best-practice violations
+4. **Low** — Simplification opportunities, cosmetic inconsistencies, tech debt
+
+For each recommendation:
+| Priority | Finding Reference | Recommendation | Expected Effort (S/M/L) | Business Impact |
+
+---
+
+## Output Format
+
+Produce a single, well-structured document (Markdown is fine) with these major sections:
+
+```
+# YOY Program Tracker — Business Rules Assessment Report
+
+## Executive Summary
+(2–3 paragraph overview of the total rule count, key findings, critical issues, and top recommendations)
+
+## 1. Master Business Rules Inventory
+### 1.1 Program Lifecycle
+### 1.2 Financial Rules
+### 1.3 Scheduling & Fulfillment
+... (all 10 domains)
+
+## 2. Conflict Detection
+## 3. Enforcement Gap Analysis
+## 4. Completeness Assessment
+## 5. Redundancy & Simplification Opportunities
+## 6. Cross-Screen Dependency Map
+## 7. Risk-Ranked Improvement Recommendations
+
+## Appendix A: Rules-by-Screen Index
+(A reverse lookup: for each screen, list all Rule IDs that apply to it)
+
+## Appendix B: Calculation Registry
+(A single table of every calculated/derived value in the system, its formula, where it's calculated, and where it's displayed)
+```
+
+---
+
+## Processing Rules
+
+1. **Be exhaustive.** Extract every rule, not just the obvious ones. Validation constraints, default values, auto-calculations, conditional visibility — all count.
+2. **Be precise.** Use the exact formulas and threshold values from the source files. Do not generalize "taxes are applied" — state "8.25% sales tax applied to items where therapies.taxable = true."
+3. **Be opinionated in the assessment.** Don't just list findings — explain WHY each one matters and what the real-world consequence is for the clinic.
+4. **Trace lineage.** When a metric appears on multiple screens, trace it back to its source of truth and note any divergence.
+5. **Think like a QA engineer.** What would break? What would a confused user do? What would happen if data was entered in an unexpected order?
+6. **Think like an auditor.** Where could financial data become inconsistent? Where are payments or revenue at risk of being miscalculated?
+7. **Think like a product manager.** Where are the rough edges in the user experience caused by business rule design? Where do rules create unnecessary friction?
+8. **Do NOT include** code snippets, component names, file paths, hook names, or any developer implementation details. This is a business-level document.
+
+---
+## Input
+
+The following screen documentation files are attached:
+
+Look in the directory called /doc/help with the extension md
+
+Please process all files and produce the complete training document.
+

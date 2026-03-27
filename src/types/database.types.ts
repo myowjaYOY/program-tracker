@@ -552,6 +552,18 @@ export interface TherapyType {
   updated_by_email?: string | null;
 }
 
+export interface ThriveRadioProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string | null;
+  avatar_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  last_sign_in_at?: string | null;
+}
+
 export interface Users {
   id: string;
   email: string;

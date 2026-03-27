@@ -1,0 +1,260 @@
+# Prompt: Code Health Assessment — Code Review Findings, Tech Debt, Security & Performance
+
+---
+
+## Role
+
+You are a senior software architect and technical lead performing a comprehensive code health assessment of an application called **YOY Program Tracker** — a Next.js 15 / TypeScript / Supabase / MUI clinic management platform. You will be provided with 12 Markdown documentation files (one per screen), each following an 18-section structure. Your job is to extract all code review findings, tech debt items, security concerns, and performance issues from every file, consolidate them into a unified view, and produce an actionable assessment with prioritized recommendations.
+
+---
+
+## Source Files
+
+Each input file contains these developer-facing sections:
+
+```
+## 12. PERFORMANCE CONSIDERATIONS
+## 13. THIRD-PARTY INTEGRATIONS
+## 14. SECURITY CONSIDERATIONS
+## 15. TESTING COVERAGE
+## 16. CODE REVIEW FINDINGS
+## 17. TECH DEBT & IMPROVEMENT OPPORTUNITIES
+```
+
+**Extract from ALL six sections.** Section 16 (Code Review Findings) is the primary source for discrete issues, but the other sections contain critical context about security vulnerabilities, performance bottlenecks, testing gaps, and architectural debt.
+
+---
+
+## Phase 1: Extraction & Consolidation
+
+### 1A. Code Review Findings Inventory
+
+Extract every discrete finding from Section 16 of all files. For each finding, capture:
+
+| Attribute | Description |
+|-----------|-------------|
+| **Finding ID** | Unique ID using screen prefix (e.g., `DASH-CR-001`, `PROG-CR-003`, `PAY-CR-007`) |
+| **Screen** | Which screen(s) this finding applies to |
+| **Severity** | Critical / High / Medium / Low (use the severity from the source file) |
+| **Category** | One of: Security, Data Integrity, Type Safety, Performance, Dead Code, Inconsistency, Deprecated Pattern, Missing Error Handling, Code Duplication |
+| **Finding** | Clear description of the issue (rewrite for a non-developer audience where possible while preserving technical accuracy) |
+| **Risk** | What could go wrong if this is not fixed? Be specific about the business impact. |
+| **Recommended Fix** | The suggested resolution from the source file, enhanced with your own assessment |
+| **Effort** | S (< 1 hour), M (1-4 hours), L (4+ hours) |
+
+After extracting from all files, organize findings into a single consolidated table sorted by severity (Critical first, then High, Medium, Low).
+
+### 1B. Security Vulnerability Register
+
+Extract all security-related items from Sections 14 and 16 across all files. Organize into:
+
+1. **Authentication Issues** — inconsistent auth patterns, missing auth checks, `getSession()` vs `getUser()` usage
+2. **Authorization Gaps** — missing role/permission checks, API-level access control failures
+3. **Input Sanitization** — SQL injection risks, XSS vectors, unsanitized user input
+4. **Sensitive Data Exposure** — PII/PHI logging, missing HIPAA controls, data transmitted to third parties
+5. **CSRF & Session Management** — cookie security, token handling
+6. **API Security** — rate limiting, unauthenticated endpoints, information leakage
+
+For each vulnerability:
+| Vuln ID | Category | Affected Screens/Routes | Description | Severity | Exploitability (Easy/Medium/Hard) | Recommended Fix |
+
+### 1C. Performance Bottleneck Register
+
+Extract all performance concerns from Sections 12 and 16. Organize by type:
+
+1. **Unbounded Queries** — API endpoints that fetch ALL data with no pagination or filtering
+2. **N+1 / Sequential Queries** — database access patterns that could be parallelized or batched
+3. **Client-Side Filtering** — data fetched in full then filtered in JavaScript instead of at the database level
+4. **Missing Memoization** — components, columns, or computed values recreated unnecessarily on every render
+5. **Bundle Size** — large dependencies, missing lazy loading, unnecessary imports
+6. **Caching Gaps** — missing server-side caching, aggressive client-side refetching
+
+For each bottleneck:
+| Perf ID | Type | Affected Screen/Route | Description | Current Impact | Scaling Risk (when will this become a problem?) | Recommended Fix |
+
+### 1D. Tech Debt Registry
+
+Extract all items from Section 17 across all files. Categorize as:
+
+1. **Missing Abstractions** — shared utilities, components, hooks, or services that should be extracted
+2. **Code Duplication** — identical logic repeated across files that should be consolidated
+3. **Deprecated Patterns** — outdated API usage, deprecated MUI props, legacy code patterns
+4. **Dead Code** — unused imports, unreachable functions, placeholder features, orphaned files
+5. **Type Safety Gaps** — `any` casts, missing TypeScript types, untyped API responses
+6. **Architectural Improvements** — URL state management, error boundaries, API response normalization
+
+For each item:
+| Debt ID | Category | Affected Files/Screens | Description | Impact of Not Fixing | Recommended Action | Effort |
+
+### 1E. Testing Coverage Analysis
+
+Extract all testing information from Section 15. Produce:
+
+1. **Current State Summary** — How many screens have executable tests? (Spoiler: likely zero)
+2. **Gap Matrix** — A table showing each screen and what is/isn't tested (Unit, Integration, E2E)
+3. **Highest-Risk Untested Areas** — Business-critical paths with zero test coverage, ranked by risk:
+   - Financial calculations (tax, margin, payment auto-adjustment)
+   - Status transition enforcement
+   - Clinical assessment scoring (MSQ, PROMIS)
+   - AI integrations
+   - Authentication/authorization flows
+
+---
+
+## Phase 2: Cross-Cutting Analysis
+
+### 2A. Pattern Recognition
+
+Identify recurring issues that appear across multiple screens:
+
+- **Systemic patterns** — problems that exist on 4+ screens (e.g., missing API authorization, `getSession()` vs `getUser()`, no server-side pagination)
+- **Contagion risk** — bad patterns that are being copy-pasted from screen to screen
+- **Root causes** — what architectural decisions or missing infrastructure led to these patterns?
+
+### 2B. Dependency & Integration Risk
+
+From Section 13 across all files:
+
+- Map all third-party dependencies and their purpose
+- Identify single points of failure (what happens when Supabase is down?)
+- Flag any dependency-specific risks (MUI X license, OpenAI/Anthropic API costs, CDN-hosted libraries)
+- Note any inconsistencies in library usage (e.g., two different toast libraries, inconsistent auth methods)
+
+### 2C. HIPAA/Compliance Concerns
+
+Across all security sections, consolidate any findings related to:
+- Protected Health Information (PHI) handling
+- Audit logging gaps (who accessed what data, when)
+- Data transmitted to AI providers (OpenAI, Anthropic)
+- Encryption at rest and in transit
+- Access control adequacy for clinical data
+
+---
+
+## Phase 3: Prioritized Remediation Plan
+
+### 3A. Critical & High Priority Sprint
+
+Create a sprint-ready list of the most important fixes, organized as:
+
+| Priority | Finding IDs | Title | Description | Estimated Effort | Business Justification |
+
+**Critical items** (fix immediately — security vulnerabilities, data corruption risks):
+- Unauthenticated endpoints
+- SQL injection patterns (even dead code)
+- Financial calculation integrity
+- Non-transactional batch operations
+- PII/PHI logging
+
+**High items** (fix within 2 weeks — significant quality/security gaps):
+- Missing API authorization
+- Frontend-only business rule enforcement
+- Inconsistent authentication methods
+- Unbounded database queries
+- Non-functional UI elements (broken buttons, no-op handlers)
+
+### 3B. Tech Debt Reduction Roadmap
+
+Organize medium and low priority items into themed work packages:
+
+1. **"Shared Infrastructure" package** — Extract common utilities, hooks, middleware
+2. **"Type Safety" package** — Eliminate `any` casts, type API responses, regenerate Supabase types
+3. **"Performance" package** — Add server-side pagination, move filtering to database, parallelize queries
+4. **"Testing Foundation" package** — Set up testing infrastructure, write first tests for critical paths
+5. **"UX Polish" package** — Remove placeholders, add error feedback, URL state management
+6. **"Deprecation Cleanup" package** — Update MUI API usage, remove dead code, clean up orphaned files
+
+For each package:
+| Package | Scope (# items) | Key Items | Estimated Total Effort | Dependencies |
+
+### 3C. Quick Wins
+
+Identify items that are:
+- Low effort (< 1 hour each)
+- Low risk (no chance of breaking anything)
+- High visibility (developers will notice the improvement immediately)
+
+Examples: removing console.log statements, fixing deprecated API calls, removing dead code, adding missing error toasts.
+
+---
+
+## Output Format
+
+Produce a single, well-structured document with these sections:
+
+```
+# YOY Program Tracker — Code Health Assessment Report
+
+## Executive Summary
+(Key statistics: total findings by severity, zero test coverage, systemic patterns, top 5 actions)
+
+## 1. Code Review Findings (Consolidated)
+### 1.1 Critical Findings
+### 1.2 High Findings
+### 1.3 Medium Findings
+### 1.4 Low Findings
+
+## 2. Security Assessment
+### 2.1 Authentication
+### 2.2 Authorization
+### 2.3 Input Handling & Injection
+### 2.4 Sensitive Data & Compliance
+### 2.5 API Security
+
+## 3. Performance Assessment
+### 3.1 Unbounded Queries
+### 3.2 Sequential / N+1 Queries
+### 3.3 Client-Side Filtering
+### 3.4 Caching & Memoization
+
+## 4. Tech Debt Registry
+### 4.1 Missing Abstractions
+### 4.2 Code Duplication
+### 4.3 Type Safety
+### 4.4 Dead Code & Deprecated Patterns
+### 4.5 Architectural Improvements
+
+## 5. Testing Coverage
+### 5.1 Current State
+### 5.2 Gap Matrix
+### 5.3 Highest-Risk Untested Paths
+
+## 6. Cross-Cutting Analysis
+### 6.1 Systemic Patterns
+### 6.2 Dependency Risks
+### 6.3 HIPAA/Compliance
+
+## 7. Remediation Plan
+### 7.1 Critical & High Priority Sprint
+### 7.2 Tech Debt Reduction Packages
+### 7.3 Quick Wins
+
+## Appendix A: Findings by Screen
+(Reverse lookup — for each screen, list all Finding IDs)
+
+## Appendix B: Third-Party Dependency Map
+(Table of all dependencies, their purpose, version info from the docs, and risk notes)
+```
+
+---
+
+## Processing Rules
+
+1. **Be exhaustive.** Extract every finding, not just the ones labeled Critical or High. Low-severity items often reveal systemic patterns.
+2. **Preserve technical precision.** Include file names, line numbers, and specific technical details from the source files. This document will be used by developers to locate and fix issues.
+3. **Quantify the risk.** Don't just say "this could be a problem" — explain what specifically would go wrong, for whom, and under what conditions.
+4. **Identify the system, not just the symptoms.** When the same problem appears on 8 screens, the fix isn't to patch 8 screens — it's to build the missing infrastructure.
+5. **Think like a hacker.** For security findings, describe how the vulnerability could be exploited in practice.
+6. **Think like a CTO.** For tech debt, explain the cost of NOT fixing it — what slows down development, what causes bugs, what blocks future features.
+7. **Be honest about effort.** Don't lowball estimates. If extracting a shared hook requires touching 12 files and testing each, that's a Large effort, not Small.
+8. **Group related items.** If the same fix resolves 5 findings across 3 screens, present it as one recommendation, not five.
+
+---
+
+## Input
+
+The following screen documentation files are attached:
+
+Look in the directory called /doc/help with the extension md
+
+Please process all files and produce the complete training document.

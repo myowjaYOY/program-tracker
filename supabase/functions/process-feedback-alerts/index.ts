@@ -3,7 +3,6 @@
 // - Low ratings (< 3) for Provider, Staff/Coach, Curriculum
 // - Improvement suggestions (text feedback)
 // - Education requests (text feedback)
-// - Overdue modules (from member_progress_summary)
 // Alerts are created as notes linked to notifications, targeting appropriate roles.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
@@ -344,13 +343,13 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
     console.warn('[AI Filter] OPENAI_API_KEY not set - AI filtering disabled, using basic filter only');
   }
 
-  // Step 1: Get Manager, Provider, and Nutritionist role IDs
+  // Step 1: Get Manager and Provider role IDs
   const { data: roles, error: roleError } = await supabase
     .from('program_roles')
     .select('program_role_id, role_name')
-    .in('role_name', ['Manager', 'Provider', 'Nutritionist']);
+    .in('role_name', ['Manager', 'Provider']);
 
-  if (roleError || !roles || roles.length < 3) {
+  if (roleError || !roles || roles.length < 2) {
     console.error('Failed to find required roles:', roleError);
     result.errors.push('Required roles not found');
     return result;
@@ -358,14 +357,13 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
 
   const managerRoleId = roles.find((r: any) => r.role_name === 'Manager')?.program_role_id;
   const providerRoleId = roles.find((r: any) => r.role_name === 'Provider')?.program_role_id;
-  const nutritionistRoleId = roles.find((r: any) => r.role_name === 'Nutritionist')?.program_role_id;
   
-  if (!managerRoleId || !providerRoleId || !nutritionistRoleId) {
-    result.errors.push('Manager, Provider, or Nutritionist role not found');
+  if (!managerRoleId || !providerRoleId) {
+    result.errors.push('Manager or Provider role not found');
     return result;
   }
   
-  console.log(`Role IDs - Manager: ${managerRoleId}, Provider: ${providerRoleId}, Nutritionist: ${nutritionistRoleId}`);
+  console.log(`Role IDs - Manager: ${managerRoleId}, Provider: ${providerRoleId}`);
 
   // Step 2: Get all sessions from this import batch with lead info
   const { data: sessions, error: sessionsError } = await supabase
@@ -654,130 +652,6 @@ async function processFeedbackAlerts(supabase: any, importBatchId: number): Prom
 
     result.alerts_created++;
     console.log(`Created alert: ${alertTitle} (${pf.feedbackType}) for ${pf.memberName}`);
-  }
-
-  // Step 7: Process overdue module alerts
-  // Only for members with ACTIVE programs (program_status_id = 1)
-  console.log('Checking for overdue modules (Active programs only)...');
-  
-  // First, get lead_ids that have an active program
-  const { data: activePrograms, error: activeProgramsError } = await supabase
-    .from('member_programs')
-    .select('lead_id')
-    .eq('program_status_id', 1)  // Active status
-    .in('lead_id', leadIds);
-
-  if (activeProgramsError) {
-    console.error('Failed to fetch active programs:', activeProgramsError);
-    result.errors.push(`Failed to fetch active programs: ${activeProgramsError.message}`);
-  }
-
-  const activeLeadIds = activePrograms ? [...new Set(activePrograms.map((p: any) => p.lead_id))] : [];
-  console.log(`Found ${activeLeadIds.length} members with active programs out of ${leadIds.length} total`);
-
-  // Skip if no active programs
-  if (activeLeadIds.length === 0) {
-    console.log('No active programs found, skipping overdue module alerts');
-    return result;
-  }
-  
-  const { data: progressSummaries, error: progressError } = await supabase
-    .from('member_progress_summary')
-    .select('lead_id, overdue_milestones')
-    .in('lead_id', activeLeadIds)  // Only active program members
-    .not('overdue_milestones', 'is', null);
-
-  if (progressError) {
-    console.error('Failed to fetch progress summaries:', progressError);
-    result.errors.push(`Failed to fetch progress summaries: ${progressError.message}`);
-  } else if (progressSummaries && progressSummaries.length > 0) {
-    // Process ONE consolidated alert per member (not per module)
-    for (const summary of progressSummaries) {
-      // Parse overdue_milestones (stored as JSON string or array)
-      let overdueModules: string[] = [];
-      try {
-        if (typeof summary.overdue_milestones === 'string') {
-          overdueModules = JSON.parse(summary.overdue_milestones);
-        } else if (Array.isArray(summary.overdue_milestones)) {
-          overdueModules = summary.overdue_milestones;
-        }
-      } catch (e) {
-        console.error(`Failed to parse overdue_milestones for lead ${summary.lead_id}:`, e);
-        continue;
-      }
-
-      if (overdueModules.length <= 1) continue;
-
-      const memberName = leadMap.get(summary.lead_id) || 'Unknown Member';
-      const dateStr = new Date().toLocaleDateString();
-
-      // ONE alert per member - reference hash does not include module name
-      const refHash = `OVERDUE-${summary.lead_id}`;
-
-      // Check for ACTIVE notification (not dismissed)
-      // This allows new alerts after user dismisses the previous one
-      const { data: existingNotification } = await supabase
-        .from('notifications')
-        .select('notification_id')
-        .eq('lead_id', summary.lead_id)
-        .eq('title', 'Member is behind on their education')
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (existingNotification) {
-        result.duplicates_skipped++;
-        console.log(`Skipping overdue alert for ${memberName} - active notification exists`);
-        continue;
-      }
-
-      // Build consolidated message with all overdue modules
-      const modulesList = overdueModules.map(m => `• ${m}`).join('\n');
-      const noteContent = `${memberName} - ${dateStr}\nMember is behind schedule on ${overdueModules.length} module(s):\n${modulesList}\nReview member report card for details.\n[REF:${refHash}]`;
-
-      // Create note
-      const { data: newNote, error: noteError } = await supabase
-        .from('lead_notes')
-        .insert({
-          lead_id: summary.lead_id,
-          note_type: 'Challenge',
-          note: noteContent,
-        })
-        .select('note_id')
-        .single();
-
-      if (noteError) {
-        console.error('Failed to create overdue note:', noteError);
-        result.errors.push(`Failed to create overdue note for ${memberName}: ${noteError.message}`);
-        continue;
-      }
-
-      result.notes_created++;
-
-      // Create notification - urgent priority, target Nutritionist and Manager
-      const alertTitle = 'Member is behind on their education';
-
-      const { error: notifError } = await supabase
-        .from('notifications')
-        .insert({
-          lead_id: summary.lead_id,
-          title: alertTitle,
-          message: noteContent,
-          priority: 'urgent',
-          target_role_ids: [nutritionistRoleId, managerRoleId],
-          source_note_id: newNote.note_id,
-          status: 'active',
-          created_by: SYSTEM_USER_ID,
-        });
-
-      if (notifError) {
-        console.error('Failed to create overdue notification:', notifError);
-        result.errors.push(`Failed to create overdue notification for ${memberName}: ${notifError.message}`);
-        continue;
-      }
-
-      result.alerts_created++;
-      console.log(`Created consolidated overdue alert for ${memberName} (${overdueModules.length} modules)`);
-    }
   }
 
   return result;

@@ -7,6 +7,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import * as XLSX from 'npm:xlsx@0.18.5'
 
+const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000000';
+
 interface ProgressRow {
   user_id: number;  // External user ID from wellness curriculum system
   name: string;
@@ -144,6 +146,11 @@ async function handleFileUpload(req: Request) {
     if (result.updated_lead_ids.length > 0) {
       console.log(`Triggering analysis for ${result.updated_lead_ids.length} updated members...`);
       await triggerMemberProgressAnalysis(supabaseUrl, supabaseServiceKey, result.updated_lead_ids);
+
+      // Process overdue module alerts using freshly-updated progress data
+      console.log('Processing overdue module alerts...');
+      const alertResult = await processOverdueModuleAlerts(supabase, result.updated_lead_ids);
+      console.log(`Overdue alerts: ${alertResult.alerts_created} created, ${alertResult.duplicates_skipped} skipped, ${alertResult.errors.length} errors`);
     }
 
     // Rename the processed file
@@ -573,4 +580,171 @@ async function triggerMemberProgressAnalysis(
     console.error('Failed to trigger member progress analysis:', error);
     // Don't throw - import succeeded, analysis is a secondary concern
   }
+}
+
+/**
+ * Process overdue module alerts for members whose progress was just updated.
+ * Creates "Member is behind on their education" notifications for members
+ * with >1 overdue module and an active program.
+ * 
+ * This runs AFTER analyze-member-progress has recalculated overdue_milestones
+ * using the freshly-imported progress data, so alerts are based on current state.
+ */
+async function processOverdueModuleAlerts(
+  supabase: any,
+  leadIds: number[]
+): Promise<{ alerts_created: number; notes_created: number; duplicates_skipped: number; errors: string[] }> {
+  const result = { alerts_created: 0, notes_created: 0, duplicates_skipped: 0, errors: [] as string[] };
+
+  if (leadIds.length === 0) return result;
+
+  // Get Manager and Nutritionist role IDs
+  const { data: roles, error: roleError } = await supabase
+    .from('program_roles')
+    .select('program_role_id, role_name')
+    .in('role_name', ['Manager', 'Nutritionist']);
+
+  if (roleError || !roles || roles.length < 2) {
+    console.error('Failed to find required roles:', roleError);
+    result.errors.push('Manager or Nutritionist role not found');
+    return result;
+  }
+
+  const managerRoleId = roles.find((r: any) => r.role_name === 'Manager')?.program_role_id;
+  const nutritionistRoleId = roles.find((r: any) => r.role_name === 'Nutritionist')?.program_role_id;
+
+  if (!managerRoleId || !nutritionistRoleId) {
+    result.errors.push('Manager or Nutritionist role not found');
+    return result;
+  }
+
+  // Filter to members with active programs only
+  const { data: activePrograms, error: activeProgramsError } = await supabase
+    .from('member_programs')
+    .select('lead_id')
+    .eq('program_status_id', 1)
+    .in('lead_id', leadIds);
+
+  if (activeProgramsError) {
+    console.error('Failed to fetch active programs:', activeProgramsError);
+    result.errors.push(`Failed to fetch active programs: ${activeProgramsError.message}`);
+    return result;
+  }
+
+  const activeLeadIds = activePrograms ? [...new Set(activePrograms.map((p: any) => p.lead_id))] : [];
+  console.log(`Found ${activeLeadIds.length} members with active programs out of ${leadIds.length} updated`);
+
+  if (activeLeadIds.length === 0) {
+    console.log('No active programs found, skipping overdue module alerts');
+    return result;
+  }
+
+  // Get freshly-updated progress summaries
+  const { data: progressSummaries, error: progressError } = await supabase
+    .from('member_progress_summary')
+    .select('lead_id, overdue_milestones')
+    .in('lead_id', activeLeadIds)
+    .not('overdue_milestones', 'is', null);
+
+  if (progressError) {
+    console.error('Failed to fetch progress summaries:', progressError);
+    result.errors.push(`Failed to fetch progress summaries: ${progressError.message}`);
+    return result;
+  }
+
+  if (!progressSummaries || progressSummaries.length === 0) {
+    console.log('No overdue milestones found');
+    return result;
+  }
+
+  // Get lead names for alert messages
+  const { data: leads } = await supabase
+    .from('leads')
+    .select('lead_id, first_name, last_name')
+    .in('lead_id', activeLeadIds);
+
+  const leadMap = new Map(
+    (leads || []).map((l: any) => [l.lead_id, `${l.first_name} ${l.last_name}`])
+  );
+
+  for (const summary of progressSummaries) {
+    let overdueModules: string[] = [];
+    try {
+      if (typeof summary.overdue_milestones === 'string') {
+        overdueModules = JSON.parse(summary.overdue_milestones);
+      } else if (Array.isArray(summary.overdue_milestones)) {
+        overdueModules = summary.overdue_milestones;
+      }
+    } catch (e) {
+      console.error(`Failed to parse overdue_milestones for lead ${summary.lead_id}:`, e);
+      continue;
+    }
+
+    if (overdueModules.length <= 1) continue;
+
+    const memberName = leadMap.get(summary.lead_id) || 'Unknown Member';
+    const dateStr = new Date().toLocaleDateString();
+    const refHash = `OVERDUE-${summary.lead_id}`;
+
+    // Check for existing active notification to avoid duplicates
+    const { data: existingNotification } = await supabase
+      .from('notifications')
+      .select('notification_id')
+      .eq('lead_id', summary.lead_id)
+      .eq('title', 'Member is behind on their education')
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (existingNotification) {
+      result.duplicates_skipped++;
+      console.log(`Skipping overdue alert for ${memberName} - active notification exists`);
+      continue;
+    }
+
+    const modulesList = overdueModules.map(m => `• ${m}`).join('\n');
+    const noteContent = `${memberName} - ${dateStr}\nMember is behind schedule on ${overdueModules.length} module(s):\n${modulesList}\nReview member report card for details.\n[REF:${refHash}]`;
+
+    // Create note
+    const { data: newNote, error: noteError } = await supabase
+      .from('lead_notes')
+      .insert({
+        lead_id: summary.lead_id,
+        note_type: 'Challenge',
+        note: noteContent,
+      })
+      .select('note_id')
+      .single();
+
+    if (noteError) {
+      console.error('Failed to create overdue note:', noteError);
+      result.errors.push(`Failed to create overdue note for ${memberName}: ${noteError.message}`);
+      continue;
+    }
+
+    result.notes_created++;
+
+    const { error: notifError } = await supabase
+      .from('notifications')
+      .insert({
+        lead_id: summary.lead_id,
+        title: 'Member is behind on their education',
+        message: noteContent,
+        priority: 'urgent',
+        target_role_ids: [nutritionistRoleId, managerRoleId],
+        source_note_id: newNote.note_id,
+        status: 'active',
+        created_by: SYSTEM_USER_ID,
+      });
+
+    if (notifError) {
+      console.error('Failed to create overdue notification:', notifError);
+      result.errors.push(`Failed to create overdue notification for ${memberName}: ${notifError.message}`);
+      continue;
+    }
+
+    result.alerts_created++;
+    console.log(`Created consolidated overdue alert for ${memberName} (${overdueModules.length} modules)`);
+  }
+
+  return result;
 }

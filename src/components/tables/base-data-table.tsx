@@ -234,6 +234,8 @@ export interface BaseDataTableProps<T extends BaseEntity> {
   aggregationLabel?: string;
   // State persistence (optional)
   persistStateKey?: string;
+  // Form dialog max width override (defaults to 'sm')
+  dialogMaxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export default function BaseDataTable<T extends BaseEntity>({
@@ -270,6 +272,7 @@ export default function BaseDataTable<T extends BaseEntity>({
   showAggregationFooter = false,
   aggregationLabel,
   persistStateKey,
+  dialogMaxWidth = 'sm',
 }: BaseDataTableProps<T>) {
   
   // Get user for per-user state persistence
@@ -703,13 +706,13 @@ export default function BaseDataTable<T extends BaseEntity>({
         <Dialog
           open={formOpen}
           onClose={handleFormClose}
-          maxWidth="sm"
+          maxWidth={dialogMaxWidth}
           fullWidth
           PaperProps={{
             sx: {
               borderRadius: 2,
               margin: { xs: 2, sm: 'auto' },
-              width: { xs: 'calc(100% - 32px)', sm: 'auto' },
+              width: { xs: 'calc(100% - 32px)' },
               maxHeight: '90vh',
               display: 'flex',
               flexDirection: 'column',
