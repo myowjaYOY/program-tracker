@@ -1,0 +1,32 @@
+# Date and Time Display — Always Use the User's Timezone
+
+All timestamps in the database are stored as UTC (`timestamp with time zone`). When displaying dates or times in the UI, they MUST be converted to the user's local browser timezone.
+
+## Required Utility
+
+Use the shared formatting functions from `src/lib/utils/date.ts`:
+
+- `formatDate(value)` — date only (e.g. "Mar 25, 2026")
+- `formatDateTime(value)` — date + time (e.g. "Mar 25, 2026, 2:30 PM")
+
+These functions:
+1. Handle `null` / `undefined` → returns `'-'`
+2. Handle date-only strings (`YYYY-MM-DD`) without UTC shift
+3. Append `Z` to bare timestamps that lack timezone info, ensuring UTC parsing
+4. Format using `toLocaleString('en-US', { ... })` which renders in the browser's local timezone
+
+## In DataGrid Columns
+
+Use the shared cell renderers from `src/components/tables/base-data-table.tsx`:
+
+- `renderDate` — for date-only columns (created_at, updated_at, start_date, etc.)
+- `renderDateTime` — for columns that should show time (last_sign_in_at, logged_at, etc.)
+- `commonColumns.createdAt` / `commonColumns.updatedAt` — pre-built column defs using `renderDate`
+
+## Rules
+
+1. **NEVER** use raw `new Date(value).toLocaleString()` or `toLocaleDateString()` directly in components. Always go through the shared utility or the DataGrid renderers.
+2. **NEVER** hardcode a timezone string (e.g. `'America/Chicago'`). The browser's `Intl` API automatically resolves the user's timezone.
+3. **NEVER** display raw ISO strings or UTC timestamps to the user.
+4. When adding a new date/time column to any table, use `renderDate` or `renderDateTime` as the `renderCell`.
+5. When displaying dates outside of a DataGrid (e.g. in a card, modal, or detail view), import and call `formatDate` or `formatDateTime` from `@/lib/utils/date`.

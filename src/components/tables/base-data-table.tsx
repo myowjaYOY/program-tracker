@@ -26,6 +26,7 @@ import {
   useGridApiRef,
 } from '@mui/x-data-grid-pro';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil } from '@/lib/utils/date';
 
 // Custom aggregation model type (not from MUI - we calculate manually)
 type AggregationModel = Record<string, 'sum' | 'avg' | 'min' | 'max' | 'size'>;
@@ -129,30 +130,15 @@ export const renderCurrency = (params: GridRenderCellParams) => (
   </Typography>
 );
 
-export const renderDate = (params: GridRenderCellParams) => {
-  if (!params || !params.value)
-    return <Typography variant="body2">-</Typography>;
-  const v = params.value as string;
-  // If value is a date-only string (YYYY-MM-DD), avoid UTC parsing shift
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-    const [y, m, d] = v.split('-').map(Number);
-    const local = new Date(y ?? 2024, (m ?? 1) - 1, d ?? 1);
-    return (
-      <Typography variant="body2">
-        {local.toLocaleDateString('en-US')}
-      </Typography>
-    );
-  }
-  return (
-    <Typography variant="body2">
-      {new Date(v).toLocaleDateString('en-US')}
-    </Typography>
-  );
-};
+export const renderDate = (params: GridRenderCellParams) => (
+  <Typography variant="body2">
+    {formatDateUtil(params?.value as string | null | undefined)}
+  </Typography>
+);
 
 export const renderDateTime = (params: GridRenderCellParams) => (
   <Typography variant="body2">
-    {params.value ? new Date(params.value).toLocaleString('en-US') : '-'}
+    {formatDateTimeUtil(params?.value as string | null | undefined)}
   </Typography>
 );
 

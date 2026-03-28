@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export async function GET(
   _request: NextRequest,
@@ -100,19 +101,29 @@ export async function PUT(
     const body = await request.json();
     const { full_name, is_admin, is_active, password, program_role_id } = body;
 
-    // Update password in Supabase Auth if provided
+    // Update password in Supabase Auth if provided (requires service role)
     if (password && password.trim() !== '') {
-      const { error: passwordError } = await supabase.auth.admin.updateUserById(
+      if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return NextResponse.json(
+          { error: 'Server configuration error: Missing service role key' },
+          { status: 500 }
+        );
+      }
+
+      const adminSupabase = createSupabaseClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { error: passwordError } = await adminSupabase.auth.admin.updateUserById(
         id,
-        {
-          password: password,
-        }
+        { password }
       );
 
       if (passwordError) {
         console.error('Error updating password:', passwordError);
         return NextResponse.json(
-          { error: 'Failed to update password' },
+          { error: `Failed to update password: ${passwordError.message}` },
           { status: 500 }
         );
       }

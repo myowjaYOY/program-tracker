@@ -66,23 +66,23 @@ export async function GET() {
       );
     }
 
-    const profileIds = (profiles || []).map((p: { id: string }) => p.id);
+    const { data: loginEvents } = await adminSupabase
+      .schema('thrive_radio')
+      .from('auth_events')
+      .select('user_id, created_at')
+      .eq('event_type', 'login')
+      .order('created_at', { ascending: false });
 
-    let usersMap = new Map<string, { last_sign_in_at: string | null }>();
-    if (profileIds.length > 0) {
-      const { data: authUsers } = await adminSupabase.auth.admin.listUsers();
-      if (authUsers?.users) {
-        for (const u of authUsers.users) {
-          if (profileIds.includes(u.id)) {
-            usersMap.set(u.id, { last_sign_in_at: u.last_sign_in_at ?? null });
-          }
-        }
+    const loginMap = new Map<string, string | null>();
+    for (const evt of loginEvents || []) {
+      if (!loginMap.has(evt.user_id)) {
+        loginMap.set(evt.user_id, evt.created_at);
       }
     }
 
     const enriched = (profiles || []).map((p: Record<string, unknown>) => ({
       ...p,
-      last_sign_in_at: usersMap.get(p.id as string)?.last_sign_in_at ?? null,
+      last_sign_in_at: loginMap.get(p.id as string) ?? null,
     }));
 
     return NextResponse.json({ data: enriched });
