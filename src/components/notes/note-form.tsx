@@ -36,6 +36,7 @@ interface NoteFormProps {
 
 const NOTE_TYPES = [
   { value: 'Challenge', label: 'Challenge', color: 'error' },
+  { value: 'Coaching', label: 'Coaching', color: 'secondary' },
   { value: 'Follow-Up', label: 'Follow-Up', color: 'info' },
   { value: 'Other', label: 'Other', color: 'default' },
   { value: 'PME', label: 'PME', color: 'primary' },
